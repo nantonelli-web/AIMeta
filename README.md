@@ -44,7 +44,8 @@ workspace and assigns the first user as `admin`.
 | `SUPABASE_SERVICE_ROLE_KEY`      | yes      | Server-only. Used by `/api/auth/bootstrap` and `/api/apify/scan`.  |
 | `APIFY_API_TOKEN`                | yes\*    | \* required only to actually run scrapes                           |
 | `APIFY_ACTOR_ID`                 | no       | Defaults to `apify/meta-ads-scraper`. Swap to a cheaper alternative if needed. |
-| `META_APP_ID` / `META_APP_SECRET`| Phase 1.1| For Meta Marketing API OAuth                                       |
+| `CRON_SECRET`                    | no       | If set, `/api/cron/scrape` requires `Authorization: Bearer …`. Vercel injects this header automatically when set. |
+| `META_APP_ID` / `META_APP_SECRET`| Phase 2  | For Meta Marketing API OAuth                                       |
 
 ## 4. What's included (MVP — sezione 9 del brief)
 
@@ -53,19 +54,34 @@ workspace and assigns the first user as `admin`.
 - ✅ 4 ruoli (`super_admin`, `admin`, `analyst`, `viewer`) — RLS enforced
 - ✅ CRUD competitor (URL pagina Facebook → page_id auto-detected)
 - ✅ Scan on-demand via Apify (`POST /api/apify/scan`)
+- ✅ **Scheduling automatico** via Vercel Cron (per-competitor: manual / daily / weekly)
+- ✅ Cronologia scrape jobs sul competitor detail
 - ✅ Lista ads per competitor con preview cards
 - ✅ Dashboard overview (counters, latest ads, top competitor)
-- ✅ Creative Library (basic grid)
-- ✅ Alerts feed
+- ✅ **Creative Library** con search full-text + filtri (format, platform, CTA, status)
+- ✅ Alerts feed con dismiss inline
 - ✅ CSV export (`/api/export/ads.csv?competitor_id=…`)
-- ✅ Dark / gold NIMA theme
+- ✅ Dark / gold NIMA theme + 404 page
 
-### Phase 1.1 (Should Have) — _placeholder pages presenti_
+## 4b. Vercel Cron schedules
 
-- Scheduling automatico Apify (cron)
-- Search & filtri Creative Library
-- Meta OAuth + Performance Analytics
-- AI tagging (Anthropic)
+Defined in `vercel.json` and run on Vercel automatically:
+
+| Schedule | Cron expression | What it does |
+|---|---|---|
+| Daily | `0 4 * * *` (04:00 UTC) | Scrapes all competitors with `monitor_config.frequency = "daily"` |
+| Weekly | `0 5 * * 1` (Mondays 05:00 UTC) | Scrapes all competitors with `monitor_config.frequency = "weekly"` |
+
+Set the schedule per-competitor from the competitor detail page (Frequency
+selector). Default for new competitors is `manual`.
+
+### Phase 2 — _scaffolded, needs credentials_
+
+- Meta OAuth + Performance Analytics (needs `META_APP_ID` / `META_APP_SECRET`)
+- AI tagging via Anthropic (needs `ANTHROPIC_API_KEY`)
+- Benchmarking dashboard
+- PDF reports
+- Webhook / Slack integration
 
 ## 5. Project layout
 

@@ -1,12 +1,11 @@
 import { getSessionUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { AlertRow } from "./alert-row";
 
 export const dynamic = "force-dynamic";
 
-interface AlertRow {
+interface AlertRowData {
   id: string;
   type: string;
   message: string;
@@ -24,14 +23,17 @@ export default async function AlertsPage() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const alerts = (data ?? []) as AlertRow[];
+  const alerts = (data ?? []) as AlertRowData[];
+  const unread = alerts.filter((a) => !a.read).length;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-serif tracking-tight">Alerts</h1>
         <p className="text-sm text-muted-foreground">
-          Notifiche sulle attività di scraping e sui cambi competitor.
+          {unread > 0
+            ? `${unread} non letti su ${alerts.length}`
+            : `${alerts.length} totali`}
         </p>
       </div>
       {alerts.length === 0 ? (
@@ -43,20 +45,7 @@ export default async function AlertsPage() {
       ) : (
         <div className="space-y-2">
           {alerts.map((a) => (
-            <Card key={a.id}>
-              <CardContent className="p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="gold">{a.type}</Badge>
-                    {!a.read && <Badge variant="muted">new</Badge>}
-                  </div>
-                  <p className="text-sm">{a.message}</p>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {formatDate(a.created_at)}
-                </span>
-              </CardContent>
-            </Card>
+            <AlertRow key={a.id} alert={a} />
           ))}
         </div>
       )}

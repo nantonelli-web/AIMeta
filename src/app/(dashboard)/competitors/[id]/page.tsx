@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AdCard } from "@/components/ads/ad-card";
 import { ScanButton } from "./scan-button";
+import { FrequencySelector } from "./frequency-selector";
+import { JobHistory } from "./job-history";
 import { formatDate } from "@/lib/utils";
-import type { MaitAdExternal, MaitCompetitor } from "@/types";
+import type { MaitAdExternal, MaitCompetitor, MaitScrapeJob } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +33,25 @@ export default async function CompetitorDetailPage({
   if (!competitor) notFound();
   const c = competitor as MaitCompetitor;
 
-  const { data: ads } = await supabase
-    .from("mait_ads_external")
-    .select("*")
-    .eq("competitor_id", id)
-    .order("start_date", { ascending: false, nullsFirst: false })
-    .limit(120);
+  const [{ data: ads }, { data: jobs }] = await Promise.all([
+    supabase
+      .from("mait_ads_external")
+      .select("*")
+      .eq("competitor_id", id)
+      .order("start_date", { ascending: false, nullsFirst: false })
+      .limit(120),
+    supabase
+      .from("mait_scrape_jobs")
+      .select("*")
+      .eq("competitor_id", id)
+      .order("started_at", { ascending: false })
+      .limit(10),
+  ]);
 
   const adsList = (ads ?? []) as MaitAdExternal[];
+  const jobsList = (jobs ?? []) as MaitScrapeJob[];
+  const frequency = ((c.monitor_config as { frequency?: string })?.frequency ??
+    "manual") as "manual" | "daily" | "weekly";
 
   return (
     <div className="space-y-6">
@@ -68,7 +81,8 @@ export default async function CompetitorDetailPage({
             Ultimo scan: {formatDate(c.last_scraped_at)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <FrequencySelector competitorId={c.id} initial={frequency} />
           <Button asChild variant="outline">
             <a href={`/api/export/ads.csv?competitor_id=${c.id}`}>
               <Download className="size-4" /> Export CSV
@@ -77,6 +91,8 @@ export default async function CompetitorDetailPage({
           <ScanButton competitorId={c.id} />
         </div>
       </div>
+
+      {jobsList.length > 0 && <JobHistory jobs={jobsList} />}
 
       {adsList.length === 0 ? (
         <Card>

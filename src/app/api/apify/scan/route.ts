@@ -24,6 +24,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  if (!process.env.APIFY_API_TOKEN) {
+    return NextResponse.json(
+      {
+        error:
+          "APIFY_API_TOKEN non configurato. Aggiungilo nelle Environment Variables di Vercel e ridepiega.",
+      },
+      { status: 503 }
+    );
+  }
+
   // Validate ownership via RLS read
   const { data: competitor, error: compErr } = await supabase
     .from("mait_competitors")
