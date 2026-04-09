@@ -2,14 +2,13 @@
 
 NIMA Digital · internal SaaS for Meta competitive intelligence, creative library, and performance analytics.
 
-> Stack: **Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Supabase (Postgres + Auth + RLS) · Apify**
+> Stack: **Next.js 15.5 (App Router) · React 19 · TypeScript · Tailwind v4 · Supabase (Postgres + Auth + RLS) · Apify**
 
 ---
 
 ## 1. Quick start
 
 ```bash
-cd main
 cp .env.example .env.local   # already populated with shared NIMA Supabase creds
 # fill APIFY_API_TOKEN before running scrapes
 npm run dev
@@ -96,12 +95,12 @@ src/
 │   ├── apify/            service layer (actor → normalized rows)
 │   ├── meta/             URL parsers + Ad Library URL builder
 │   └── auth/session.ts   getSessionUser helper
-├── types/                shared TS interfaces
-└── proxy.ts              auth proxy (Next.js 16 — replaces middleware.ts)
+└── types/                shared TS interfaces
 ```
 
-> **Next.js 16 note**: middleware was renamed to **proxy**. The file is
-> `src/proxy.ts` and exports a `proxy()` function. This is intentional, not a typo.
+> **Auth protection** lives in `src/app/(dashboard)/layout.tsx` via
+> `getSessionUser()`, which redirects unauthenticated users to `/login`.
+> No middleware needed.
 
 ## 6. Trigger a scan manually
 
