@@ -9,7 +9,7 @@ NIMA Digital · internal SaaS for Meta competitive intelligence, creative librar
 ## 1. Quick start
 
 ```bash
-cd mait
+cd main
 cp .env.example .env.local   # already populated with shared NIMA Supabase creds
 # fill APIFY_API_TOKEN before running scrapes
 npm run dev
