@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-/**
- * Supabase OAuth callback. After Google auth, Supabase redirects here
- * (or to the Site URL) with a `code` param. We exchange it for a session,
- * then bootstrap workspace + mait_user if the user is new.
- */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -17,51 +12,78 @@ export async function GET(req: Request) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
+
+  // Exchange the OAuth code for a session
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.exchangeCodeForSession(code);
+
+  if (sessionError) {
+    console.error("OAuth code exchange failed:", sessionError.message);
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message)}`
+      `${origin}/login?error=${encodeURIComponent(sessionError.message)}`
     );
   }
 
-  // Check if this user already has a mait_users row
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Get user from the session we just created
+  const user = sessionData?.user;
+  if (!user) {
+    console.error("OAuth: session created but no user returned");
+    return NextResponse.redirect(`${origin}/login?error=no_user`);
+  }
 
-  if (user) {
-    const { data: existing } = await supabase
-      .from("mait_users")
+  // Use admin client for all DB operations (bypasses RLS completely)
+  const admin = createAdminClient();
+
+  // Check if mait_user already exists
+  const { data: existing, error: checkErr } = await admin
+    .from("mait_users")
+    .select("id")
+    .eq("id", user.id)
+    .single();
+
+  if (checkErr && checkErr.code !== "PGRST116") {
+    // PGRST116 = "no rows returned" which is expected for new users
+    console.error("OAuth: check existing user failed:", checkErr.message);
+  }
+
+  if (!existing) {
+    // First-time login → bootstrap workspace + user
+    const name =
+      user.user_metadata?.full_name ??
+      user.user_metadata?.name ??
+      user.email?.split("@")[0] ??
+      "User";
+    const email = user.email ?? "";
+    const slug = `ws-${user.id.slice(0, 8)}`;
+
+    const { data: ws, error: wsErr } = await admin
+      .from("mait_workspaces")
+      .insert({ name: `${name}'s workspace`, slug })
       .select("id")
-      .eq("id", user.id)
       .single();
 
-    if (!existing) {
-      // First-time Google login → auto-bootstrap workspace + user
-      const admin = createAdminClient();
-      const name =
-        user.user_metadata?.full_name ??
-        user.user_metadata?.name ??
-        user.email?.split("@")[0] ??
-        "User";
-      const email = user.email ?? "";
+    if (wsErr) {
+      console.error("OAuth: workspace creation failed:", wsErr.message);
+      return NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent("Workspace creation failed: " + wsErr.message)}`
+      );
+    }
 
-      const slug = `ws-${user.id.slice(0, 8)}`;
-      const { data: ws } = await admin
-        .from("mait_workspaces")
-        .insert({ name: `${name}'s workspace`, slug })
-        .select("id")
-        .single();
+    const { error: userErr } = await admin.from("mait_users").insert({
+      id: user.id,
+      email,
+      name,
+      role: "admin",
+      workspace_id: ws.id,
+    });
 
-      if (ws) {
-        await admin.from("mait_users").insert({
-          id: user.id,
-          email,
-          name,
-          role: "admin",
-          workspace_id: ws.id,
-        });
-      }
+    if (userErr) {
+      console.error("OAuth: user creation failed:", userErr.message);
+      // Rollback workspace
+      await admin.from("mait_workspaces").delete().eq("id", ws.id);
+      return NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent("User creation failed: " + userErr.message)}`
+      );
     }
   }
 
