@@ -1,25 +1,40 @@
-import { ApifyClient } from "apify-client";
 import { buildAdLibraryUrl } from "@/lib/meta/url";
 
 /**
  * Service layer for the Apify Meta Ads Scraper actor.
- * Docs: https://apify.com/apify/meta-ads-scraper
+ * Uses the Apify REST API directly (no apify-client SDK) to avoid
+ * native dependency issues on Vercel serverless.
  *
- * The exact actor ID is configurable via APIFY_ACTOR_ID since several actors
- * (apify/meta-ads-scraper, leadsbrary/meta-ads-library-scraper) expose the
- * same data shape with minor input differences.
+ * API docs: https://docs.apify.com/api/v2
  */
 
+const APIFY_BASE = "https://api.apify.com/v2";
 const ACTOR_ID = process.env.APIFY_ACTOR_ID || "apify/meta-ads-scraper";
 
-function getClient() {
+function getToken(): string {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
-    throw new Error(
-      "APIFY_API_TOKEN missing. Set it in .env.local before running scrapes."
-    );
+    throw new Error("APIFY_API_TOKEN missing.");
   }
-  return new ApifyClient({ token });
+  return token;
+}
+
+async function apifyFetch(path: string, init?: RequestInit) {
+  const token = getToken();
+  const url = `${APIFY_BASE}${path}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      ...init?.headers,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Apify API ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res.json();
 }
 
 export interface NormalizedAd {
@@ -57,8 +72,6 @@ export interface ScrapeOptions {
 export async function scrapeMetaAds(
   opts: ScrapeOptions
 ): Promise<ScrapeResult> {
-  const client = getClient();
-
   const startUrl =
     opts.pageUrl?.includes("ads/library")
       ? opts.pageUrl
@@ -68,31 +81,67 @@ export async function scrapeMetaAds(
           active: opts.active,
         });
 
-  const input: Record<string, unknown> = {
+  const input = {
     startUrls: [{ url: startUrl }],
-    urls: [startUrl], // some actors use `urls`
+    urls: [startUrl],
     maxItems: opts.maxItems ?? 200,
     countryCode: opts.country ?? "ALL",
     activeStatus: opts.active === false ? "all" : "active",
   };
 
-  const run = await client.actor(ACTOR_ID).call(input);
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
+  // Start the actor run (synchronous — waits for completion)
+  const actorPath = `/acts/${encodeURIComponent(ACTOR_ID)}/runs`;
+  const run = await apifyFetch(actorPath, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-  const records = (items as RawAd[]).map(normalize).filter(
-    (a): a is NormalizedAd => !!a.ad_archive_id
+  const runId: string = run.data?.id ?? run.id ?? "";
+  const datasetId: string =
+    run.data?.defaultDatasetId ?? run.defaultDatasetId ?? "";
+
+  if (!datasetId) {
+    throw new Error("Apify run started but no datasetId returned.");
+  }
+
+  // Poll until the run finishes (max ~5 min)
+  let status = run.data?.status ?? run.status ?? "RUNNING";
+  const startTime = Date.now();
+  const maxWait = 5 * 60 * 1000;
+
+  while (
+    (status === "RUNNING" || status === "READY") &&
+    Date.now() - startTime < maxWait
+  ) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const runInfo = await apifyFetch(`/actor-runs/${runId}`);
+    status = runInfo.data?.status ?? runInfo.status ?? status;
+  }
+
+  if (status !== "SUCCEEDED") {
+    throw new Error(`Apify run ended with status: ${status}`);
+  }
+
+  // Fetch dataset items
+  const dataset = await apifyFetch(
+    `/datasets/${datasetId}/items?format=json&limit=1000`
   );
+  const items: RawAd[] = Array.isArray(dataset) ? dataset : dataset.items ?? [];
 
-  // Best-effort cost lookup; not all runs expose usage immediately.
+  const records = items
+    .map(normalize)
+    .filter((a): a is NormalizedAd => !!a.ad_archive_id);
+
+  // Best-effort cost lookup
   let costCu = 0;
   try {
-    const fullRun = await client.run(run.id).get();
-    costCu = (fullRun?.usageTotalUsd as number | undefined) ?? 0;
+    const runInfo = await apifyFetch(`/actor-runs/${runId}`);
+    costCu = runInfo.data?.usageTotalUsd ?? 0;
   } catch {
     /* ignore */
   }
 
-  return { runId: run.id, records, costCu };
+  return { runId, records, costCu };
 }
 
 interface RawAd {
