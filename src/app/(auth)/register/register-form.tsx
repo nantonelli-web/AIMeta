@@ -67,6 +67,7 @@ export function RegisterForm() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback?redirect=/dashboard`,
+        queryParams: { prompt: "select_account" },
       },
     });
     if (error) {

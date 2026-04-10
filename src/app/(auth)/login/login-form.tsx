@@ -43,6 +43,7 @@ export function LoginForm() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+        queryParams: { prompt: "select_account" },
       },
     });
     if (error) {
