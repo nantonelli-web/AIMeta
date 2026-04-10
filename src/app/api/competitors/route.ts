@@ -6,7 +6,7 @@ import { extractPageIdentifier } from "@/lib/meta/url";
 const schema = z.object({
   page_name: z.string().min(1).max(160),
   page_url: z.string().url(),
-  country: z.string().max(8).nullable().optional(),
+  country: z.string().max(60).nullable().optional(),
   category: z.string().max(80).nullable().optional(),
 });
 
