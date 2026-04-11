@@ -69,14 +69,14 @@ export default async function CompetitorsPage() {
                     <p className="text-xs text-muted-foreground">
                       {t("competitors", "lastScan")} {formatDate(c.last_scraped_at)}
                     </p>
-                    <Link
+                    <a
                       href={`/competitors/${c.id}/edit`}
                       onClick={(e) => e.stopPropagation()}
                       className="size-7 rounded-md border border-border hover:bg-muted hover:border-gold/40 grid place-items-center text-muted-foreground hover:text-gold transition-colors"
                       title={t("editCompetitor", "title")}
                     >
                       <Pencil className="size-3.5" />
-                    </Link>
+                    </a>
                   </div>
                 </CardContent>
               </Card>

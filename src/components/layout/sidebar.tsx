@@ -18,7 +18,7 @@ import { useT } from "@/lib/i18n/context";
 
 const itemDefs = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
-  { href: "/competitors", key: "competitors", icon: Users },
+  { href: "/competitors", key: "brands", icon: Users },
   { href: "/competitors/compare", key: "compare", icon: GitCompareArrows },
   { href: "/library", key: "library", icon: Library },
   { href: "/collections", key: "collections", icon: FolderHeart },

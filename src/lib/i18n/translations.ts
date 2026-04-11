@@ -59,6 +59,7 @@ const translations = {
   // ─── Sidebar ───────────────────────────────────────────────
   sidebar: {
     dashboard: { it: "Dashboard", en: "Dashboard" },
+    brands: { it: "Brands", en: "Brands" },
     competitors: { it: "Competitors", en: "Competitors" },
     compare: { it: "Confronto", en: "Compare" },
     library: { it: "Creative Library", en: "Creative Library" },
