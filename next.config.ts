@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "scontent.**" },
     ],
   },
+  async rewrites() {
+    return [
+      { source: "/brands", destination: "/competitors" },
+      { source: "/brands/:path*", destination: "/competitors/:path*" },
+    ];
+  },
 };
 
 export default nextConfig;
