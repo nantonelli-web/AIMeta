@@ -72,6 +72,14 @@ export function AdCard({ ad }: { ad: MaitAdExternal }) {
 
       {/* Details */}
       <div className="p-4 flex-1 flex flex-col gap-2">
+        {ad.headline && (
+          <p className="font-medium line-clamp-2 text-sm">{ad.headline}</p>
+        )}
+        {ad.ad_text && (
+          <p className="text-xs text-muted-foreground line-clamp-3">
+            {ad.ad_text}
+          </p>
+        )}
         <div className="flex items-center gap-1 flex-wrap">
           {ad.cta && <Badge variant="muted">{ad.cta}</Badge>}
           {ad.platforms?.slice(0, 3).map((p) => (
