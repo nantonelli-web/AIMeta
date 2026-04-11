@@ -161,6 +161,18 @@ interface SnapshotCard {
   watermarkedVideoSdUrl?: string;
 }
 
+interface SnapshotImage {
+  originalImageUrl?: string;
+  resizedImageUrl?: string;
+  imageCrops?: unknown[];
+}
+
+interface SnapshotVideo {
+  videoHdUrl?: string;
+  videoSdUrl?: string;
+  videoPreviewImageUrl?: string;
+}
+
 interface Snapshot {
   pageName?: string;
   pageId?: string;
@@ -168,7 +180,14 @@ interface Snapshot {
   pageProfilePictureUrl?: string;
   caption?: string;
   ctaText?: string;
+  linkUrl?: string;
+  body?: string;
+  title?: string;
   cards?: SnapshotCard[];
+  images?: SnapshotImage[];
+  videos?: SnapshotVideo[];
+  extraImages?: SnapshotImage[];
+  extraVideos?: SnapshotVideo[];
   event?: unknown;
 }
 
@@ -206,24 +225,34 @@ function toIso(v: string | number | undefined | null): string | null {
 function normalize(ad: RawAd): NormalizedAd {
   const snap = ad.snapshot;
   const card = snap?.cards?.[0];
+  const firstImage = snap?.images?.[0];
+  const firstVideo = snap?.videos?.[0];
 
-  // Extract image: prefer first card's original image, then resized
+  // Extract image: cards > snapshot.images > snapshot.extraImages
   const imageUrl =
     card?.originalImageUrl ??
     card?.resizedImageUrl ??
     card?.videoPreviewImageUrl ??
+    firstImage?.originalImageUrl ??
+    firstImage?.resizedImageUrl ??
+    snap?.extraImages?.[0]?.originalImageUrl ??
+    snap?.extraImages?.[0]?.resizedImageUrl ??
     null;
 
-  // Extract video
+  // Extract video: cards > snapshot.videos
   const videoUrl =
-    card?.videoHdUrl ?? card?.videoSdUrl ?? null;
+    card?.videoHdUrl ??
+    card?.videoSdUrl ??
+    firstVideo?.videoHdUrl ??
+    firstVideo?.videoSdUrl ??
+    null;
 
-  // Extract text from first card or snapshot
-  const adText = card?.body ?? ad.adText ?? null;
-  const headline = card?.title ?? null;
+  // Extract text: cards > snapshot body > top-level
+  const adText = card?.body ?? snap?.body ?? ad.adText ?? null;
+  const headline = card?.title ?? snap?.title ?? null;
   const description = card?.linkDescription ?? null;
   const cta = card?.ctaText ?? snap?.ctaText ?? null;
-  const landingUrl = card?.linkUrl ?? null;
+  const landingUrl = card?.linkUrl ?? snap?.linkUrl ?? null;
 
   // Platforms from the official actor use uppercase
   const platforms = (ad.publisherPlatform ?? []).map((p) =>
