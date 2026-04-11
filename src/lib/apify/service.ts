@@ -1,19 +1,21 @@
 import { buildAdLibraryUrl } from "@/lib/meta/url";
 
 /**
- * Service layer for the leadsbrary/meta-ads-library-scraper Apify actor.
- * Uses the Apify REST API directly (no SDK) to avoid native dep issues on Vercel.
+ * Service layer for the apify/facebook-ads-scraper actor (official).
+ * Uses the Apify REST API directly (no SDK).
  *
- * Actor output fields (verified):
- *   adArchiveID, pageID, pageName, pageURL, pageCategory, pageLikes,
- *   pageVerified, pageInstagramUser, pageInstagramFollowers, adText,
- *   adCreativeBodies, publisherPlatforms, adStatus, languages,
- *   startDate, endDate, adCreationTime, adLibraryURL, adSnapshotUrl,
- *   ctaDomain, ctaHeadline, ctaDescription, estimatedAudienceSize
+ * This actor provides full ad data INCLUDING direct image/video URLs
+ * inside the `snapshot.cards[]` array:
+ *   - originalImageUrl / resizedImageUrl (direct fbcdn URLs)
+ *   - videoHdUrl / videoSdUrl / videoPreviewImageUrl
+ *   - title, body, linkUrl, ctaText, caption
+ *
+ * Pricing: $5.80/1000 ads (Free), $5.00 (Starter), $3.40 (Business)
+ * Platform usage: Free
  */
 
 const APIFY_BASE = "https://api.apify.com/v2";
-const ACTOR_ID = process.env.APIFY_ACTOR_ID || "leadsbrary/meta-ads-library-scraper";
+const ACTOR_ID = process.env.APIFY_ACTOR_ID || "apify/facebook-ads-scraper";
 
 function getToken(): string {
   const token = process.env.APIFY_API_TOKEN;
@@ -72,8 +74,6 @@ export interface ScrapeOptions {
 export async function scrapeMetaAds(
   opts: ScrapeOptions
 ): Promise<ScrapeResult> {
-  // Build the Ad Library URL. The actor requires a full Ad Library URL
-  // with view_all_page_id for page-specific scraping.
   const startUrl =
     opts.pageUrl?.includes("ads/library")
       ? opts.pageUrl
@@ -85,13 +85,9 @@ export async function scrapeMetaAds(
 
   const input = {
     startUrls: [{ url: startUrl }],
-    maxResults: opts.maxItems ?? 200,
-    activeStatus: opts.active === false ? "ALL" : "ACTIVE",
-    scrapeAdDetails: true,
-    includeAboutPage: true,
+    maxItems: opts.maxItems ?? 200,
   };
 
-  // Start the actor run
   const actorPath = `/acts/${encodeURIComponent(ACTOR_ID)}/runs`;
   const run = await apifyFetch(actorPath, {
     method: "POST",
@@ -124,7 +120,6 @@ export async function scrapeMetaAds(
     throw new Error(`Apify run ended with status: ${status}`);
   }
 
-  // Fetch dataset items
   const dataset = await apifyFetch(
     `/datasets/${datasetId}/items?format=json&limit=1000`
   );
@@ -134,7 +129,6 @@ export async function scrapeMetaAds(
     .map(normalize)
     .filter((a): a is NormalizedAd => !!a.ad_archive_id);
 
-  // Best-effort cost lookup
   let costCu = 0;
   try {
     const runInfo = await apifyFetch(`/actor-runs/${runId}`);
@@ -146,43 +140,60 @@ export async function scrapeMetaAds(
   return { runId, records, costCu };
 }
 
-// ------- Raw ad shape from leadsbrary actor -------
-interface RawAd {
-  adArchiveID?: string;
-  adText?: string;
-  adCreativeBodies?: string[];
-  ctaHeadline?: string;
-  ctaDescription?: string;
-  ctaDomain?: string;
-  adSnapshotUrl?: string;
-  adLibraryURL?: string;
-  publisherPlatforms?: string[];
-  languages?: string[] | null;
-  startDate?: string;
-  endDate?: string | null;
-  adStatus?: string;
-  // Page info
-  pageID?: string;
-  pageName?: string;
-  pageURL?: string;
-  pageCategory?: string;
-  // Fallback fields from other actors
-  ad_archive_id?: string;
+// ------- Raw ad shape from apify/facebook-ads-scraper -------
+
+interface SnapshotCard {
   body?: string;
-  headline?: string;
-  description?: string;
-  callToAction?: string;
+  title?: string;
+  caption?: string;
+  ctaText?: string;
+  ctaType?: string;
+  linkUrl?: string;
+  linkDescription?: string;
   originalImageUrl?: string;
-  imageUrl?: string;
+  resizedImageUrl?: string;
   videoHdUrl?: string;
   videoSdUrl?: string;
-  linkUrl?: string;
+  videoPreviewImageUrl?: string;
+  watermarkedVideoHdUrl?: string;
+  watermarkedVideoSdUrl?: string;
+}
+
+interface Snapshot {
+  pageName?: string;
+  pageId?: string;
+  pageProfileUri?: string;
+  pageProfilePictureUrl?: string;
+  caption?: string;
+  ctaText?: string;
+  cards?: SnapshotCard[];
+  event?: unknown;
+}
+
+interface RawAd {
+  adArchiveID?: string;
+  adArchiveId?: string;
+  pageID?: string;
+  pageId?: string;
+  pageName?: string;
+  isActive?: boolean;
+  startDate?: number;
+  endDate?: number | null;
+  startDateFormatted?: string;
+  endDateFormatted?: string;
+  publisherPlatform?: string[];
+  snapshot?: Snapshot;
+  categories?: string[];
+  // Fallback fields from other actors
+  adText?: string;
+  adStatus?: string;
   [k: string]: unknown;
 }
 
 function toIso(v: string | number | undefined | null): string | null {
   if (v == null) return null;
   if (typeof v === "number") {
+    // Unix timestamp in seconds
     const ms = v < 1e12 ? v * 1000 : v;
     return new Date(ms).toISOString();
   }
@@ -191,26 +202,50 @@ function toIso(v: string | number | undefined | null): string | null {
 }
 
 function normalize(ad: RawAd): NormalizedAd {
-  // adText from this actor is often duplicated across variants; use first creative body
-  const primaryText =
-    ad.adCreativeBodies?.[0] ?? ad.adText ?? ad.body ?? null;
+  const snap = ad.snapshot;
+  const card = snap?.cards?.[0];
+
+  // Extract image: prefer first card's original image, then resized
+  const imageUrl =
+    card?.originalImageUrl ??
+    card?.resizedImageUrl ??
+    card?.videoPreviewImageUrl ??
+    null;
+
+  // Extract video
+  const videoUrl =
+    card?.videoHdUrl ?? card?.videoSdUrl ?? null;
+
+  // Extract text from first card or snapshot
+  const adText = card?.body ?? ad.adText ?? null;
+  const headline = card?.title ?? null;
+  const description = card?.linkDescription ?? null;
+  const cta = card?.ctaText ?? snap?.ctaText ?? null;
+  const landingUrl = card?.linkUrl ?? null;
+
+  // Platforms from the official actor use uppercase
+  const platforms = (ad.publisherPlatform ?? []).map((p) =>
+    p.toLowerCase()
+  );
 
   return {
-    ad_archive_id: String(ad.adArchiveID ?? ad.ad_archive_id ?? ""),
-    ad_text: primaryText,
-    headline: ad.ctaHeadline ?? ad.headline ?? null,
-    description: ad.ctaDescription ?? ad.description ?? null,
-    cta: ad.ctaDomain ?? ad.callToAction ?? null,
-    image_url: ad.adSnapshotUrl ?? ad.originalImageUrl ?? ad.imageUrl ?? null,
-    video_url: ad.videoHdUrl ?? ad.videoSdUrl ?? null,
-    landing_url: ad.ctaDomain
-      ? `https://${ad.ctaDomain}`
-      : ad.linkUrl ?? null,
-    platforms: ad.publisherPlatforms ?? [],
-    languages: Array.isArray(ad.languages) ? ad.languages : [],
-    start_date: toIso(ad.startDate),
-    end_date: toIso(ad.endDate),
-    status: ad.adStatus ?? null,
-    raw_data: ad as Record<string, unknown>,
+    ad_archive_id: String(
+      ad.adArchiveID ?? ad.adArchiveId ?? ""
+    ),
+    ad_text: adText,
+    headline,
+    description,
+    cta,
+    image_url: imageUrl,
+    video_url: videoUrl,
+    landing_url: landingUrl,
+    platforms,
+    languages: [],
+    start_date:
+      toIso(ad.startDateFormatted ?? ad.startDate),
+    end_date:
+      toIso(ad.endDateFormatted ?? ad.endDate),
+    status: ad.isActive ? "ACTIVE" : ad.adStatus ?? "INACTIVE",
+    raw_data: ad as unknown as Record<string, unknown>,
   };
 }
