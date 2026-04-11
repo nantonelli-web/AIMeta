@@ -38,7 +38,18 @@ export async function AdCard({
     <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col hover:border-gold/40 transition-colors">
       {/* Preview area */}
       <MaybeLink href={detailHref} className="aspect-[4/3] bg-muted relative overflow-hidden block cursor-pointer">
-        {snapshotUrl && !isSnapshotHtml ? (
+        {ad.video_url ? (
+          <video
+            src={ad.video_url}
+            poster={snapshotUrl && !isSnapshotHtml ? snapshotUrl : undefined}
+            className="absolute inset-0 w-full h-full object-cover"
+            muted
+            playsInline
+            loop
+            onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+            onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+          />
+        ) : snapshotUrl && !isSnapshotHtml ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={snapshotUrl}

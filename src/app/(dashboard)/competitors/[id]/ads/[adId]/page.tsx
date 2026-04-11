@@ -103,8 +103,20 @@ export default async function AdDetailPage({
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Main creative */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Primary image */}
-          {ad.image_url && !ad.image_url.includes("/render_ad/") && (
+          {/* Primary creative */}
+          {ad.video_url ? (
+            <Card>
+              <CardContent className="p-0">
+                <video
+                  src={ad.video_url}
+                  poster={ad.image_url && !ad.image_url.includes("/render_ad/") ? ad.image_url : undefined}
+                  controls
+                  playsInline
+                  className="w-full rounded-xl"
+                />
+              </CardContent>
+            </Card>
+          ) : ad.image_url && !ad.image_url.includes("/render_ad/") ? (
             <Card>
               <CardContent className="p-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -115,7 +127,7 @@ export default async function AdDetailPage({
                 />
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           {/* All card variants */}
           {cards.length > 1 && (
