@@ -6,7 +6,15 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Trash2,
+  CheckSquare,
+  Square,
+  MinusSquare,
+} from "lucide-react";
 import type { MaitScrapeJob } from "@/types";
 
 const statusBadge: Record<
@@ -42,10 +50,32 @@ function formatRelative(d: string | null) {
 
 export function JobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
   const router = useRouter();
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmSingle, setConfirmSingle] = useState<string | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  async function handleDelete(jobId: string, deleteAds: boolean) {
+  const allSelected = selected.size === jobs.length && jobs.length > 0;
+  const someSelected = selected.size > 0 && !allSelected;
+  const totalAdsSelected = jobs
+    .filter((j) => selected.has(j.id))
+    .reduce((sum, j) => sum + j.records_count, 0);
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(jobs.map((j) => j.id)));
+  }
+
+  async function handleDeleteSingle(jobId: string, deleteAds: boolean) {
     setDeleting(true);
     const t = toast.loading("Eliminazione in corso…");
     try {
@@ -58,35 +88,157 @@ export function JobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
         toast.error(json.error, { id: t });
       } else {
         toast.success(
-          deleteAds
-            ? "Scan e ads relativi eliminati."
-            : "Scan eliminato (ads mantenute).",
+          deleteAds ? "Scan e ads eliminati." : "Scan eliminato.",
           { id: t }
         );
+        setSelected((prev) => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
         router.refresh();
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Errore", { id: t });
     } finally {
       setDeleting(false);
-      setConfirmId(null);
+      setConfirmSingle(null);
+    }
+  }
+
+  async function handleBulkDelete(deleteAds: boolean) {
+    setDeleting(true);
+    const ids = [...selected];
+    const t = toast.loading(`Eliminazione di ${ids.length} scan…`);
+    try {
+      const res = await fetch("/api/scrape-jobs/bulk", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids, deleteAds }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({ error: "Errore" }));
+        toast.error(json.error, { id: t });
+      } else {
+        toast.success(
+          deleteAds
+            ? `${ids.length} scan e ads relativi eliminati.`
+            : `${ids.length} scan eliminati.`,
+          { id: t }
+        );
+        setSelected(new Set());
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Errore", { id: t });
+    } finally {
+      setDeleting(false);
+      setConfirmBulk(false);
     }
   }
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle className="text-sm">Cronologia scan</CardTitle>
+        {selected.size > 0 && !confirmBulk && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setConfirmBulk(true)}
+            disabled={deleting}
+          >
+            <Trash2 className="size-3.5" />
+            Elimina {selected.size} selezionat{selected.size === 1 ? "o" : "i"}
+          </Button>
+        )}
       </CardHeader>
+
+      {/* Bulk confirmation bar */}
+      {confirmBulk && (
+        <div className="mx-5 mb-3 p-3 rounded-md border border-red-400/30 bg-red-400/5 space-y-2">
+          <p className="text-xs text-foreground">
+            Stai per eliminare <b>{selected.size} scan</b>
+            {totalAdsSelected > 0 && (
+              <> ({totalAdsSelected} ads associate)</>
+            )}. Vuoi eliminare anche le ads?
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => handleBulkDelete(true)}
+            >
+              Elimina scan + ads
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => handleBulkDelete(false)}
+            >
+              Solo gli scan
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setConfirmBulk(false)}
+            >
+              Annulla
+            </Button>
+          </div>
+        </div>
+      )}
+
       <CardContent className="p-0">
+        {/* Select all header */}
+        <div className="flex items-center gap-3 px-5 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
+          <button
+            onClick={toggleAll}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title={allSelected ? "Deseleziona tutti" : "Seleziona tutti"}
+          >
+            {allSelected ? (
+              <CheckSquare className="size-4 text-gold" />
+            ) : someSelected ? (
+              <MinusSquare className="size-4 text-gold" />
+            ) : (
+              <Square className="size-4" />
+            )}
+          </button>
+          <span>
+            {selected.size > 0
+              ? `${selected.size} di ${jobs.length} selezionati`
+              : `${jobs.length} scan`}
+          </span>
+        </div>
+
         <div className="divide-y divide-border">
           {jobs.map((j) => {
             const cfg = statusBadge[j.status];
-            const isConfirming = confirmId === j.id;
+            const isSelected = selected.has(j.id);
+            const isConfirming = confirmSingle === j.id;
             return (
-              <div key={j.id} className="px-5 py-3 text-sm">
+              <div
+                key={j.id}
+                className={`px-5 py-3 text-sm transition-colors ${
+                  isSelected ? "bg-gold/5" : ""
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      onClick={() => toggleOne(j.id)}
+                      className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="size-4 text-gold" />
+                      ) : (
+                        <Square className="size-4" />
+                      )}
+                    </button>
                     <Badge variant={cfg.variant} className="gap-1">
                       {cfg.icon}
                       {j.status}
@@ -104,7 +256,9 @@ export function JobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
                     <span>{j.records_count} ads</span>
                     {j.cost_cu > 0 && <span>${j.cost_cu.toFixed(3)}</span>}
                     <button
-                      onClick={() => setConfirmId(isConfirming ? null : j.id)}
+                      onClick={() =>
+                        setConfirmSingle(isConfirming ? null : j.id)
+                      }
                       disabled={deleting}
                       className="size-7 rounded-md border border-border hover:bg-muted hover:border-red-400/40 grid place-items-center text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-50"
                       aria-label="Elimina scan"
@@ -116,7 +270,7 @@ export function JobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
                 </div>
 
                 {isConfirming && (
-                  <div className="mt-3 p-3 rounded-md border border-border bg-muted/50 space-y-2">
+                  <div className="mt-3 ml-7 p-3 rounded-md border border-border bg-muted/50 space-y-2">
                     <p className="text-xs text-foreground">
                       Vuoi eliminare anche le <b>{j.records_count} ads</b>{" "}
                       raccolte da questo scan?
@@ -126,23 +280,23 @@ export function JobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
                         size="sm"
                         variant="destructive"
                         disabled={deleting}
-                        onClick={() => handleDelete(j.id, true)}
+                        onClick={() => handleDeleteSingle(j.id, true)}
                       >
-                        Elimina scan + ads
+                        Scan + ads
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={deleting}
-                        onClick={() => handleDelete(j.id, false)}
+                        onClick={() => handleDeleteSingle(j.id, false)}
                       >
-                        Solo lo scan
+                        Solo scan
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={deleting}
-                        onClick={() => setConfirmId(null)}
+                        onClick={() => setConfirmSingle(null)}
                       >
                         Annulla
                       </Button>
