@@ -80,14 +80,12 @@ export function AdCard({ ad }: { ad: MaitAdExternal }) {
             {ad.ad_text}
           </p>
         )}
-        <div className="flex items-center gap-1 flex-wrap">
-          {ad.cta && <Badge variant="muted">{ad.cta}</Badge>}
-          {ad.platforms?.slice(0, 3).map((p) => (
-            <Badge key={p} variant="outline">
-              {p}
-            </Badge>
-          ))}
-        </div>
+        {ad.cta && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground">CTA:</span>
+            <Badge variant="muted">{ad.cta}</Badge>
+          </div>
+        )}
         {aiTags && (
           <div className="flex items-center gap-1 flex-wrap">
             {aiTags.sector && <Badge variant="gold">{aiTags.sector}</Badge>}
@@ -95,6 +93,12 @@ export function AdCard({ ad }: { ad: MaitAdExternal }) {
             {aiTags.objective && (
               <Badge variant="outline">{aiTags.objective}</Badge>
             )}
+          </div>
+        )}
+        {ad.platforms && ad.platforms.length > 0 && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span>Su:</span>
+            <span>{ad.platforms.join(" · ")}</span>
           </div>
         )}
         <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border mt-auto">
