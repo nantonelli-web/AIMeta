@@ -86,7 +86,7 @@ export async function scrapeMetaAds(
     urls: [startUrl],
     maxItems: opts.maxItems ?? 200,
     countryCode: opts.country ?? "ALL",
-    activeStatus: opts.active === false ? "all" : "active",
+    activeStatus: opts.active === false ? "ALL" : "ACTIVE",
   };
 
   // Start the actor run (synchronous — waits for completion)
