@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
   // If URL is a username (not numeric), resolve to page ID via Apify
   if (!pageId) {
-    const resolved = await resolvePageId(parsed.data.page_url);
+    const resolved = await resolvePageId(parsed.data.page_url, parsed.data.page_name);
     if (resolved) pageId = resolved;
   }
 
