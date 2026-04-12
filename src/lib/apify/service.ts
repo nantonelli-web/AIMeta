@@ -88,10 +88,14 @@ export async function scrapeMetaAds(
         });
 
   const maxItems = opts.maxItems ?? 200;
-  const input = {
+  const input: Record<string, unknown> = {
     startUrls: [{ url: startUrl }],
     maxItems,
   };
+  // Pass dates as direct actor input fields (some actors read these
+  // instead of / in addition to the URL query params).
+  if (opts.dateFrom) input.startDate = opts.dateFrom;
+  if (opts.dateTo) input.endDate = opts.dateTo;
 
   // maxItems is passed both in input AND as query param (pay-per-result billing)
   const actorPath = `/acts/${encodeURIComponent(ACTOR_ID)}/runs?maxItems=${maxItems}`;

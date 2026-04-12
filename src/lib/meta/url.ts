@@ -37,7 +37,10 @@ export function buildAdLibraryUrl(opts: {
     media_type: "all",
   });
   if (opts.pageId) params.set("view_all_page_id", opts.pageId);
-  if (opts.dateFrom) params.set("start_date[min]", opts.dateFrom);
-  if (opts.dateTo) params.set("start_date[max]", opts.dateTo);
-  return `https://www.facebook.com/ads/library/?${params.toString()}`;
+  // Build base URL then append date params with literal brackets.
+  // URLSearchParams encodes [] as %5B%5D which some scrapers don't handle.
+  let qs = params.toString();
+  if (opts.dateFrom) qs += `&start_date[min]=${opts.dateFrom}`;
+  if (opts.dateTo) qs += `&start_date[max]=${opts.dateTo}`;
+  return `https://www.facebook.com/ads/library/?${qs}`;
 }
