@@ -84,7 +84,9 @@ export async function scrapeMetaAds(
       : buildAdLibraryUrl({
           pageId: opts.pageId,
           searchQuery: opts.pageId ? undefined : opts.pageName,
-          country: opts.country ? opts.country.split(",")[0].trim() : undefined,
+          // Use ALL when multiple countries are configured so we don't
+          // miss ads targeting other regions (e.g. DE for a German brand).
+          country: opts.country?.includes(",") ? "ALL" : opts.country,
           active: opts.active,
           dateFrom: opts.dateFrom,
           dateTo: opts.dateTo,
