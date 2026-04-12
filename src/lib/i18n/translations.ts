@@ -14,15 +14,15 @@ const translations = {
       en: "Meta Ads Intelligence Tool.",
     },
     subtitle: {
-      it: "Competitive intelligence, performance analytics e creative library per il team NIMA Digital. Monitora competitor, analizza creativit\u00E0, presenta insight ai clienti.",
-      en: "Competitive intelligence, performance analytics and creative library for the NIMA Digital team. Monitor competitors, analyse creatives, present insights to clients.",
+      it: "Competitive intelligence, performance analytics e creative library per il team NIMA Digital. Monitora i brand, analizza creativit\u00E0, presenta insight ai clienti.",
+      en: "Competitive intelligence, performance analytics and creative library for the NIMA Digital team. Monitor brands, analyse creatives, present insights to clients.",
     },
     loginBtn: { it: "Accedi", en: "Sign in" },
     registerBtn: { it: "Crea account", en: "Create account" },
-    featureMonitorTitle: { it: "Competitor Monitor", en: "Competitor Monitor" },
+    featureMonitorTitle: { it: "Brand Monitor", en: "Brand Monitor" },
     featureMonitorBody: {
-      it: "Scraping automatico delle ads attive dei competitor via Apify + Meta Ad Library.",
-      en: "Automatic scraping of competitor active ads via Apify + Meta Ad Library.",
+      it: "Scraping automatico delle ads attive dei brand via Apify + Meta Ad Library.",
+      en: "Automatic scraping of brand active ads via Apify + Meta Ad Library.",
     },
     featureLibraryTitle: { it: "Creative Library", en: "Creative Library" },
     featureLibraryBody: {
@@ -60,7 +60,6 @@ const translations = {
   sidebar: {
     dashboard: { it: "Dashboard", en: "Dashboard" },
     brands: { it: "Brands", en: "Brands" },
-    competitors: { it: "Competitors", en: "Competitors" },
     compare: { it: "Confronto", en: "Compare" },
     library: { it: "Creative Library", en: "Creative Library" },
     collections: { it: "Collezioni", en: "Collections" },
@@ -118,37 +117,37 @@ const translations = {
     totalAds: { it: "Ads totali", en: "Total ads" },
     activeAds: { it: "Ads attive", en: "Active ads" },
     monitoredCompetitors: {
-      it: "Competitor monitorati",
-      en: "Monitored competitors",
+      it: "Brand monitorati",
+      en: "Monitored brands",
     },
     latestAds: { it: "Latest ads", en: "Latest ads" },
     viewAll: { it: "Vedi tutto", en: "View all" },
     noAdsYet: {
-      it: "Nessuna ad ancora. Aggiungi un competitor e lancia uno scan.",
-      en: "No ads yet. Add a competitor and run a scan.",
+      it: "Nessuna ad ancora. Aggiungi un brand e lancia uno scan.",
+      en: "No ads yet. Add a brand and run a scan.",
     },
-    topCompetitors: { it: "Top 5 competitor (active)", en: "Top 5 competitors (active)" },
+    topCompetitors: { it: "Top 5 brand (active)", en: "Top 5 brands (active)" },
     noDataYet: { it: "Nessun dato ancora.", en: "No data yet." },
   },
 
-  // ─── Competitors ───────────────────────────────────────────
+  // ─── Competitors (Brands) ─────────────────────────────────
   competitors: {
-    title: { it: "Competitors", en: "Competitors" },
+    title: { it: "Brands", en: "Brands" },
     subtitle: {
       it: "Brand monitorati nel tuo workspace.",
       en: "Monitored brands in your workspace.",
     },
-    addCompetitor: { it: "Aggiungi competitor", en: "Add competitor" },
+    addCompetitor: { it: "Aggiungi brand", en: "Add brand" },
     noCompetitors: {
-      it: "Nessun competitor configurato.",
-      en: "No competitors configured.",
+      it: "Nessun brand configurato.",
+      en: "No brands configured.",
     },
     noCompetitorsClickAdd: {
-      it: "Clicca Aggiungi competitor per iniziare.",
-      en: "Click Add competitor to get started.",
+      it: "Clicca Aggiungi brand per iniziare.",
+      en: "Click Add brand to get started.",
     },
     lastScan: { it: "Ultimo scan:", en: "Last scan:" },
-    allCompetitors: { it: "Tutti i competitor", en: "All competitors" },
+    allCompetitors: { it: "Tutti i brand", en: "All brands" },
     exportCsv: { it: "Export CSV", en: "Export CSV" },
     noAdsCollected: {
       it: "Nessuna ad ancora raccolta. Lancia uno Scan now per popolare la libreria.",
@@ -157,12 +156,12 @@ const translations = {
     adsCount: { it: "ads (max 120 pi\u00F9 recenti)", en: "ads (max 120 most recent)" },
   },
 
-  // ─── New Competitor ────────────────────────────────────────
+  // ─── New Brand ─────────────────────────────────────────────
   newCompetitor: {
-    title: { it: "Aggiungi competitor", en: "Add competitor" },
+    title: { it: "Aggiungi brand", en: "Add brand" },
     subtitle: {
-      it: "Inserisci l'URL pagina Facebook o Meta Ad Library del competitor.",
-      en: "Enter the competitor's Facebook page or Meta Ad Library URL.",
+      it: "Inserisci l'URL pagina Facebook o Meta Ad Library del brand.",
+      en: "Enter the brand's Facebook page or Meta Ad Library URL.",
     },
     detailsTitle: { it: "Dettagli", en: "Details" },
     detailsDescription: {
@@ -177,29 +176,29 @@ const translations = {
     },
     countryLabel: { it: "Paese", en: "Country" },
     categoryLabel: { it: "Categoria", en: "Category" },
-    createSubmit: { it: "Crea competitor", en: "Create competitor" },
+    createSubmit: { it: "Crea brand", en: "Create brand" },
     createLoading: { it: "Creazione...", en: "Creating..." },
-    created: { it: "Competitor creato.", en: "Competitor created." },
+    created: { it: "Brand creato.", en: "Brand created." },
     error: { it: "Errore", en: "Error" },
     selectCategory: { it: "Seleziona categoria", en: "Select category" },
     searchCountry: { it: "Cerca paese...", en: "Search country..." },
     noCountryMatch: { it: "Nessun paese trovato.", en: "No country found." },
   },
 
-  // ─── Edit Competitor ────────────────────────────────────────
+  // ─── Edit Brand ────────────────────────────────────────────
   editCompetitor: {
-    title: { it: "Modifica competitor", en: "Edit competitor" },
+    title: { it: "Modifica brand", en: "Edit brand" },
     detailsTitle: { it: "Dettagli", en: "Details" },
-    detailsDescription: { it: "Modifica le informazioni del competitor.", en: "Edit competitor information." },
+    detailsDescription: { it: "Modifica le informazioni del brand.", en: "Edit brand information." },
     save: { it: "Salva modifiche", en: "Save changes" },
     saving: { it: "Salvataggio...", en: "Saving..." },
-    saved: { it: "Competitor aggiornato.", en: "Competitor updated." },
-    deleteBtn: { it: "Elimina competitor", en: "Delete competitor" },
+    saved: { it: "Brand aggiornato.", en: "Brand updated." },
+    deleteBtn: { it: "Elimina brand", en: "Delete brand" },
     deleteConfirm: { it: "Sei sicuro di voler eliminare", en: "Are you sure you want to delete" },
     deleteWarning: { it: "Tutte le ads e gli scan associati verranno eliminati.", en: "All associated ads and scans will be deleted." },
     confirmDelete: { it: "Elimina definitivamente", en: "Delete permanently" },
     deletingProgress: { it: "Eliminazione...", en: "Deleting..." },
-    deleted: { it: "Competitor eliminato.", en: "Competitor deleted." },
+    deleted: { it: "Brand eliminato.", en: "Brand deleted." },
     deleteError: { it: "Errore nell'eliminazione.", en: "Error deleting." },
     cancel: { it: "Annulla", en: "Cancel" },
   },
@@ -282,7 +281,7 @@ const translations = {
 
   // ─── Ad Detail ─────────────────────────────────────────────
   adDetail: {
-    backToCompetitor: { it: "Torna al competitor", en: "Back to competitor" },
+    backToCompetitor: { it: "Torna al brand", en: "Back to brand" },
     creativeVariants: { it: "Varianti creative", en: "Creative variants" },
     variantLabel: { it: "Variante", en: "Variant" },
     fullText: { it: "Testo completo", en: "Full text" },
@@ -307,19 +306,19 @@ const translations = {
 
   // ─── Compare ───────────────────────────────────────────────
   compare: {
-    title: { it: "Confronto competitor", en: "Competitor comparison" },
+    title: { it: "Confronto brand", en: "Brand comparison" },
     subtitle: {
-      it: "Seleziona 2 o 3 competitor per confrontarli side-by-side.",
-      en: "Select 2 or 3 competitors to compare them side-by-side.",
+      it: "Seleziona 2 o 3 brand per confrontarli side-by-side.",
+      en: "Select 2 or 3 brands to compare them side-by-side.",
     },
-    selectCompetitors: { it: "Seleziona competitor", en: "Select competitors" },
+    selectCompetitors: { it: "Seleziona brand", en: "Select brands" },
     noCompetitorsInWorkspace: {
-      it: "Nessun competitor nel workspace.",
-      en: "No competitors in workspace.",
+      it: "Nessun brand nel workspace.",
+      en: "No brands in workspace.",
     },
     selectAtLeast2: {
-      it: "Seleziona almeno 2 competitor per vedere il confronto.",
-      en: "Select at least 2 competitors to see the comparison.",
+      it: "Seleziona almeno 2 brand per vedere il confronto.",
+      en: "Select at least 2 brands to see the comparison.",
     },
     calculating: { it: "Calcolo in corso\u2026", en: "Calculating\u2026" },
     totalAds: { it: "Ads totali", en: "Total ads" },
@@ -365,19 +364,19 @@ const translations = {
   benchmarks: {
     title: { it: "Benchmarks", en: "Benchmarks" },
     subtitle: {
-      it: "Confronto competitivo basato sulle ads scrappate.",
-      en: "Competitive comparison based on scraped ads.",
+      it: "Analisi comparativa basata sulle ads scrappate.",
+      en: "Comparative analysis based on scraped ads.",
     },
     noData: {
-      it: "Nessun dato disponibile. Aggiungi dei competitor e lancia almeno uno scan per popolare i benchmark.",
-      en: "No data available. Add competitors and run at least one scan to populate benchmarks.",
+      it: "Nessun dato disponibile. Aggiungi dei brand e lancia almeno uno scan per popolare i benchmark.",
+      en: "No data available. Add brands and run at least one scan to populate benchmarks.",
     },
     comparativeAnalysis: {
       it: "Analisi comparativa su",
       en: "Comparative analysis on",
     },
     adsOf: { it: "ads di", en: "ads from" },
-    competitorsWord: { it: "competitor.", en: "competitors." },
+    competitorsWord: { it: "brand.", en: "brands." },
     totalAds: { it: "Ads totali", en: "Total ads" },
     activeAds: { it: "Ads attive", en: "Active ads" },
     avgCampaignDuration: {
@@ -386,13 +385,13 @@ const translations = {
     },
     avgCopyLength: { it: "Lungh. media copy", en: "Avg. copy length" },
     volumePerCompetitor: {
-      it: "Volume ads per competitor",
-      en: "Ad volume per competitor",
+      it: "Volume ads per brand",
+      en: "Ad volume per brand",
     },
     globalFormatMix: { it: "Format mix (globale)", en: "Format mix (global)" },
     formatPerCompetitor: {
-      it: "Format mix per competitor",
-      en: "Format mix per competitor",
+      it: "Format mix per brand",
+      en: "Format mix per brand",
     },
     topCta: { it: "Top CTA", en: "Top CTA" },
     platformDistribution: {
@@ -536,8 +535,8 @@ const translations = {
   collections: {
     title: { it: "Collezioni", en: "Collections" },
     subtitle: {
-      it: "Board di ispirazione. Salva ads dalla Creative Library o dai competitor.",
-      en: "Inspiration boards. Save ads from the Creative Library or competitors.",
+      it: "Board di ispirazione. Salva ads dalla Creative Library o dai brand monitorati.",
+      en: "Inspiration boards. Save ads from the Creative Library or monitored brands.",
     },
     noCollections: { it: "Nessuna collezione creata.", en: "No collections created." },
     noCollectionsHint: {
@@ -558,9 +557,9 @@ const translations = {
     taggingFailed: { it: "Tagging fallito.", en: "Tagging failed." },
     adsTagged: { it: "ads taggate.", en: "ads tagged." },
     remaining: { it: "ancora da analizzare.", en: "remaining to analyze." },
-    allTagged: { it: "Tutte le ads sono già state analizzate.", en: "All ads have already been analyzed." },
+    allTagged: { it: "Tutte le ads sono gi\u00E0 state analizzate.", en: "All ads have already been analyzed." },
     allTaggedBtn: { it: "Tutto analizzato", en: "All analyzed" },
-    allTaggedTooltip: { it: "Tutte le ads di questo competitor sono state analizzate dall'AI.", en: "All ads from this competitor have been analyzed by AI." },
+    allTaggedTooltip: { it: "Tutte le ads di questo brand sono state analizzate dall'AI.", en: "All ads from this brand have been analyzed by AI." },
     toTag: { it: "ads da analizzare", en: "ads to analyze" },
     toAnalyze: { it: "da analizzare", en: "to analyze" },
     complete: { it: "Analisi completata", en: "Analysis complete" },
