@@ -49,7 +49,9 @@ export async function POST(req: Request) {
     .single();
 
   if (existingProfile) {
-    // User exists — update their workspace and role
+    const oldWorkspaceId = existingProfile.workspace_id;
+
+    // Move user to the inviter's workspace
     await admin
       .from("mait_users")
       .update({
@@ -57,8 +59,24 @@ export async function POST(req: Request) {
         role: invite.role,
       })
       .eq("id", user.id);
+
+    // Clean up orphaned workspace if the user was the only member
+    if (oldWorkspaceId && oldWorkspaceId !== invite.workspace_id) {
+      const { count } = await admin
+        .from("mait_users")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", oldWorkspaceId);
+
+      if (count === 0) {
+        // No other members — delete orphaned workspace (cascades to all data)
+        await admin
+          .from("mait_workspaces")
+          .delete()
+          .eq("id", oldWorkspaceId);
+      }
+    }
   } else {
-    // New user — create profile
+    // New user — create profile directly in the inviter's workspace
     await admin.from("mait_users").insert({
       id: user.id,
       email: user.email ?? invite.email,
