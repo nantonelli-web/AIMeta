@@ -76,6 +76,17 @@ export async function POST(req: Request) {
 
   const results = await tagAdsBatch(toTag);
 
+  if (results.size === 0 && toTag.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        tagged: 0,
+        error: "AI tagging failed for all ads. Check OPENROUTER_API_KEY and model availability.",
+      },
+      { status: 502 }
+    );
+  }
+
   const admin = createAdminClient();
   let tagCount = 0;
   for (const [adId, tags] of results) {

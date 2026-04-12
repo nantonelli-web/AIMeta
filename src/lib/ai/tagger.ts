@@ -27,7 +27,7 @@ interface AdInput {
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "anthropic/claude-haiku-4-5-20251001";
+const MODEL = "anthropic/claude-haiku-4.5";
 
 export async function tagAd(ad: AdInput): Promise<AdTagResult | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
