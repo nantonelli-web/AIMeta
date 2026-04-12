@@ -18,8 +18,42 @@ export async function POST(req: Request) {
   const { userId, email, name, workspaceName } = parsed.data;
 
   const admin = createAdminClient();
-  const slug = `ws-${userId.slice(0, 8)}`;
 
+  // Check for pending invitation for this email
+  const { data: pendingInvite } = await admin
+    .from("mait_invitations")
+    .select("id, workspace_id, role")
+    .eq("email", email)
+    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (pendingInvite) {
+    // Join the invited workspace directly — no personal workspace created
+    const { error: userErr } = await admin.from("mait_users").insert({
+      id: userId,
+      email,
+      name,
+      role: pendingInvite.role,
+      workspace_id: pendingInvite.workspace_id,
+    });
+
+    if (userErr) {
+      return NextResponse.json({ error: userErr.message }, { status: 500 });
+    }
+
+    await admin
+      .from("mait_invitations")
+      .update({ accepted_at: new Date().toISOString() })
+      .eq("id", pendingInvite.id);
+
+    return NextResponse.json({ workspaceId: pendingInvite.workspace_id });
+  }
+
+  // No invite — create personal workspace
+  const slug = `ws-${userId.slice(0, 8)}`;
   const { data: ws, error: wsErr } = await admin
     .from("mait_workspaces")
     .insert({ name: workspaceName, slug })

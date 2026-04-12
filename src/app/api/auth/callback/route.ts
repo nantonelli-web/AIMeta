@@ -28,50 +28,109 @@ export async function GET(req: Request) {
   }
 
   const admin = createAdminClient();
+  const email = user.email ?? "";
+  const name =
+    user.user_metadata?.full_name ??
+    user.user_metadata?.name ??
+    email.split("@")[0] ??
+    "User";
+
+  // Check for pending invitation for this email
+  const { data: pendingInvite } = await admin
+    .from("mait_invitations")
+    .select("id, workspace_id, role")
+    .eq("email", email)
+    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
 
   // Check if mait_user already exists
   const { data: existing } = await admin
     .from("mait_users")
-    .select("id")
+    .select("id, workspace_id")
     .eq("id", user.id)
     .single();
 
-  if (!existing) {
-    const name =
-      user.user_metadata?.full_name ??
-      user.user_metadata?.name ??
-      user.email?.split("@")[0] ??
-      "User";
-    const email = user.email ?? "";
-    const slug = `ws-${user.id.slice(0, 8)}`;
+  if (existing) {
+    // User exists — check if there's a pending invite to a different workspace
+    if (pendingInvite && existing.workspace_id !== pendingInvite.workspace_id) {
+      const oldWorkspaceId = existing.workspace_id;
 
-    const { data: ws, error: wsErr } = await admin
-      .from("mait_workspaces")
-      .insert({ name: `${name}'s workspace`, slug })
-      .select("id")
-      .single();
+      // Move to invited workspace
+      await admin
+        .from("mait_users")
+        .update({
+          workspace_id: pendingInvite.workspace_id,
+          role: pendingInvite.role,
+        })
+        .eq("id", user.id);
 
-    if (wsErr) {
-      console.error("OAuth: workspace creation failed:", wsErr.message);
-      return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent("Workspace failed: " + wsErr.message)}`
-      );
+      // Mark invite as accepted
+      await admin
+        .from("mait_invitations")
+        .update({ accepted_at: new Date().toISOString() })
+        .eq("id", pendingInvite.id);
+
+      // Clean up orphaned workspace if empty
+      if (oldWorkspaceId) {
+        const { count } = await admin
+          .from("mait_users")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", oldWorkspaceId);
+        if (count === 0) {
+          await admin.from("mait_workspaces").delete().eq("id", oldWorkspaceId);
+        }
+      }
     }
+  } else {
+    // New user
+    if (pendingInvite) {
+      // Has a pending invite — join that workspace directly (no personal workspace)
+      await admin.from("mait_users").insert({
+        id: user.id,
+        email,
+        name,
+        role: pendingInvite.role,
+        workspace_id: pendingInvite.workspace_id,
+      });
 
-    const { error: userErr } = await admin.from("mait_users").insert({
-      id: user.id,
-      email,
-      name,
-      role: "admin",
-      workspace_id: ws.id,
-    });
+      await admin
+        .from("mait_invitations")
+        .update({ accepted_at: new Date().toISOString() })
+        .eq("id", pendingInvite.id);
+    } else {
+      // No invite — create personal workspace
+      const slug = `ws-${user.id.slice(0, 8)}`;
+      const { data: ws, error: wsErr } = await admin
+        .from("mait_workspaces")
+        .insert({ name: `${name}'s workspace`, slug })
+        .select("id")
+        .single();
 
-    if (userErr) {
-      console.error("OAuth: user creation failed:", userErr.message);
-      await admin.from("mait_workspaces").delete().eq("id", ws.id);
-      return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent("User creation failed: " + userErr.message)}`
-      );
+      if (wsErr) {
+        console.error("OAuth: workspace creation failed:", wsErr.message);
+        return NextResponse.redirect(
+          `${origin}/login?error=${encodeURIComponent("Workspace failed: " + wsErr.message)}`
+        );
+      }
+
+      const { error: userErr } = await admin.from("mait_users").insert({
+        id: user.id,
+        email,
+        name,
+        role: "admin",
+        workspace_id: ws.id,
+      });
+
+      if (userErr) {
+        console.error("OAuth: user creation failed:", userErr.message);
+        await admin.from("mait_workspaces").delete().eq("id", ws.id);
+        return NextResponse.redirect(
+          `${origin}/login?error=${encodeURIComponent("User creation failed: " + userErr.message)}`
+        );
+      }
     }
   }
 
