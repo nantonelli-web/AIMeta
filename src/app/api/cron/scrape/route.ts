@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   // Find all competitors whose monitor_config.frequency matches.
   const { data: competitors, error } = await admin
     .from("mait_competitors")
-    .select("id, workspace_id, page_id, page_url, country, monitor_config");
+    .select("id, workspace_id, page_id, page_name, page_url, country, monitor_config");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     id: string;
     workspace_id: string;
     page_id: string | null;
+    page_name: string | null;
     page_url: string;
     country: string | null;
     monitor_config: { frequency?: string; max_items?: number } | null;
@@ -77,6 +78,7 @@ export async function GET(req: Request) {
     try {
       const result = await scrapeMetaAds({
         pageId: c.page_id ?? undefined,
+        pageName: (c as { page_name?: string }).page_name ?? undefined,
         pageUrl: c.page_url,
         country: c.country ?? undefined,
         maxItems: c.monitor_config?.max_items ?? 200,

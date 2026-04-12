@@ -25,6 +25,7 @@ export function extractPageIdentifier(url: string): {
 
 export function buildAdLibraryUrl(opts: {
   pageId?: string;
+  searchQuery?: string;
   country?: string;
   active?: boolean;
   dateFrom?: string;
@@ -36,8 +37,13 @@ export function buildAdLibraryUrl(opts: {
     country: opts.country ?? "ALL",
     media_type: "all",
   });
-  if (opts.pageId) params.set("view_all_page_id", opts.pageId);
-  // Build base URL then append date params with literal brackets.
+  if (opts.pageId) {
+    params.set("view_all_page_id", opts.pageId);
+  } else if (opts.searchQuery) {
+    // Fallback: search by name when page_id was not resolved
+    params.set("q", opts.searchQuery);
+  }
+  // Append date params with literal brackets.
   // URLSearchParams encodes [] as %5B%5D which some scrapers don't handle.
   let qs = params.toString();
   if (opts.dateFrom) qs += `&start_date[min]=${opts.dateFrom}`;

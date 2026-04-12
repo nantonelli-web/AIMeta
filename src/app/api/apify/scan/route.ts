@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeMetaAds } from "@/lib/apify/service";
+import { resolvePageId } from "@/lib/meta/resolve-page-id";
 import { sendNewAdsNotification } from "@/lib/email/resend";
 
 export const maxDuration = 300; // seconds (Vercel hobby allows 60; pro 300)
@@ -51,6 +52,22 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
+  // If page_id was never resolved, try again now
+  let pageId = competitor.page_id;
+  if (!pageId) {
+    const resolved = await resolvePageId(
+      competitor.page_url,
+      competitor.page_name ?? undefined
+    );
+    if (resolved) {
+      pageId = resolved;
+      await admin
+        .from("mait_competitors")
+        .update({ page_id: resolved })
+        .eq("id", competitor.id);
+    }
+  }
+
   // Create job row
   const { data: job, error: jobErr } = await admin
     .from("mait_scrape_jobs")
@@ -68,7 +85,8 @@ export async function POST(req: Request) {
 
   try {
     const result = await scrapeMetaAds({
-      pageId: competitor.page_id ?? undefined,
+      pageId: pageId ?? undefined,
+      pageName: competitor.page_name ?? undefined,
       pageUrl: competitor.page_url,
       country: competitor.country ?? undefined,
       maxItems: parsed.data.max_items ?? 200,
@@ -145,6 +163,7 @@ export async function POST(req: Request) {
       ok: true,
       job_id: job.id,
       records: result.records.length,
+      debug: { startUrl: result.startUrl, pageId: pageId ?? null },
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Scrape failed";

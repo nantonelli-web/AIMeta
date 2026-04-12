@@ -61,10 +61,12 @@ export interface ScrapeResult {
   runId: string;
   records: NormalizedAd[];
   costCu: number;
+  startUrl: string;
 }
 
 export interface ScrapeOptions {
   pageId?: string;
+  pageName?: string;
   pageUrl?: string;
   country?: string;
   maxItems?: number;
@@ -81,6 +83,7 @@ export async function scrapeMetaAds(
       ? opts.pageUrl
       : buildAdLibraryUrl({
           pageId: opts.pageId,
+          searchQuery: opts.pageId ? undefined : opts.pageName,
           country: opts.country ? opts.country.split(",")[0].trim() : undefined,
           active: opts.active,
           dateFrom: opts.dateFrom,
@@ -147,7 +150,7 @@ export async function scrapeMetaAds(
     /* ignore */
   }
 
-  return { runId, records, costCu };
+  return { runId, records, costCu, startUrl };
 }
 
 // ------- Raw ad shape from apify/facebook-ads-scraper -------
