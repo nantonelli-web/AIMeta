@@ -212,6 +212,14 @@ const translations = {
       en: "Scraping in progress\u2026 (may take 30-90s)",
     },
     adsSynced: { it: "ads sincronizzate.", en: "ads synced." },
+    scanOptions: { it: "Opzioni scan", en: "Scan options" },
+    dateFrom: { it: "Da", en: "From" },
+    dateTo: { it: "A", en: "To" },
+    adStatus: { it: "Stato ads", en: "Ad status" },
+    activeOnly: { it: "Solo attive", en: "Active only" },
+    allAds: { it: "Tutte (attive + inattive)", en: "All (active + inactive)" },
+    resetFilters: { it: "Reset filtri", en: "Reset filters" },
+    launchScan: { it: "Lancia scan", en: "Launch scan" },
   },
 
   // ─── Frequency Selector ────────────────────────────────────

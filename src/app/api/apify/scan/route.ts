@@ -10,6 +10,9 @@ export const maxDuration = 300; // seconds (Vercel hobby allows 60; pro 300)
 const schema = z.object({
   competitor_id: z.string().uuid(),
   max_items: z.number().int().min(1).max(1000).optional(),
+  date_from: z.string().optional(),
+  date_to: z.string().optional(),
+  active_status: z.enum(["ACTIVE", "ALL"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -69,7 +72,9 @@ export async function POST(req: Request) {
       pageUrl: competitor.page_url,
       country: competitor.country ?? undefined,
       maxItems: parsed.data.max_items ?? 200,
-      active: true,
+      active: parsed.data.active_status !== "ALL",
+      dateFrom: parsed.data.date_from,
+      dateTo: parsed.data.date_to,
     });
 
     // Upsert ads

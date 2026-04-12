@@ -69,6 +69,8 @@ export interface ScrapeOptions {
   country?: string;
   maxItems?: number;
   active?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export async function scrapeMetaAds(
@@ -81,6 +83,8 @@ export async function scrapeMetaAds(
           pageId: opts.pageId,
           country: opts.country ? opts.country.split(",")[0].trim() : undefined,
           active: opts.active,
+          dateFrom: opts.dateFrom,
+          dateTo: opts.dateTo,
         });
 
   const maxItems = opts.maxItems ?? 200;

@@ -27,6 +27,8 @@ export function buildAdLibraryUrl(opts: {
   pageId?: string;
   country?: string;
   active?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
 }): string {
   const params = new URLSearchParams({
     active_status: opts.active === false ? "all" : "active",
@@ -35,5 +37,7 @@ export function buildAdLibraryUrl(opts: {
     media_type: "all",
   });
   if (opts.pageId) params.set("view_all_page_id", opts.pageId);
+  if (opts.dateFrom) params.set("start_date[min]", opts.dateFrom);
+  if (opts.dateTo) params.set("start_date[max]", opts.dateTo);
   return `https://www.facebook.com/ads/library/?${params.toString()}`;
 }
