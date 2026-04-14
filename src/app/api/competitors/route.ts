@@ -10,6 +10,7 @@ const schema = z.object({
   country: z.string().max(200).nullable().optional(),
   category: z.string().max(80).nullable().optional(),
   client_id: z.string().uuid().nullable().optional(),
+  instagram_username: z.string().max(60).nullable().optional(),
 });
 
 export async function POST(req: Request) {
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
       country: parsed.data.country ?? null,
       category: parsed.data.category ?? null,
       client_id: parsed.data.client_id ?? null,
+      instagram_username: parsed.data.instagram_username ?? null,
     })
     .select("id")
     .single();

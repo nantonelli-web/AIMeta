@@ -183,6 +183,8 @@ const translations = {
     created: { it: "Brand creato.", en: "Brand created." },
     error: { it: "Errore", en: "Error" },
     selectCategory: { it: "Seleziona categoria", en: "Select category" },
+    instagramLabel: { it: "Username Instagram", en: "Instagram username" },
+    instagramPlaceholder: { it: "es. nike (senza @)", en: "e.g. nike (without @)" },
     searchCountry: { it: "Cerca paese...", en: "Search country..." },
     noCountryMatch: { it: "Nessun paese trovato.", en: "No country found." },
   },

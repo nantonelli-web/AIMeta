@@ -95,6 +95,7 @@ export function EditCompetitorForm({
     parseCountries(competitor.country)
   );
   const [category, setCategory] = useState(competitor.category ?? "");
+  const [instagramUsername, setInstagramUsername] = useState(competitor.instagram_username ?? "");
   const [clientId, setClientId] = useState(competitor.client_id ?? "");
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [newClientName, setNewClientName] = useState("");
@@ -139,6 +140,7 @@ export function EditCompetitorForm({
         country: selectedCountries.length > 0 ? selectedCountries.join(", ") : null,
         category: category || null,
         client_id: clientId || null,
+        instagram_username: instagramUsername.replace(/^@/, "").trim() || null,
       }),
     });
     setLoading(false);
@@ -189,6 +191,15 @@ export function EditCompetitorForm({
                 type="url"
                 value={pageUrl}
                 onChange={(e) => setPageUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="instagram">{t("newCompetitor", "instagramLabel")}</Label>
+              <Input
+                id="instagram"
+                value={instagramUsername}
+                onChange={(e) => setInstagramUsername(e.target.value)}
+                placeholder={t("newCompetitor", "instagramPlaceholder")}
               />
             </div>
             <div className="space-y-2">

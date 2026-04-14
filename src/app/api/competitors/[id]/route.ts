@@ -12,6 +12,7 @@ const patchSchema = z.object({
   country: z.string().max(200).nullable().optional(),
   category: z.string().max(80).nullable().optional(),
   client_id: z.string().uuid().nullable().optional(),
+  instagram_username: z.string().max(60).nullable().optional(),
 });
 
 export async function PATCH(
@@ -31,7 +32,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { frequency, max_items, page_name, page_url, country, category, client_id } =
+  const { frequency, max_items, page_name, page_url, country, category, client_id, instagram_username } =
     parsed.data;
 
   // Separate monitor_config fields from direct fields
@@ -41,6 +42,7 @@ export async function PATCH(
   if (country !== undefined) directUpdate.country = country;
   if (category !== undefined) directUpdate.category = category;
   if (client_id !== undefined) directUpdate.client_id = client_id;
+  if (instagram_username !== undefined) directUpdate.instagram_username = instagram_username;
 
   // Handle monitor_config merge if frequency or max_items changed
   if (frequency !== undefined || max_items !== undefined) {

@@ -86,6 +86,7 @@ export function NewCompetitorForm() {
   const [pageUrl, setPageUrl] = useState("");
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [category, setCategory] = useState("");
+  const [instagramUsername, setInstagramUsername] = useState("");
   const [clientId, setClientId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [newClientName, setNewClientName] = useState("");
@@ -144,6 +145,7 @@ export function NewCompetitorForm() {
         country: selectedCountries.length > 0 ? selectedCountries.join(", ") : null,
         category: category || null,
         client_id: clientId || null,
+        instagram_username: instagramUsername.replace(/^@/, "").trim() || null,
       }),
     });
     setLoading(false);
@@ -186,6 +188,15 @@ export function NewCompetitorForm() {
               value={pageUrl}
               onChange={(e) => setPageUrl(e.target.value)}
               placeholder="https://www.facebook.com/nike"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="instagram">{t("newCompetitor", "instagramLabel")}</Label>
+            <Input
+              id="instagram"
+              value={instagramUsername}
+              onChange={(e) => setInstagramUsername(e.target.value)}
+              placeholder={t("newCompetitor", "instagramPlaceholder")}
             />
           </div>
           <div className="space-y-2">
