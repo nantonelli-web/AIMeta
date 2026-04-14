@@ -50,12 +50,34 @@ interface AdSignals {
   isAaaEligible: boolean;
   landingUrl: string | null;
   hasVideo: boolean;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+}
+
+function parseUtmFromUrl(url: string): { medium: string | null; campaign: string | null } {
+  try {
+    const parsed = new URL(url);
+    return {
+      medium: parsed.searchParams.get("utm_medium"),
+      campaign: parsed.searchParams.get("utm_campaign"),
+    };
+  } catch {
+    return { medium: null, campaign: null };
+  }
 }
 
 function extractSignals(raw: Record<string, unknown>): AdSignals {
   const snapshot = (raw?.snapshot ?? {}) as Record<string, unknown>;
   const cards = (snapshot?.cards ?? []) as Array<Record<string, unknown>>;
   const firstCard = cards[0] ?? {};
+
+  const landingUrl =
+    (firstCard?.linkUrl as string) ??
+    (snapshot?.linkUrl as string) ??
+    null;
+
+  // Parse UTM from landing URL
+  const utm = landingUrl ? parseUtmFromUrl(landingUrl) : { medium: null, campaign: null };
 
   return {
     ctaType:
@@ -64,13 +86,12 @@ function extractSignals(raw: Record<string, unknown>): AdSignals {
       null,
     displayFormat: (snapshot?.displayFormat as string) ?? null,
     isAaaEligible: (raw?.isAaaEligible as boolean) ?? false,
-    landingUrl:
-      (firstCard?.linkUrl as string) ??
-      (snapshot?.linkUrl as string) ??
-      null,
+    landingUrl,
     hasVideo:
       !!(firstCard?.videoHdUrl || firstCard?.videoSdUrl) ||
       ((snapshot?.videos as unknown[]) ?? []).length > 0,
+    utmMedium: utm.medium,
+    utmCampaign: utm.campaign,
   };
 }
 
@@ -90,7 +111,44 @@ function inferSingle(signals: AdSignals): {
   };
   const reasons: string[] = [];
 
-  // CTA Type — strongest signal
+  // ── UTM parameters — highest priority signal ──
+  const utmMedium = (signals.utmMedium ?? "").toLowerCase();
+  const utmCampaign = (signals.utmCampaign ?? "").toLowerCase();
+  const utmAll = `${utmMedium} ${utmCampaign}`;
+
+  if (utmMedium || utmCampaign) {
+    if (utmAll.includes("awareness") || utmAll.includes("branding")) {
+      scores.awareness += 60;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Awareness`);
+    } else if (utmAll.includes("conversion") || utmAll.includes("performance") || utmAll.includes("purchase") || utmAll.includes("sale")) {
+      scores.sales += 60;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Sales`);
+    } else if (utmAll.includes("retargeting") || utmAll.includes("remarketing") || utmAll.includes("rtg")) {
+      scores.sales += 50;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Retargeting/Sales`);
+    } else if (utmAll.includes("traffic") || utmAll.includes("click")) {
+      scores.traffic += 55;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Traffic`);
+    } else if (utmAll.includes("lead") || utmAll.includes("signup")) {
+      scores.lead_generation += 55;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Lead Gen`);
+    } else if (utmAll.includes("engagement") || utmAll.includes("interact")) {
+      scores.engagement += 50;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Engagement`);
+    } else if (utmAll.includes("install") || utmAll.includes("app")) {
+      scores.app_install += 55;
+      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → App Install`);
+    }
+
+    // Extract funnel stage from campaign naming
+    if (utmAll.includes("prospecting")) {
+      reasons.push("UTM funnel: Prospecting (top of funnel)");
+    } else if (utmAll.includes("retargeting") || utmAll.includes("remarketing")) {
+      reasons.push("UTM funnel: Retargeting (bottom of funnel)");
+    }
+  }
+
+  // ── CTA Type ──
   const cta = signals.ctaType?.toUpperCase() ?? "";
   if (cta === "SHOP_NOW" || cta === "BUY_NOW" || cta === "ORDER_NOW") {
     scores.sales += 35;
