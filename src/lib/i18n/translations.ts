@@ -664,6 +664,38 @@ const translations = {
     viewOnInstagram: { it: "Instagram", en: "Instagram" },
   },
 
+  // ─── Creative Analysis ─────────────────────────────────────
+  creativeAnalysis: {
+    title: { it: "Analisi AI Creativa", en: "AI Creative Analysis" },
+    subtitle: {
+      it: "Analisi comparativa copy e visual tramite agenti AI.",
+      en: "Comparative copy and visual analysis via AI agents.",
+    },
+    copywriterTitle: { it: "Copywriter", en: "Copywriter" },
+    creativeDirectorTitle: { it: "Direttore Creativo", en: "Creative Director" },
+    analyzing: { it: "Analisi in corso\u2026", en: "Analyzing\u2026" },
+    analysisFailed: {
+      it: "Analisi AI fallita. Riprova.",
+      en: "AI analysis failed. Please try again.",
+    },
+    analysisComplete: { it: "Analisi completata.", en: "Analysis complete." },
+    toneOfVoice: { it: "Tono di voce", en: "Tone of voice" },
+    copyStyle: { it: "Stile copy", en: "Copy style" },
+    emotionalTriggers: { it: "Trigger emozionali", en: "Emotional triggers" },
+    ctaPatterns: { it: "Pattern CTA", en: "CTA patterns" },
+    strengths: { it: "Punti di forza", en: "Strengths" },
+    weaknesses: { it: "Punti deboli", en: "Weaknesses" },
+    visualStyle: { it: "Stile visivo", en: "Visual style" },
+    colorPalette: { it: "Palette colori", en: "Color palette" },
+    photographyStyle: { it: "Stile fotografico", en: "Photography style" },
+    brandConsistency: { it: "Coerenza brand", en: "Brand consistency" },
+    formatPreferences: { it: "Preferenze formato", en: "Format preferences" },
+    comparison: { it: "Confronto", en: "Comparison" },
+    recommendations: { it: "Raccomandazioni", en: "Recommendations" },
+    launchAnalysis: { it: "Analisi AI Creativa", en: "AI Creative Analysis" },
+    close: { it: "Chiudi", en: "Close" },
+  },
+
   // ─── Common ────────────────────────────────────────────────
   common: {
     error: { it: "Errore", en: "Error" },

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
+import { CreativeAnalysisButton } from "./creative-analysis-button";
 import type { MaitCompetitor } from "@/types";
 
 interface CompStats {
@@ -98,6 +99,9 @@ export function CompareView({
           )}
         </CardContent>
       </Card>
+
+      {/* AI Creative Analysis */}
+      <CreativeAnalysisButton competitorIds={[...selected]} />
 
       {selected.size < 2 && (
         <p className="text-sm text-muted-foreground text-center py-8">

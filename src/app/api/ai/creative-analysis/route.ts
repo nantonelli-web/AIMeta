@@ -1,0 +1,94 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  analyzeCopy,
+  analyzeVisuals,
+  type BrandAdData,
+  type CreativeAnalysisResult,
+} from "@/lib/ai/creative-analysis";
+
+export const maxDuration = 120;
+
+const schema = z.object({
+  competitor_ids: z.array(z.string().uuid()).min(2).max(3),
+});
+
+export async function POST(req: Request) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    return NextResponse.json(
+      {
+        error:
+          "OPENROUTER_API_KEY non configurato. Aggiungilo nelle Environment Variables di Vercel e ridepiega.",
+      },
+      { status: 503 }
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  // Fetch latest 15 ads per competitor with brand name
+  const brands: BrandAdData[] = await Promise.all(
+    parsed.data.competitor_ids.map(async (id) => {
+      const [{ data: comp }, { data: ads }] = await Promise.all([
+        admin
+          .from("mait_competitors")
+          .select("id, page_name")
+          .eq("id", id)
+          .single(),
+        admin
+          .from("mait_ads_external")
+          .select("headline, ad_text, description, cta, image_url")
+          .eq("competitor_id", id)
+          .order("created_at", { ascending: false })
+          .limit(15),
+      ]);
+
+      return {
+        brandName: comp?.page_name ?? "Unknown",
+        competitorId: id,
+        ads: (ads ?? []) as {
+          headline: string | null;
+          ad_text: string | null;
+          description: string | null;
+          cta: string | null;
+          image_url: string | null;
+        }[],
+      };
+    })
+  );
+
+  // Run both agents in parallel — if one fails, the other still returns
+  const [copywriterReport, creativeDirectorReport] = await Promise.all([
+    analyzeCopy(brands),
+    analyzeVisuals(brands),
+  ]);
+
+  const result: CreativeAnalysisResult = {
+    copywriterReport,
+    creativeDirectorReport,
+  };
+
+  if (!copywriterReport && !creativeDirectorReport) {
+    return NextResponse.json(
+      { error: "Both AI agents failed. Check OPENROUTER_API_KEY and model availability." },
+      { status: 502 }
+    );
+  }
+
+  return NextResponse.json(result);
+}
