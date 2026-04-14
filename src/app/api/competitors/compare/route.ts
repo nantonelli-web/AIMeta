@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { inferObjective } from "@/lib/analytics/objective-inference";
 
 const schema = z.object({
   ids: z.array(z.string().uuid()).min(2).max(3),
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
         admin
           .from("mait_ads_external")
           .select(
-            "ad_archive_id, headline, ad_text, cta, image_url, video_url, platforms, status, start_date, end_date, created_at"
+            "ad_archive_id, headline, ad_text, cta, image_url, video_url, platforms, status, start_date, end_date, created_at, raw_data"
           )
           .eq("competitor_id", id)
           .limit(500),
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
         start_date: string | null;
         end_date: string | null;
         created_at: string;
+        raw_data: Record<string, unknown> | null;
       };
 
       const adsList = (ads ?? []) as AdRow[];
@@ -125,6 +127,11 @@ export async function POST(req: Request) {
           ad_archive_id: a.ad_archive_id,
         }));
 
+      // Infer campaign objective
+      const objectiveInference = inferObjective(
+        adsList.map((a) => a.raw_data)
+      );
+
       return {
         id,
         name: comp?.page_name ?? "—",
@@ -138,6 +145,7 @@ export async function POST(req: Request) {
         avgCopyLength,
         adsPerWeek,
         latestAds,
+        objectiveInference,
       };
     })
   );
