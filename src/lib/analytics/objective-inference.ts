@@ -50,19 +50,41 @@ interface AdSignals {
   isAaaEligible: boolean;
   landingUrl: string | null;
   hasVideo: boolean;
-  utmMedium: string | null;
-  utmCampaign: string | null;
+  utmTokens: string[]; // all tokens from all UTM params
+  utmRaw: Record<string, string>; // original params for display
 }
 
-function parseUtmFromUrl(url: string): { medium: string | null; campaign: string | null } {
+/**
+ * Extract ALL UTM values from a URL, tokenize them by common separators,
+ * and return both the raw values and the token set for keyword matching.
+ *
+ * Key insight: the SAME keyword (e.g. "purch", "traffic", "awareness")
+ * can appear in ANY utm_ parameter depending on the brand's naming
+ * convention. So we scan content across ALL params, not by param name.
+ */
+function parseUtmFromUrl(url: string): { tokens: string[]; raw: Record<string, string> } {
   try {
     const parsed = new URL(url);
-    return {
-      medium: parsed.searchParams.get("utm_medium"),
-      campaign: parsed.searchParams.get("utm_campaign"),
-    };
+    const raw: Record<string, string> = {};
+    const allTokens = new Set<string>();
+
+    for (const [k, v] of parsed.searchParams.entries()) {
+      const kl = k.toLowerCase();
+      if (kl.startsWith("utm_") || kl === "campaign") {
+        raw[kl] = v;
+        // Tokenize by all common separators
+        const val = v.toLowerCase();
+        for (const sep of ["_", "-", "/", ".", " ", "|"]) {
+          val.split(sep).forEach((t) => { if (t.length >= 2) allTokens.add(t); });
+        }
+        // Also add the full value
+        allTokens.add(val);
+      }
+    }
+
+    return { tokens: [...allTokens], raw };
   } catch {
-    return { medium: null, campaign: null };
+    return { tokens: [], raw: {} };
   }
 }
 
@@ -76,8 +98,22 @@ function extractSignals(raw: Record<string, unknown>): AdSignals {
     (snapshot?.linkUrl as string) ??
     null;
 
-  // Parse UTM from landing URL
-  const utm = landingUrl ? parseUtmFromUrl(landingUrl) : { medium: null, campaign: null };
+  // Parse UTM from ALL card URLs (not just the first)
+  const allUrls = [
+    landingUrl,
+    ...(cards.map((c) => c.linkUrl as string | undefined).filter(Boolean)),
+  ].filter(Boolean) as string[];
+
+  let utmTokens: string[] = [];
+  let utmRaw: Record<string, string> = {};
+  for (const u of allUrls) {
+    const parsed = parseUtmFromUrl(u);
+    if (parsed.tokens.length > 0) {
+      utmTokens = [...new Set([...utmTokens, ...parsed.tokens])];
+      utmRaw = { ...utmRaw, ...parsed.raw };
+      break; // Use first URL with UTMs
+    }
+  }
 
   return {
     ctaType:
@@ -90,8 +126,8 @@ function extractSignals(raw: Record<string, unknown>): AdSignals {
     hasVideo:
       !!(firstCard?.videoHdUrl || firstCard?.videoSdUrl) ||
       ((snapshot?.videos as unknown[]) ?? []).length > 0,
-    utmMedium: utm.medium,
-    utmCampaign: utm.campaign,
+    utmTokens,
+    utmRaw,
   };
 }
 
@@ -111,40 +147,70 @@ function inferSingle(signals: AdSignals): {
   };
   const reasons: string[] = [];
 
-  // ── UTM parameters — highest priority signal ──
-  const utmMedium = (signals.utmMedium ?? "").toLowerCase();
-  const utmCampaign = (signals.utmCampaign ?? "").toLowerCase();
-  const utmAll = `${utmMedium} ${utmCampaign}`;
+  // ── UTM parameters — content-based keyword matching ──
+  // Scan ALL utm tokens for objective keywords regardless of which
+  // utm_ param they appear in (brands use different naming conventions).
+  const tokens = signals.utmTokens;
+  const hasUtm = tokens.length > 0;
 
-  if (utmMedium || utmCampaign) {
-    if (utmAll.includes("awareness") || utmAll.includes("branding")) {
-      scores.awareness += 60;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Awareness`);
-    } else if (utmAll.includes("conversion") || utmAll.includes("performance") || utmAll.includes("purchase") || utmAll.includes("sale")) {
-      scores.sales += 60;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Sales`);
-    } else if (utmAll.includes("retargeting") || utmAll.includes("remarketing") || utmAll.includes("rtg")) {
-      scores.sales += 50;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Retargeting/Sales`);
-    } else if (utmAll.includes("traffic") || utmAll.includes("click")) {
-      scores.traffic += 55;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Traffic`);
-    } else if (utmAll.includes("lead") || utmAll.includes("signup")) {
-      scores.lead_generation += 55;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Lead Gen`);
-    } else if (utmAll.includes("engagement") || utmAll.includes("interact")) {
-      scores.engagement += 50;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → Engagement`);
-    } else if (utmAll.includes("install") || utmAll.includes("app")) {
-      scores.app_install += 55;
-      reasons.push(`UTM "${signals.utmMedium ?? signals.utmCampaign}" → App Install`);
+  if (hasUtm) {
+    // Objective keywords ordered by specificity (most specific first).
+    // Each keyword only counts once, and we use token_match (exact segment)
+    // to avoid false positives from substrings like "shop" in "TagShoppable".
+    const utmObjectiveRules: Array<{
+      objective: InferredObjective;
+      keywords: string[];
+      weight: number;
+    }> = [
+      // High specificity — these are unambiguous
+      { objective: "sales", keywords: ["purch", "purchase", "conversion", "conv", "vendita", "acquisto"], weight: 60 },
+      { objective: "awareness", keywords: ["awareness", "brand_awareness", "reach", "notoriet"], weight: 60 },
+      { objective: "traffic", keywords: ["traffic", "traffico", "link_click"], weight: 55 },
+      { objective: "sales", keywords: ["retargeting", "remarketing", "rtg", "rmk"], weight: 55 },
+      { objective: "lead_generation", keywords: ["lead", "signup", "sign_up", "registr"], weight: 55 },
+      { objective: "app_install", keywords: ["install", "app_install", "download"], weight: 55 },
+      { objective: "engagement", keywords: ["engagement", "interact", "interazion"], weight: 50 },
+      { objective: "awareness", keywords: ["video-views", "video_views", "videoviews", "thruplay", "vv"], weight: 55 },
+      // Medium specificity — shorter tokens, only exact match
+      { objective: "awareness", keywords: ["awa", "branding"], weight: 50 },
+      { objective: "sales", keywords: ["perf", "performance", "sale", "sales"], weight: 50 },
+      { objective: "traffic", keywords: ["click", "clic"], weight: 40 },
+    ];
+
+    for (const rule of utmObjectiveRules) {
+      for (const kw of rule.keywords) {
+        // Exact token match only (not substring) to avoid "shop" in "TagShoppable"
+        if (tokens.includes(kw)) {
+          scores[rule.objective] += rule.weight;
+          // Find which UTM param contained this keyword
+          const source = Object.entries(signals.utmRaw).find(([, v]) =>
+            v.toLowerCase().split(/[_\-\/\.\s|]/).includes(kw)
+          );
+          const paramName = source ? source[0] : "utm";
+          reasons.push(`UTM ${paramName}="${source?.[1] ?? kw}" → token "${kw}"`);
+          break; // One match per rule is enough
+        }
+      }
     }
 
-    // Extract funnel stage from campaign naming
-    if (utmAll.includes("prospecting")) {
+    // Funnel stage (supplementary, not objective)
+    if (tokens.includes("prospecting") || tokens.includes("prosp")) {
       reasons.push("UTM funnel: Prospecting (top of funnel)");
-    } else if (utmAll.includes("retargeting") || utmAll.includes("remarketing")) {
+    }
+    if (tokens.includes("retargeting") || tokens.includes("remarketing") || tokens.includes("rmk")) {
       reasons.push("UTM funnel: Retargeting (bottom of funnel)");
+    }
+    if (tokens.includes("cons") || tokens.includes("consideration")) {
+      reasons.push("UTM funnel: Consideration (mid funnel)");
+    }
+
+    // Filter out organic (not an ad campaign objective)
+    if (tokens.includes("social_org") || tokens.includes("organic")) {
+      // Reduce all scores — this isn't a paid campaign
+      for (const k of Object.keys(scores) as InferredObjective[]) {
+        scores[k] = Math.round(scores[k] * 0.3);
+      }
+      reasons.push("UTM indica traffico organico (non paid)");
     }
   }
 
