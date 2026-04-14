@@ -95,7 +95,7 @@ export function FormatPieChart({
 export function FormatStackedChart({
   data,
 }: {
-  data: { name: string; image: number; video: number; unknown: number }[];
+  data: { name: string; image: number; video: number; carousel: number; unknown: number }[];
 }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
@@ -113,6 +113,7 @@ export function FormatStackedChart({
         <Legend wrapperStyle={{ fontSize: 12, color: "#b0b0b0" }} />
         <Bar dataKey="image" stackId="a" fill={GOLD} name="Image" />
         <Bar dataKey="video" stackId="a" fill="#5b7ea3" name="Video" />
+        <Bar dataKey="carousel" stackId="a" fill="#8a6bb0" name="Carousel" />
         <Bar dataKey="unknown" stackId="a" fill={MUTED} name="Other" />
       </BarChart>
     </ResponsiveContainer>

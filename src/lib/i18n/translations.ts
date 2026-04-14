@@ -154,6 +154,8 @@ const translations = {
       en: "No ads collected yet. Run a Scan now to populate the library.",
     },
     adsCount: { it: "ads (max 120 pi\u00F9 recenti)", en: "ads (max 120 most recent)" },
+    likes: { it: "likes", en: "likes" },
+    pageCategories: { it: "Categorie pagina", en: "Page categories" },
   },
 
   // ─── New Brand ─────────────────────────────────────────────
@@ -296,6 +298,7 @@ const translations = {
   adDetail: {
     backToCompetitor: { it: "Torna al brand", en: "Back to brand" },
     creativeVariants: { it: "Varianti creative", en: "Creative variants" },
+    allCarouselCards: { it: "Tutte le card del carousel", en: "All carousel cards" },
     variantLabel: { it: "Variante", en: "Variant" },
     fullText: { it: "Testo completo", en: "Full text" },
     headline: { it: "Headline", en: "Headline" },
@@ -315,6 +318,16 @@ const translations = {
     aiTagObjective: { it: "Obiettivo", en: "Objective" },
     aiTagSeasonality: { it: "Stagionalit\u00E0", en: "Seasonality" },
     aiTagLanguage: { it: "Lingua", en: "Language" },
+    adMetadata: { it: "Metadati dell'ad", en: "Ad metadata" },
+    displayFormat: { it: "Formato display", en: "Display format" },
+    ctaType: { it: "Tipo CTA", en: "CTA type" },
+    variantsCount: { it: "Varianti creative", en: "Creative variants" },
+    enabled: { it: "Attivo", en: "Enabled" },
+    aiGenerated: { it: "Generato con AI", en: "AI generated" },
+    reshared: { it: "Condiviso da altra pagina", en: "Reshared" },
+    yes: { it: "S\u00EC", en: "Yes" },
+    targetedCountries: { it: "Paesi target", en: "Targeted countries" },
+    relatedPages: { it: "Pagine correlate", en: "Related pages" },
   },
 
   // ─── Compare ───────────────────────────────────────────────
@@ -424,6 +437,13 @@ const translations = {
     charsLabel: { it: "Caratteri", en: "Characters" },
     adsPerWeekLabel: { it: "Ads/settimana", en: "Ads/week" },
     adsLabel: { it: "Ads", en: "Ads" },
+    aiGeneratedPercent: { it: "% AI generato", en: "% AI generated" },
+    advantagePlusPercent: { it: "% Advantage+", en: "% Advantage+" },
+    aiGeneratedChart: { it: "Ads AI-generated per brand (%)", en: "AI-generated ads per brand (%)" },
+    advantagePlusChart: { it: "Advantage+ per brand (%)", en: "Advantage+ per brand (%)" },
+    avgVariantsChart: { it: "Media varianti per ad", en: "Avg. variants per ad" },
+    variantsLabel: { it: "Varianti", en: "Variants" },
+    topTargetedCountries: { it: "Top paesi target", en: "Top targeted countries" },
   },
 
   // ─── Alerts ────────────────────────────────────────────────
@@ -527,6 +547,10 @@ const translations = {
     onPlatforms: { it: "Su:", en: "On:" },
     saveToCollection: { it: "Salva in collezione", en: "Save to collection" },
     notAnalyzed: { it: "Non analizzata dall'AI", en: "Not analyzed by AI" },
+    formatImage: { it: "IMAGE", en: "IMAGE" },
+    formatVideo: { it: "VIDEO", en: "VIDEO" },
+    formatCarousel: { it: "CAROUSEL", en: "CAROUSEL" },
+    aiBadge: { it: "AI", en: "AI" },
   },
 
   // ─── Save to Collection ────────────────────────────────────

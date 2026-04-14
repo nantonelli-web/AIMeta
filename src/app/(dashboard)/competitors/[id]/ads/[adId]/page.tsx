@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Calendar, Clock, Globe, Tag } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, Clock, Globe, Tag, Bot, Zap, LayoutGrid, MapPin, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,8 @@ export default async function AdDetailPage({
     body?: string;
     originalImageUrl?: string;
     resizedImageUrl?: string;
+    videoHdUrl?: string;
+    videoSdUrl?: string;
     linkUrl?: string;
     ctaText?: string;
   }>;
@@ -46,6 +48,22 @@ export default async function AdDetailPage({
   const adLibraryUrl =
     (raw?.adLibraryURL as string) ??
     `https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`;
+
+  // New metadata from raw_data
+  const displayFormat = (snapshot?.displayFormat as string) ?? null;
+  const ctaType = (snapshot?.ctaType as string) ?? (cards[0]?.ctaText as string) ?? null;
+  const isAiGenerated = (raw?.containsDigitalCreatedMedia as boolean) ?? false;
+  const isAaaEligible = (raw?.isAaaEligible as boolean) ?? false;
+  const isReshared = (snapshot?.isReshared as boolean) ?? false;
+  const collationCount = (raw?.collationCount as number) ?? null;
+  const targetedCountries = (raw?.targetedOrReachedCountries as string[]) ?? [];
+  const pageInfoRaw = raw?.pageInfo as Record<string, unknown> | null;
+  const adLibPageInfo = pageInfoRaw?.adLibraryPageInfo as Record<string, unknown> | null;
+  const relatedPages = (adLibPageInfo?.relatedPages ?? []) as Array<{
+    pageId?: string;
+    pageName?: string;
+    country?: string;
+  }>;
 
   // Calculate campaign duration
   let durationDays: number | null = null;
@@ -129,12 +147,13 @@ export default async function AdDetailPage({
             </Card>
           ) : null}
 
-          {/* All card variants */}
-          {cards.length > 1 && (
+          {/* All carousel cards */}
+          {cards.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">
-                  {t("adDetail", "creativeVariants")} ({cards.length})
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <LayoutGrid className="size-4" />
+                  {t("adDetail", "allCarouselCards")} ({cards.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -159,6 +178,16 @@ export default async function AdDetailPage({
                           <p className="text-[11px] text-muted-foreground">
                             {card.body}
                           </p>
+                        )}
+                        {card.linkUrl && (
+                          <a
+                            href={card.linkUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-gold hover:underline break-all"
+                          >
+                            {card.linkUrl}
+                          </a>
                         )}
                       </div>
                     );
@@ -286,6 +315,96 @@ export default async function AdDetailPage({
                     </div>
                   );
                 })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ad metadata */}
+          {(displayFormat || ctaType || collationCount || isAiGenerated || isAaaEligible || isReshared) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Zap className="size-4" /> {t("adDetail", "adMetadata")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {displayFormat && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("adDetail", "displayFormat")}</span>
+                    <Badge variant="muted">{displayFormat}</Badge>
+                  </div>
+                )}
+                {ctaType && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("adDetail", "ctaType")}</span>
+                    <Badge variant="muted">{ctaType}</Badge>
+                  </div>
+                )}
+                {collationCount != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("adDetail", "variantsCount")}</span>
+                    <span className="font-medium">{collationCount}</span>
+                  </div>
+                )}
+                {isAaaEligible && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Advantage+</span>
+                    <Badge variant="gold">{t("adDetail", "enabled")}</Badge>
+                  </div>
+                )}
+                {isAiGenerated && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Bot className="size-3" /> {t("adDetail", "aiGenerated")}
+                    </span>
+                    <Badge variant="gold">{t("adDetail", "yes")}</Badge>
+                  </div>
+                )}
+                {isReshared && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("adDetail", "reshared")}</span>
+                    <Badge variant="muted">{t("adDetail", "yes")}</Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Targeted countries */}
+          {targetedCountries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <MapPin className="size-4" /> {t("adDetail", "targetedCountries")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-1.5">
+                  {targetedCountries.map((c) => (
+                    <Badge key={c} variant="muted">{c}</Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Related pages */}
+          {relatedPages.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="size-4" /> {t("adDetail", "relatedPages")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {relatedPages.map((rp, i) => (
+                  <div key={rp.pageId ?? i} className="flex items-center justify-between text-sm">
+                    <span className="font-medium truncate">{rp.pageName ?? rp.pageId ?? "—"}</span>
+                    {rp.country && (
+                      <Badge variant="muted" className="shrink-0 ml-2">{rp.country}</Badge>
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}

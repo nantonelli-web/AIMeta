@@ -50,7 +50,7 @@ export default async function BenchmarksPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Stat label={t("benchmarks", "totalAds")} value={formatNumber(data.totals.totalAds)} />
         <Stat label={t("benchmarks", "activeAds")} value={formatNumber(data.totals.activeAds)} />
         <Stat
@@ -60,6 +60,14 @@ export default async function BenchmarksPage() {
         <Stat
           label={t("benchmarks", "avgCopyLength")}
           value={`${data.totals.avgCopyLength} chr`}
+        />
+        <Stat
+          label={t("benchmarks", "aiGeneratedPercent")}
+          value={`${data.totals.aiGeneratedPercent}%`}
+        />
+        <Stat
+          label={t("benchmarks", "advantagePlusPercent")}
+          value={`${data.totals.advantagePlusPercent}%`}
         />
       </div>
 
@@ -163,6 +171,74 @@ export default async function BenchmarksPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI-generated + Advantage+ + Variants */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {data.aiGeneratedByCompetitor.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("benchmarks", "aiGeneratedChart")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HorizontalBarChart
+                data={data.aiGeneratedByCompetitor}
+                dataKey="percent"
+                label="%"
+                color="#8a6bb0"
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {data.advantagePlusByCompetitor.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("benchmarks", "advantagePlusChart")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HorizontalBarChart
+                data={data.advantagePlusByCompetitor}
+                dataKey="percent"
+                label="%"
+                color="#5ba09b"
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {data.avgVariantsByCompetitor.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("benchmarks", "avgVariantsChart")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HorizontalBarChart
+                data={data.avgVariantsByCompetitor}
+                dataKey="variants"
+                label={t("benchmarks", "variantsLabel")}
+                color="#a06b5b"
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Targeted countries */}
+      {data.topTargetedCountries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("benchmarks", "topTargetedCountries")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.topTargetedCountries}
+              dataKey="count"
+              label={t("benchmarks", "adsLabel")}
+              color="#6b8e6b"
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

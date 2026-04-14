@@ -57,6 +57,19 @@ export default async function CompetitorDetailPage({
   const frequency = ((c.monitor_config as { frequency?: string })?.frequency ??
     "manual") as "manual" | "daily" | "weekly";
 
+  // Extract page-level info from the most recent ad's raw_data
+  const latestRaw = adsList[0]?.raw_data as Record<string, unknown> | null;
+  const latestSnapshot = latestRaw?.snapshot as Record<string, unknown> | null;
+  const pageProfilePicture = (latestSnapshot?.pageProfilePictureUrl as string) ?? null;
+  const pageLikeCount = (latestSnapshot?.pageLikeCount as number) ?? null;
+  const pageCategories = (latestSnapshot?.pageCategories as string[]) ?? [];
+
+  function formatCompactNumber(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+    return String(n);
+  }
+
   return (
     <div className="space-y-6">
       <Link
@@ -68,7 +81,17 @@ export default async function CompetitorDetailPage({
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-2">
-          <h1 className="text-3xl font-serif tracking-tight">{c.page_name}</h1>
+          <div className="flex items-center gap-3">
+            {pageProfilePicture && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={pageProfilePicture}
+                alt=""
+                className="size-10 rounded-full object-cover border border-border shrink-0"
+              />
+            )}
+            <h1 className="text-3xl font-serif tracking-tight">{c.page_name}</h1>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <a
               href={c.page_url}
@@ -80,7 +103,21 @@ export default async function CompetitorDetailPage({
             </a>
             {c.country && <Badge variant="muted">{c.country}</Badge>}
             {c.category && <Badge variant="muted">{c.category}</Badge>}
+            {pageLikeCount != null && pageLikeCount > 0 && (
+              <Badge variant="gold">
+                {formatCompactNumber(pageLikeCount)} {t("competitors", "likes")}
+              </Badge>
+            )}
           </div>
+          {pageCategories.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {pageCategories.map((cat) => (
+                <Badge key={cat} variant="outline" className="text-[10px]">
+                  {cat}
+                </Badge>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             {t("competitors", "lastScan")} {formatDate(c.last_scraped_at)}
           </p>

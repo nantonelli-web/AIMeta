@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Eye, Sparkles, Play, ImageIcon } from "lucide-react";
+import { ExternalLink, Eye, Sparkles, Play, ImageIcon, LayoutGrid, Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SaveToCollection } from "@/components/ads/save-to-collection";
 import { VideoPreview } from "@/components/ads/video-preview";
@@ -22,6 +22,7 @@ export async function AdCard({
     | undefined;
 
   const raw = ad.raw_data as Record<string, unknown> | null;
+  const snapshot = raw?.snapshot as Record<string, unknown> | null;
   const adLibraryUrl =
     (raw?.adLibraryURL as string) ??
     (ad.ad_archive_id
@@ -34,6 +35,27 @@ export async function AdCard({
     competitorId ?? ad.competitor_id
       ? `/competitors/${competitorId ?? ad.competitor_id}/ads/${ad.id}`
       : null;
+
+  // Extract displayFormat from raw_data
+  const displayFormat = (snapshot?.displayFormat as string) ?? null;
+  const isAiGenerated = (raw?.containsDigitalCreatedMedia as boolean) ?? false;
+  const pageProfilePicture = (snapshot?.pageProfilePictureUrl as string) ?? null;
+
+  // Determine the format badge label and icon
+  const formatLabel =
+    displayFormat === "DPA" || displayFormat === "DCO"
+      ? "CAROUSEL"
+      : displayFormat === "VIDEO"
+        ? "VIDEO"
+        : displayFormat === "IMAGE"
+          ? "IMAGE"
+          : displayFormat === "CAROUSEL"
+            ? "CAROUSEL"
+            : ad.video_url
+              ? "VIDEO"
+              : "IMAGE";
+  const isCarousel = formatLabel === "CAROUSEL";
+  const isVideo = formatLabel === "VIDEO";
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col hover:border-gold/40 transition-colors">
@@ -57,9 +79,19 @@ export async function AdCard({
           <div className="absolute inset-0 p-4 flex flex-col justify-between">
             <div className="space-y-2">
               {pageName && (
-                <p className="text-[10px] uppercase tracking-widest text-gold truncate">
-                  {pageName}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  {pageProfilePicture && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pageProfilePicture}
+                      alt=""
+                      className="size-4 rounded-full object-cover shrink-0"
+                    />
+                  )}
+                  <p className="text-[10px] uppercase tracking-widest text-gold truncate">
+                    {pageName}
+                  </p>
+                </div>
               )}
               {ad.headline && (
                 <p className="font-semibold text-sm line-clamp-2">
@@ -92,14 +124,20 @@ export async function AdCard({
         <div className="absolute top-2 left-2">
           <SaveToCollection adId={ad.id} />
         </div>
-        <div className="absolute bottom-2 left-2">
-          {ad.video_url ? (
-            <span className="inline-flex items-center gap-1 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
-              <Play className="size-3" /> VIDEO
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
-              <ImageIcon className="size-3" /> IMAGE
+        <div className="absolute bottom-2 left-2 flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
+            {isCarousel ? (
+              <LayoutGrid className="size-3" />
+            ) : isVideo ? (
+              <Play className="size-3" />
+            ) : (
+              <ImageIcon className="size-3" />
+            )}
+            {formatLabel}
+          </span>
+          {isAiGenerated && (
+            <span className="inline-flex items-center gap-1 rounded bg-purple-600/80 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
+              <Bot className="size-3" /> AI
             </span>
           )}
         </div>

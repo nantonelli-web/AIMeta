@@ -193,15 +193,32 @@ interface Snapshot {
   pageProfilePictureUrl?: string;
   caption?: string;
   ctaText?: string;
+  ctaType?: string;
   linkUrl?: string;
   body?: string;
   title?: string;
+  displayFormat?: string;
+  pageLikeCount?: number;
+  pageCategories?: string[];
+  isReshared?: boolean;
   cards?: SnapshotCard[];
   images?: SnapshotImage[];
   videos?: SnapshotVideo[];
   extraImages?: SnapshotImage[];
   extraVideos?: SnapshotVideo[];
   event?: unknown;
+}
+
+interface RelatedPage {
+  pageId?: string;
+  pageName?: string;
+  country?: string;
+}
+
+interface PageInfo {
+  adLibraryPageInfo?: {
+    relatedPages?: RelatedPage[];
+  };
 }
 
 interface RawAd {
@@ -218,6 +235,11 @@ interface RawAd {
   publisherPlatform?: string[];
   snapshot?: Snapshot;
   categories?: string[];
+  containsDigitalCreatedMedia?: boolean;
+  isAaaEligible?: boolean;
+  collationCount?: number;
+  targetedOrReachedCountries?: string[];
+  pageInfo?: PageInfo;
   // Fallback fields from other actors
   adText?: string;
   adStatus?: string;
@@ -253,6 +275,7 @@ function normalize(ad: RawAd): NormalizedAd {
     null;
 
   // Extract video: cards > snapshot.videos
+  // displayFormat is stored in raw_data and read by the UI for badge display
   const videoUrl =
     card?.videoHdUrl ??
     card?.videoSdUrl ??
