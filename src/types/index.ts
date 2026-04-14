@@ -36,6 +36,7 @@ export interface MaitCompetitor {
   page_url: string;
   category: string | null;
   country: string | null;
+  instagram_username: string | null;
   monitor_config: Record<string, unknown>;
   last_scraped_at: string | null;
   created_at: string;
@@ -73,4 +74,28 @@ export interface MaitScrapeJob {
   records_count: number;
   cost_cu: number;
   error: string | null;
+}
+
+export interface MaitOrganicPost {
+  id: string;
+  workspace_id: string;
+  competitor_id: string | null;
+  platform: string;
+  post_id: string;
+  post_url: string | null;
+  post_type: string | null;
+  caption: string | null;
+  display_url: string | null;
+  video_url: string | null;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  video_views: number;
+  video_play_count: number;
+  hashtags: string[];
+  mentions: string[];
+  tagged_users: string[];
+  posted_at: string | null;
+  raw_data: Record<string, unknown> | null;
+  created_at: string;
 }

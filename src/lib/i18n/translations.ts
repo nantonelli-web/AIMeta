@@ -633,6 +633,35 @@ const translations = {
     emptyClient: { it: "Nessun brand in questa cartella.", en: "No brands in this folder." },
   },
 
+  // ─── Organic Posts ─────────────────────────────────────────
+  organic: {
+    title: { it: "Contenuti organici Instagram", en: "Instagram Organic Content" },
+    subtitle: {
+      it: "Post organici raccolti dal profilo Instagram.",
+      en: "Organic posts collected from the Instagram profile.",
+    },
+    scanInstagram: { it: "Scan Instagram", en: "Scan Instagram" },
+    scanning: {
+      it: "Scraping Instagram\u2026 (pu\u00F2 richiedere 30-90s)",
+      en: "Scraping Instagram\u2026 (may take 30-90s)",
+    },
+    postsSynced: { it: "post Instagram sincronizzati.", en: "Instagram posts synced." },
+    likes: { it: "likes", en: "likes" },
+    comments: { it: "commenti", en: "comments" },
+    views: { it: "visualizzazioni", en: "views" },
+    videoViews: { it: "Visualizzazioni video", en: "Video views" },
+    noPostsYet: {
+      it: "Nessun post organico ancora. Lancia uno Scan Instagram per popolare la sezione.",
+      en: "No organic posts yet. Run a Scan Instagram to populate this section.",
+    },
+    postsCount: { it: "post organici", en: "organic posts" },
+    avgLikes: { it: "Media likes", en: "Avg. likes" },
+    avgComments: { it: "Media commenti", en: "Avg. comments" },
+    totalViews: { it: "Views totali", en: "Total views" },
+    totalPosts: { it: "Post organici", en: "Organic posts" },
+    viewOnInstagram: { it: "Instagram", en: "Instagram" },
+  },
+
   // ─── Common ────────────────────────────────────────────────
   common: {
     error: { it: "Errore", en: "Error" },
