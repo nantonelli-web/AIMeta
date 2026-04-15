@@ -133,7 +133,7 @@ Important:
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
+    const timeout = setTimeout(() => controller.abort(), 120000);
 
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -269,7 +269,7 @@ Important:
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
+    const timeout = setTimeout(() => controller.abort(), 120000);
 
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",

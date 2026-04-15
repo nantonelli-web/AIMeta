@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Fetch latest 15 ads per competitor with brand name
+  // Fetch latest 8 ads per competitor with brand name
   const brands: BrandAdData[] = await Promise.all(
     parsed.data.competitor_ids.map(async (id) => {
       const [{ data: comp }, { data: ads }] = await Promise.all([
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
           .select("headline, ad_text, description, cta, image_url")
           .eq("competitor_id", id)
           .order("created_at", { ascending: false })
-          .limit(15),
+          .limit(8),
       ]);
 
       return {

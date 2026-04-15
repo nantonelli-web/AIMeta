@@ -171,7 +171,7 @@ async function fetchBrandAdData(
     .select("headline, ad_text, cta, image_url, raw_data")
     .eq("competitor_id", competitorId)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(8);
 
   type AdRow = {
     headline: string | null;

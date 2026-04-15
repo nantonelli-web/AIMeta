@@ -9,7 +9,7 @@ import {
   type BrandAdData,
 } from "@/lib/ai/creative-analysis";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /* ── Schemas ─────────────────────────────────────────────── */
 
@@ -208,7 +208,7 @@ async function fetchBrandAdData(
           .select("headline, ad_text, description, cta, image_url")
           .eq("competitor_id", id)
           .order("created_at", { ascending: false })
-          .limit(15),
+          .limit(8),
       ]);
 
       return {
