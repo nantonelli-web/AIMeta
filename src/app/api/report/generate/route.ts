@@ -254,8 +254,8 @@ export async function POST(req: Request) {
 
     // Run AI analyses in parallel
     const [copyResult, visualResult] = await Promise.all([
-      needsCopy ? analyzeCopy(brandAdData) : null,
-      needsVisual ? analyzeVisuals(brandAdData) : null,
+      needsCopy ? analyzeCopy(brandAdData, parsed.data.locale) : null,
+      needsVisual ? analyzeVisuals(brandAdData, parsed.data.locale) : null,
     ]);
 
     copyAnalysis = copyResult;

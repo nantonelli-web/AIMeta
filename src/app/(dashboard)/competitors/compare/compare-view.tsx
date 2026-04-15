@@ -56,7 +56,7 @@ export function CompareView({
   const [aiError, setAiError] = useState<string | null>(null);
   const aiLoadedForRef = useRef<string>("");
 
-  const { t } = useT();
+  const { t, locale } = useT();
   const selectedIds = [...selected];
   const selectedKey = selectedIds.sort().join(",");
 
@@ -106,7 +106,7 @@ export function CompareView({
       fetch("/api/ai/creative-analysis", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ competitor_ids: selectedIds }),
+        body: JSON.stringify({ competitor_ids: selectedIds, locale }),
       })
         .then(async (res) => {
           if (!res.ok) {

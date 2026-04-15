@@ -13,6 +13,7 @@ export const maxDuration = 120;
 
 const schema = z.object({
   competitor_ids: z.array(z.string().uuid()).min(2).max(3),
+  locale: z.enum(["it", "en"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -74,8 +75,8 @@ export async function POST(req: Request) {
 
   // Run both agents in parallel — if one fails, the other still returns
   const [copywriterReport, creativeDirectorReport] = await Promise.all([
-    analyzeCopy(brands),
-    analyzeVisuals(brands),
+    analyzeCopy(brands, parsed.data.locale ?? "it"),
+    analyzeVisuals(brands, parsed.data.locale ?? "it"),
   ]);
 
   const result: CreativeAnalysisResult = {

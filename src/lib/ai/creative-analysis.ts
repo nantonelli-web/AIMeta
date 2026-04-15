@@ -66,7 +66,8 @@ function stripMarkdownFences(text: string): string {
  * Uses DeepSeek V3.2 via OpenRouter.
  */
 export async function analyzeCopy(
-  brands: BrandAdData[]
+  brands: BrandAdData[],
+  locale: "it" | "en" = "en"
 ): Promise<CreativeAnalysisResult["copywriterReport"]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -94,7 +95,13 @@ export async function analyzeCopy(
     })
     .join("\n\n---\n\n");
 
+  const langInstruction = locale === "it"
+    ? "IMPORTANT: Write ALL text values in Italian. The entire output must be in Italian."
+    : "Write all text values in English.";
+
   const prompt = `You are a senior copywriter with 15+ years of experience in digital advertising, fluent in Italian and English. You specialize in Meta (Facebook/Instagram) ad copy analysis for fashion, luxury, lifestyle, and DTC brands.
+
+${langInstruction}
 
 Analyze the following ads from ${brands.length} competing brands. For each brand, evaluate their ad copy strategy, then provide a direct comparison and actionable recommendations.
 
@@ -121,7 +128,8 @@ Important:
 - Provide one entry in brandAnalyses for each brand, in the same order as presented
 - Be specific, reference actual ad examples when possible
 - Include Italian marketing terminology where it adds value
-- emotionalTriggers should be 3-5 specific triggers per brand`;
+- emotionalTriggers should be 3-5 specific triggers per brand
+- ${locale === "it" ? "Write ALL descriptions, comparisons, and recommendations in Italian" : "Write all in English"}`;
 
   try {
     const controller = new AbortController();
@@ -175,7 +183,8 @@ Important:
  * Max 3 images per brand, 9 total.
  */
 export async function analyzeVisuals(
-  brands: BrandAdData[]
+  brands: BrandAdData[],
+  locale: "it" | "en" = "en"
 ): Promise<CreativeAnalysisResult["creativeDirectorReport"]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -217,6 +226,8 @@ export async function analyzeVisuals(
     type: "text" as const,
     text: `You are a creative director with 15+ years of experience in fashion, luxury, and lifestyle advertising. You have a keen eye for visual trends, brand consistency, and creative effectiveness in digital paid media.
 
+${locale === "it" ? "IMPORTANT: Write ALL text values in Italian. The entire output must be in Italian." : "Write all text values in English."}
+
 Analyze the following ad images from ${brands.length} competing brands. The images are organized as follows:
 ${brandImageLabels}
 
@@ -245,7 +256,8 @@ Return a JSON object with this exact structure (no markdown, no explanation, jus
 Important:
 - Provide one entry in brandAnalyses for each brand, in the same order as listed above
 - Be specific about colors (use names or approximate hex values), compositions, and styles
-- Reference fashion/luxury advertising benchmarks where relevant`,
+- Reference fashion/luxury advertising benchmarks where relevant
+- ${locale === "it" ? "Write ALL descriptions, comparisons, and recommendations in Italian" : "Write all in English"}`,
   };
 
   const imageParts = imageEntries.map((entry) => ({
