@@ -392,7 +392,8 @@ export function ReportBuilder({
             4. {t("report", "template")}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          {/* Template selection */}
           <div className="flex flex-wrap gap-2">
             <Button
               variant={!templateId ? "default" : "outline"}
@@ -421,6 +422,7 @@ export function ReportBuilder({
             ))}
           </div>
 
+          {/* Status message */}
           {selectedTemplate && (
             <p className="text-xs text-gold">
               {t("report", "usingTemplate")}: {selectedTemplate.name}
@@ -432,63 +434,103 @@ export function ReportBuilder({
             </p>
           )}
 
+          {/* Upload section */}
           {selectedBrands.size > 0 && (
             <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowUpload(!showUpload)}
-                className="gap-1.5"
-              >
-                <Upload className="size-3.5" />
-                {t("report", "uploadTemplate")}
-              </Button>
+              {!showUpload && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUpload(true)}
+                  className="gap-1.5"
+                >
+                  <Upload className="size-3.5" />
+                  {t("report", "uploadTemplate")}
+                </Button>
+              )}
 
               {showUpload && (
-                <div className="space-y-3 p-3 rounded-lg border border-border bg-muted/30">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">{t("report", "templateName")}</Label>
-                    <Input
-                      value={uploadName}
-                      onChange={(e) => setUploadName(e.target.value)}
-                      placeholder="Es. Brand Template Q1"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">File (.pptx)</Label>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pptx"
-                      onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                      className="block text-xs text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:bg-gold/10 file:text-gold file:cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={!uploadFile || !uploadName.trim() || uploading}
-                      onClick={handleUploadTemplate}
-                      className="gap-1.5"
-                    >
-                      {uploading ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Upload className="size-3.5" />
-                      )}
-                      {t("report", "uploadBtn")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
+                <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+                    <p className="text-xs font-medium">{t("report", "uploadTemplate")}</p>
+                    <button
                       onClick={() => {
                         setShowUpload(false);
                         setUploadName("");
                         setUploadFile(null);
                       }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <X className="size-3.5" />
+                      <X className="size-4" />
+                    </button>
+                  </div>
+
+                  <div className="p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs">
+                        {t("report", "templateName")} <span className="text-red-400">*</span>
+                      </Label>
+                      <Input
+                        value={uploadName}
+                        onChange={(e) => setUploadName(e.target.value)}
+                        placeholder="Es. Brand Template Q1"
+                        className="h-9"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs">
+                        File (.pptx) <span className="text-red-400">*</span>
+                      </Label>
+                      <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".pptx"
+                          onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+                          className="hidden"
+                          id="template-file-input"
+                        />
+                        {uploadFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <FileText className="size-4 text-gold" />
+                            <span className="text-sm">{uploadFile.name}</span>
+                            <button
+                              onClick={() => {
+                                setUploadFile(null);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                              }}
+                              className="text-muted-foreground hover:text-red-400"
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label
+                            htmlFor="template-file-input"
+                            className="cursor-pointer space-y-1"
+                          >
+                            <Upload className="size-5 text-muted-foreground mx-auto" />
+                            <p className="text-xs text-muted-foreground">
+                              Clicca per selezionare un file PPTX
+                            </p>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full gap-1.5"
+                      disabled={!uploadFile || !uploadName.trim() || uploading}
+                      onClick={handleUploadTemplate}
+                    >
+                      {uploading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Upload className="size-4" />
+                      )}
+                      {uploading ? "Caricamento..." : t("report", "uploadBtn")}
                     </Button>
                   </div>
                 </div>
