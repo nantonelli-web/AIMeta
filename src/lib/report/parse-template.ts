@@ -3,6 +3,10 @@ import JSZip from "jszip";
 /**
  * Theme configuration extracted from a PPTX template file.
  * Stored as JSONB in mait_client_templates.theme_config.
+ *
+ * IMPORTANT: Large images (cover background, logo) are NOT stored here
+ * to avoid JSONB size limits. They are extracted on-demand from the
+ * original PPTX file in Supabase Storage via `extractImagesFromTemplate()`.
  */
 export interface ThemeConfig {
   colors: {
@@ -16,12 +20,11 @@ export interface ThemeConfig {
     heading: string;
     body: string;
   };
+  /** Set at generation time from storage, not persisted in DB */
   logoBase64: string | null;
   logoMimeType: string | null;
-  /** Full cover slide background image (from slide 1) */
   coverImageBase64: string | null;
   coverImageMimeType: string | null;
-  /** Content slide background color (from slide 2+) */
   contentBackground: string | null;
 }
 
@@ -79,9 +82,6 @@ function getMimeType(filename: string): string {
   return "image/png";
 }
 
-/**
- * Get image filenames referenced by a specific slide via its .rels file.
- */
 async function getSlideImages(zip: JSZip, slideNum: number): Promise<string[]> {
   const relsPath = `ppt/slides/_rels/slide${slideNum}.xml.rels`;
   const relsFile = zip.file(relsPath);
@@ -93,24 +93,18 @@ async function getSlideImages(zip: JSZip, slideNum: number): Promise<string[]> {
 }
 
 /**
- * Parse an uploaded PPTX file to extract branding configuration.
- *
- * Strategy:
- * 1. Parse theme XML for colors + fonts
- * 2. Identify slide 1 images (cover) — largest = background, smallest = logo
- * 3. Identify slide 2 images (content) — typically just a small logo
- * 4. Extract background color from slide 2 XML
+ * Parse template for LIGHTWEIGHT config only (colors, fonts, content bg).
+ * Does NOT extract images — those are too large for JSONB.
+ * This is what gets stored in mait_client_templates.theme_config.
  */
 export async function parseTemplate(buffer: ArrayBuffer): Promise<ThemeConfig> {
   try {
     const zip = await JSZip.loadAsync(buffer);
 
-    // ── 1. Parse theme XML ─────────────────────────────────────
+    // Parse theme XML
     let themeXml = "";
     const themeFile = zip.file("ppt/theme/theme1.xml");
-    if (themeFile) {
-      themeXml = await themeFile.async("text");
-    }
+    if (themeFile) themeXml = await themeFile.async("text");
 
     let colors = { ...DEFAULT_THEME.colors };
     let fonts = { ...DEFAULT_THEME.fonts };
@@ -129,7 +123,44 @@ export async function parseTemplate(buffer: ArrayBuffer): Promise<ThemeConfig> {
       };
     }
 
-    // ── 2. Extract slide 1 images (cover) ──────────────────────
+    // Extract content slide background color (slide 2)
+    let contentBackground: string | null = null;
+    const slide2File = zip.file("ppt/slides/slide2.xml");
+    if (slide2File) {
+      const s2Xml = await slide2File.async("text");
+      const bgMatch = s2Xml.match(/<a:srgbClr val="([A-Fa-f0-9]{6})"/i);
+      if (bgMatch) contentBackground = `#${bgMatch[1].toUpperCase()}`;
+    }
+
+    return {
+      colors,
+      fonts,
+      logoBase64: null,
+      logoMimeType: null,
+      coverImageBase64: null,
+      coverImageMimeType: null,
+      contentBackground,
+    };
+  } catch (err) {
+    console.warn("[parse-template] Failed, using defaults:", err);
+    return { ...DEFAULT_THEME };
+  }
+}
+
+/**
+ * Extract images from a PPTX file buffer.
+ * Called at report generation time (not at upload time).
+ * Returns the cover image and logo as base64.
+ */
+export async function extractImagesFromTemplate(buffer: ArrayBuffer): Promise<{
+  coverImageBase64: string | null;
+  coverImageMimeType: string | null;
+  logoBase64: string | null;
+  logoMimeType: string | null;
+}> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+
     const slide1Images = await getSlideImages(zip, 1);
     let coverImageBase64: string | null = null;
     let coverImageMimeType: string | null = null;
@@ -137,7 +168,6 @@ export async function parseTemplate(buffer: ArrayBuffer): Promise<ThemeConfig> {
     let logoMimeType: string | null = null;
 
     if (slide1Images.length > 0) {
-      // Load all images with their sizes
       const imageData: { path: string; data: string; size: number }[] = [];
       for (const path of slide1Images) {
         const file = zip.file(path);
@@ -148,32 +178,27 @@ export async function parseTemplate(buffer: ArrayBuffer): Promise<ThemeConfig> {
         }
       }
 
-      // Sort by size: largest = cover background, smallest = logo
       imageData.sort((a, b) => b.size - a.size);
 
       if (imageData.length >= 1) {
-        // Largest image = cover background
-        const cover = imageData[0];
-        coverImageBase64 = cover.data;
-        coverImageMimeType = getMimeType(cover.path);
+        coverImageBase64 = imageData[0].data;
+        coverImageMimeType = getMimeType(imageData[0].path);
       }
 
       if (imageData.length >= 2) {
-        // Second image = logo (or smaller one on the cover)
-        const logo = imageData[imageData.length - 1]; // smallest
+        const logo = imageData[imageData.length - 1];
         logoBase64 = logo.data;
         logoMimeType = getMimeType(logo.path);
       }
     }
 
-    // ── 3. If no logo from slide 1, check slide 2 ──────────────
+    // Fallback: check slide 2 for logo
     if (!logoBase64) {
       const slide2Images = await getSlideImages(zip, 2);
       for (const path of slide2Images) {
         const file = zip.file(path);
         if (file) {
           const raw = await file.async("uint8array");
-          // Only take small images as logo (< 200KB)
           if (raw.length < 200_000) {
             logoBase64 = await file.async("base64");
             logoMimeType = getMimeType(path);
@@ -183,28 +208,9 @@ export async function parseTemplate(buffer: ArrayBuffer): Promise<ThemeConfig> {
       }
     }
 
-    // ── 4. Extract content slide background color ───────────────
-    let contentBackground: string | null = null;
-    const slide2File = zip.file("ppt/slides/slide2.xml");
-    if (slide2File) {
-      const s2Xml = await slide2File.async("text");
-      const bgMatch = s2Xml.match(/<a:srgbClr val="([A-Fa-f0-9]{6})"/i);
-      if (bgMatch) {
-        contentBackground = `#${bgMatch[1].toUpperCase()}`;
-      }
-    }
-
-    return {
-      colors,
-      fonts,
-      logoBase64,
-      logoMimeType,
-      coverImageBase64,
-      coverImageMimeType,
-      contentBackground,
-    };
+    return { coverImageBase64, coverImageMimeType, logoBase64, logoMimeType };
   } catch (err) {
-    console.warn("[parse-template] Failed to parse PPTX template, using defaults:", err);
-    return { ...DEFAULT_THEME };
+    console.warn("[extractImages] Failed:", err);
+    return { coverImageBase64: null, coverImageMimeType: null, logoBase64: null, logoMimeType: null };
   }
 }

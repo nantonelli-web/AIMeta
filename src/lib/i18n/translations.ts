@@ -382,6 +382,8 @@ const translations = {
     },
     generating: { it: "Generazione confronto...", en: "Generating comparison..." },
     generatingAi: { it: "Analisi AI in corso...", en: "AI analysis in progress..." },
+    staleShort: { it: "da aggiornare", en: "outdated" },
+    savedComparisons: { it: "Confronti salvati", en: "Saved comparisons" },
   },
 
   // ─── Library ───────────────────────────────────────────────

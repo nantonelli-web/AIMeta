@@ -67,11 +67,22 @@ function formatTimestamp(isoDate: string, locale: string): string {
   );
 }
 
+interface SavedComparison {
+  id: string;
+  competitor_ids: string[];
+  locale: string;
+  stale: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export function CompareView({
   competitors,
+  savedComparisons = [],
 }: {
   competitors: MaitCompetitor[];
   workspaceId: string;
+  savedComparisons?: SavedComparison[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<Tab>("technical");
@@ -358,9 +369,49 @@ export function CompareView({
       </Card>
 
       {!hasResults && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          {t("compare", "selectAtLeast2")}
-        </p>
+        <div className="space-y-6">
+          <p className="text-sm text-muted-foreground text-center py-4">
+            {t("compare", "selectAtLeast2")}
+          </p>
+
+          {/* Saved comparisons */}
+          {savedComparisons.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">{t("compare", "savedComparisons")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {savedComparisons.map((sc) => {
+                  const brandNames = sc.competitor_ids
+                    .map((cid) => competitors.find((c) => c.id === cid)?.page_name ?? cid.slice(0, 8))
+                    .join(" vs ");
+                  return (
+                    <button
+                      key={sc.id}
+                      onClick={() => {
+                        const newSet = new Set(sc.competitor_ids);
+                        setSelected(newSet);
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-md border border-border hover:border-gold/40 transition-colors text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{brandNames}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatTimestamp(sc.updated_at, locale)}
+                          {sc.stale && (
+                            <span className="ml-2 text-amber-400">
+                              ⚠ {t("compare", "staleShort")}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Timestamp + Stale Warning + Regenerate */}

@@ -46,8 +46,14 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {itemDefs.map(({ href, key, icon: Icon }) => {
-          const active =
-            pathname === href || pathname.startsWith(`${href}/`);
+          // Exact match for items that are prefixes of other items
+          // (e.g. /brands should not highlight when on /brands/compare)
+          const isExactMatch = pathname === href;
+          const isChildMatch = pathname.startsWith(`${href}/`);
+          const hasChildInMenu = itemDefs.some(
+            (other) => other.href !== href && other.href.startsWith(`${href}/`)
+          );
+          const active = isExactMatch || (isChildMatch && !hasChildInMenu);
           return (
             <Link
               key={href}

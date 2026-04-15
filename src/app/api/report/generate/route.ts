@@ -6,7 +6,7 @@ import { inferObjective } from "@/lib/analytics/objective-inference";
 import { generateSinglePptx, generateComparisonPptx, type BrandData, type SectionType } from "@/lib/report/generate-pptx";
 import { generateSinglePdf, generateComparisonPdf } from "@/lib/report/generate-pdf";
 import { analyzeCopy, analyzeVisuals, type BrandAdData, type CreativeAnalysisResult } from "@/lib/ai/creative-analysis";
-import type { ThemeConfig } from "@/lib/report/parse-template";
+import { extractImagesFromTemplate, type ThemeConfig } from "@/lib/report/parse-template";
 
 export const maxDuration = 120;
 
@@ -224,16 +224,35 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Fetch theme config if template_id is provided
+  // Fetch theme config + images from template if provided
   let themeConfig: ThemeConfig | null = null;
   if (template_id) {
     const { data: tmpl } = await admin
       .from("mait_client_templates")
-      .select("theme_config")
+      .select("theme_config, storage_path")
       .eq("id", template_id)
       .single();
     if (tmpl?.theme_config) {
       themeConfig = tmpl.theme_config as unknown as ThemeConfig;
+
+      // Download the original PPTX from storage to extract images
+      if (tmpl.storage_path) {
+        try {
+          const { data: fileData } = await admin.storage
+            .from("templates")
+            .download(tmpl.storage_path);
+          if (fileData) {
+            const buffer = await fileData.arrayBuffer();
+            const images = await extractImagesFromTemplate(buffer);
+            themeConfig = {
+              ...themeConfig,
+              ...images,
+            };
+          }
+        } catch (err) {
+          console.warn("[report/generate] Failed to extract images from template:", err);
+        }
+      }
     }
   }
 
