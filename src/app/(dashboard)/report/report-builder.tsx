@@ -190,23 +190,34 @@ export function ReportBuilder({
     setUploading(true);
     setError(null);
     try {
-      // Step 1: Upload file directly to Supabase Storage (bypass Vercel 4.5MB limit)
-      const { createClient: createBrowserClient } = await import("@/lib/supabase/client");
-      const supabase = createBrowserClient();
-      const storagePath = `${clientIdForUpload}/${Date.now()}_${uploadFile.name}`;
+      // Step 1: Get a signed upload URL from the server
+      const urlRes = await fetch("/api/report/templates/upload-url", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: uploadFile.name,
+          client_id: clientIdForUpload,
+        }),
+      });
+      if (!urlRes.ok) {
+        const data = await urlRes.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to get upload URL");
+      }
+      const { signedUrl, storagePath } = await urlRes.json();
 
-      const { error: storageErr } = await supabase.storage
-        .from("templates")
-        .upload(storagePath, uploadFile, {
-          contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          upsert: false,
-        });
-
-      if (storageErr) {
-        throw new Error(`Storage upload failed: ${storageErr.message}`);
+      // Step 2: Upload file directly to Supabase Storage via signed URL
+      const uploadRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        },
+        body: uploadFile,
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Storage upload failed: ${uploadRes.status}`);
       }
 
-      // Step 2: Call API to parse the template and save DB record
+      // Step 3: Call API to parse the template and save DB record
       const res = await fetch("/api/report/templates", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -218,8 +229,6 @@ export function ReportBuilder({
       });
 
       if (!res.ok) {
-        // Clean up storage on failure
-        await supabase.storage.from("templates").remove([storagePath]);
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Upload failed");
       }
