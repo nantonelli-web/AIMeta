@@ -203,7 +203,9 @@ export function ReportBuilder({
         const data = await urlRes.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to get upload URL");
       }
-      const { signedUrl, storagePath } = await urlRes.json();
+      const urlData = await urlRes.json();
+      const { signedUrl, storagePath } = urlData;
+      console.log("[MAIT template] Step 1 OK — signed URL:", signedUrl?.slice(0, 80));
 
       // Step 2: Upload file directly to Supabase Storage via signed URL
       const uploadRes = await fetch(signedUrl, {
@@ -215,9 +217,10 @@ export function ReportBuilder({
       });
       if (!uploadRes.ok) {
         const errText = await uploadRes.text().catch(() => "");
-        console.error("[template upload] Storage error:", uploadRes.status, errText);
-        throw new Error(`Storage upload failed: ${uploadRes.status} ${errText.slice(0, 100)}`);
+        console.error("[MAIT template] Step 2 FAILED:", uploadRes.status, errText);
+        throw new Error(`Storage upload failed: ${uploadRes.status} ${errText.slice(0, 200)}`);
       }
+      console.log("[MAIT template] Step 2 OK — file uploaded to:", storagePath);
 
       // Step 3: Call API to parse the template and save DB record
       const res = await fetch("/api/report/templates", {
@@ -236,6 +239,7 @@ export function ReportBuilder({
       }
 
       const record = await res.json();
+      console.log("[MAIT template] Step 3 OK — record saved:", record.id, record.name);
       setTemplates((prev) => [record, ...prev]);
       setTemplateId(record.id);
       setShowUpload(false);
