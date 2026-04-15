@@ -555,6 +555,16 @@ function singleLatestAds(
 }
 
 // ─── AI ANALYSIS SLIDES (shared for single and comparison) ──────
+// Full text, no truncation. One slide per brand + comparison slide.
+
+function full(text: string | null | undefined): string {
+  return text?.trim() || "—";
+}
+
+function estimateLines(text: string, fontSize: number, widthInches: number): number {
+  const charsPerLine = Math.floor(widthInches * 14 * (10 / fontSize));
+  return Math.max(1, Math.ceil(text.length / Math.max(charsPerLine, 1)));
+}
 
 function addCopyAnalysisSlide(
   pptx: PptxGenJS,
@@ -563,107 +573,60 @@ function addCopyAnalysisSlide(
   theme: ThemeConfig,
   locale: Locale
 ) {
-  const slide = pptx.addSlide();
-  addLogo(slide, theme);
-  slide.background = { color: hex(contentBg(theme)) };
-
-  slide.addText(label(locale, "Analisi Copy (AI)", "Copy Analysis (AI)"), {
-    x: PAD,
-    y: 0.15,
-    w: SW - 2 * PAD,
-    h: 0.35,
-    fontSize: 14,
-    fontFace: theme.fonts.heading,
-    color: hex(theme.colors.primary),
-    bold: true,
-  });
-
   const cardBg = lighten(contentBg(theme), 0.12);
-  const numBrands = analyses.length;
-  const colW = (SW - 2 * PAD - 0.15 * (numBrands - 1)) / numBrands;
 
-  analyses.forEach((a, i) => {
-    const x = PAD + i * (colW + 0.15);
-    const y = 0.6;
-    const h = 3.8;
+  for (const a of analyses) {
+    const slide = pptx.addSlide();
+    addLogo(slide, theme);
+    slide.background = { color: hex(contentBg(theme)) };
 
-    addCardBg(slide, pptx, x, y, colW, h, cardBg);
-
-    // Brand name header
-    slide.addShape(pptx.ShapeType.rect, {
-      x,
-      y,
-      w: colW,
-      h: 0.28,
-      fill: { color: hex(theme.colors.primary) },
-      line: { type: "none" },
-    });
-    slide.addText(a.brandName, {
-      x: x + 0.08,
-      y,
-      w: colW - 0.16,
-      h: 0.28,
-      fontSize: 9,
-      fontFace: theme.fonts.heading,
-      color: hex(theme.colors.background),
-      bold: true,
+    slide.addText(`${label(locale, "Analisi Copy", "Copy Analysis")} — ${a.brandName}`, {
+      x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.35,
+      fontSize: 14, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
     });
 
     const fields: [string, string][] = [
-      [label(locale, "Tono di voce", "Tone of voice"), trunc(a.toneOfVoice, 80)],
-      [label(locale, "Stile copy", "Copy style"), trunc(a.copyStyle, 80)],
-      [label(locale, "Trigger emozionali", "Emotional triggers"), a.emotionalTriggers?.join(", ") ?? "\u2014"],
-      [label(locale, "Pattern CTA", "CTA patterns"), trunc(a.ctaPatterns, 70)],
-      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 70)],
-      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 70)],
+      [label(locale, "Tono di voce", "Tone of voice"), full(a.toneOfVoice)],
+      [label(locale, "Stile copy", "Copy style"), full(a.copyStyle)],
+      [label(locale, "Trigger emozionali", "Emotional triggers"), a.emotionalTriggers?.join(", ") ?? "—"],
+      [label(locale, "Pattern CTA", "CTA patterns"), full(a.ctaPatterns)],
+      [label(locale, "Punti di forza", "Strengths"), full(a.strengths)],
+      [label(locale, "Punti deboli", "Weaknesses"), full(a.weaknesses)],
     ];
 
-    let fy = y + 0.38;
-    fields.forEach(([lbl, val]) => {
+    let fy = 0.6;
+    const contentW = SW - 2 * PAD;
+    for (const [lbl, val] of fields) {
+      const lines = estimateLines(val, 8, contentW - 0.2);
+      const valH = Math.max(0.3, lines * 0.16);
+      addCardBg(slide, pptx, PAD, fy, contentW, valH + 0.22, cardBg);
       slide.addText(lbl, {
-        x: x + 0.08,
-        y: fy,
-        w: colW - 0.16,
-        h: 0.18,
-        fontSize: 6,
-        fontFace: theme.fonts.heading,
-        color: hex(theme.colors.primary),
-        bold: true,
+        x: PAD + 0.1, y: fy + 0.04, w: contentW - 0.2, h: 0.16,
+        fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
       });
       slide.addText(val, {
-        x: x + 0.08,
-        y: fy + 0.17,
-        w: colW - 0.16,
-        h: 0.38,
-        fontSize: 7,
-        fontFace: theme.fonts.body,
-        color: hex(theme.colors.text),
-        valign: "top",
+        x: PAD + 0.1, y: fy + 0.2, w: contentW - 0.2, h: valH,
+        fontSize: 8, fontFace: theme.fonts.body, color: hex(theme.colors.text), valign: "top",
       });
-      fy += 0.56;
-    });
-  });
+      fy += valH + 0.28;
+    }
+  }
 
-  // Comparison box at bottom
   if (comparison) {
-    slide.addShape(pptx.ShapeType.rect, {
-      x: PAD,
-      y: 4.5,
-      w: SW - 2 * PAD,
-      h: 0.03,
-      fill: { color: hex(theme.colors.primary) },
-      line: { type: "none" },
+    const slide = pptx.addSlide();
+    addLogo(slide, theme);
+    slide.background = { color: hex(contentBg(theme)) };
+    slide.addText(label(locale, "Confronto Copy", "Copy Comparison"), {
+      x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.35,
+      fontSize: 14, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
     });
-    slide.addText(trunc(comparison, 200), {
-      x: PAD + 0.05,
-      y: 4.55,
-      w: SW - 2 * PAD - 0.1,
-      h: 0.9,
-      fontSize: 7,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.text),
-      transparency: 15,
-      valign: "top",
+    slide.addShape(pptx.ShapeType.rect, {
+      x: PAD, y: 0.55, w: SW - 2 * PAD, h: 0.03,
+      fill: { color: hex(theme.colors.primary) }, line: { type: "none" },
+    });
+    slide.addText(full(comparison), {
+      x: PAD + 0.1, y: 0.65, w: SW - 2 * PAD - 0.2, h: SH - 0.95,
+      fontSize: 9, fontFace: theme.fonts.body, color: hex(theme.colors.text), valign: "top",
     });
   }
 }
@@ -675,108 +638,61 @@ function addVisualAnalysisSlide(
   theme: ThemeConfig,
   locale: Locale
 ) {
-  const slide = pptx.addSlide();
-  addLogo(slide, theme);
-  slide.background = { color: hex(contentBg(theme)) };
-
-  slide.addText(label(locale, "Analisi Creativa (AI)", "Creative Analysis (AI)"), {
-    x: PAD,
-    y: 0.15,
-    w: SW - 2 * PAD,
-    h: 0.35,
-    fontSize: 14,
-    fontFace: theme.fonts.heading,
-    color: hex(theme.colors.primary),
-    bold: true,
-  });
-
   const cardBg = lighten(contentBg(theme), 0.12);
-  const numBrands = analyses.length;
-  const colW = (SW - 2 * PAD - 0.15 * (numBrands - 1)) / numBrands;
 
-  analyses.forEach((a, i) => {
-    const x = PAD + i * (colW + 0.15);
-    const y = 0.6;
-    const h = 3.8;
+  for (const a of analyses) {
+    const slide = pptx.addSlide();
+    addLogo(slide, theme);
+    slide.background = { color: hex(contentBg(theme)) };
 
-    addCardBg(slide, pptx, x, y, colW, h, cardBg);
-
-    // Brand name header
-    slide.addShape(pptx.ShapeType.rect, {
-      x,
-      y,
-      w: colW,
-      h: 0.28,
-      fill: { color: hex(theme.colors.primary) },
-      line: { type: "none" },
-    });
-    slide.addText(a.brandName, {
-      x: x + 0.08,
-      y,
-      w: colW - 0.16,
-      h: 0.28,
-      fontSize: 9,
-      fontFace: theme.fonts.heading,
-      color: hex(theme.colors.background),
-      bold: true,
+    slide.addText(`${label(locale, "Analisi Creativa", "Creative Analysis")} — ${a.brandName}`, {
+      x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.35,
+      fontSize: 14, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
     });
 
     const fields: [string, string][] = [
-      [label(locale, "Stile visivo", "Visual style"), trunc(a.visualStyle, 80)],
-      [label(locale, "Palette colori", "Color palette"), trunc(a.colorPalette, 80)],
-      [label(locale, "Stile fotografico", "Photography style"), trunc(a.photographyStyle, 80)],
-      [label(locale, "Coerenza brand", "Brand consistency"), trunc(a.brandConsistency, 70)],
-      [label(locale, "Preferenze formato", "Format preferences"), trunc(a.formatPreferences, 70)],
-      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 70)],
-      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 70)],
+      [label(locale, "Stile visivo", "Visual style"), full(a.visualStyle)],
+      [label(locale, "Palette colori", "Color palette"), full(a.colorPalette)],
+      [label(locale, "Stile fotografico", "Photography style"), full(a.photographyStyle)],
+      [label(locale, "Coerenza brand", "Brand consistency"), full(a.brandConsistency)],
+      [label(locale, "Preferenze formato", "Format preferences"), full(a.formatPreferences)],
+      [label(locale, "Punti di forza", "Strengths"), full(a.strengths)],
+      [label(locale, "Punti deboli", "Weaknesses"), full(a.weaknesses)],
     ];
 
-    let fy = y + 0.38;
-    fields.forEach(([lbl, val]) => {
+    let fy = 0.6;
+    const contentW = SW - 2 * PAD;
+    for (const [lbl, val] of fields) {
+      const lines = estimateLines(val, 8, contentW - 0.2);
+      const valH = Math.max(0.3, lines * 0.16);
+      addCardBg(slide, pptx, PAD, fy, contentW, valH + 0.22, cardBg);
       slide.addText(lbl, {
-        x: x + 0.08,
-        y: fy,
-        w: colW - 0.16,
-        h: 0.16,
-        fontSize: 6,
-        fontFace: theme.fonts.heading,
-        color: hex(theme.colors.primary),
-        bold: true,
+        x: PAD + 0.1, y: fy + 0.04, w: contentW - 0.2, h: 0.16,
+        fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
       });
       slide.addText(val, {
-        x: x + 0.08,
-        y: fy + 0.15,
-        w: colW - 0.16,
-        h: 0.32,
-        fontSize: 7,
-        fontFace: theme.fonts.body,
-        color: hex(theme.colors.text),
-        valign: "top",
+        x: PAD + 0.1, y: fy + 0.2, w: contentW - 0.2, h: valH,
+        fontSize: 8, fontFace: theme.fonts.body, color: hex(theme.colors.text), valign: "top",
       });
-      fy += 0.48;
-    });
-  });
+      fy += valH + 0.28;
+    }
+  }
 
-  // Comparison box at bottom
   if (comparison) {
-    slide.addShape(pptx.ShapeType.rect, {
-      x: PAD,
-      y: 4.5,
-      w: SW - 2 * PAD,
-      h: 0.03,
-      fill: { color: hex(theme.colors.primary) },
-      line: { type: "none" },
+    const slide = pptx.addSlide();
+    addLogo(slide, theme);
+    slide.background = { color: hex(contentBg(theme)) };
+    slide.addText(label(locale, "Confronto Creativo", "Creative Comparison"), {
+      x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.35,
+      fontSize: 14, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
     });
-    slide.addText(trunc(comparison, 200), {
-      x: PAD + 0.05,
-      y: 4.55,
-      w: SW - 2 * PAD - 0.1,
-      h: 0.9,
-      fontSize: 7,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.text),
-      transparency: 15,
-      valign: "top",
+    slide.addShape(pptx.ShapeType.rect, {
+      x: PAD, y: 0.55, w: SW - 2 * PAD, h: 0.03,
+      fill: { color: hex(theme.colors.primary) }, line: { type: "none" },
+    });
+    slide.addText(full(comparison), {
+      x: PAD + 0.1, y: 0.65, w: SW - 2 * PAD - 0.2, h: SH - 0.95,
+      fontSize: 9, fontFace: theme.fonts.body, color: hex(theme.colors.text), valign: "top",
     });
   }
 }
