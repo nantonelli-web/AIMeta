@@ -56,6 +56,7 @@ export function ReportBuilder({
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [reportLocale, setReportLocale] = useState<ReportLocale>(locale as ReportLocale);
+  const [contentSections, setContentSections] = useState<Set<'technical' | 'copy' | 'visual'>>(new Set(['technical']));
   const [format, setFormat] = useState<ReportFormat>("pptx");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -133,6 +134,7 @@ export function ReportBuilder({
           template_id: templateId ?? undefined,
           format,
           locale: reportLocale,
+          sections: [...contentSections],
         }),
       });
 
@@ -278,11 +280,54 @@ export function ReportBuilder({
         </CardContent>
       </Card>
 
-      {/* Step 3: Template */}
+      {/* Step 3: Content Sections */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            3. {t("report", "template")}
+            3. {t("report", "contentSelection")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground mb-2">
+            {t("report", "selectSections")}
+          </p>
+          {([
+            { key: 'technical' as const, label: t("report", "sectionTechnical") },
+            { key: 'copy' as const, label: t("report", "sectionCopy") },
+            { key: 'visual' as const, label: t("report", "sectionVisual") },
+          ]).map((section) => (
+            <label
+              key={section.key}
+              className="flex items-center gap-2 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                checked={contentSections.has(section.key)}
+                onChange={() => {
+                  setContentSections((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(section.key)) {
+                      // Don't allow unchecking the last section
+                      if (next.size > 1) next.delete(section.key);
+                    } else {
+                      next.add(section.key);
+                    }
+                    return next;
+                  });
+                }}
+                className="rounded border-border accent-gold"
+              />
+              <span className="text-sm">{section.label}</span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Step 4: Template */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">
+            4. {t("report", "template")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -395,7 +440,7 @@ export function ReportBuilder({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            4. {t("report", "language")}
+            5. {t("report", "language")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -418,11 +463,11 @@ export function ReportBuilder({
         </CardContent>
       </Card>
 
-      {/* Step 5: Format */}
+      {/* Step 6: Format */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            5. {t("report", "format")}
+            6. {t("report", "format")}
           </CardTitle>
         </CardHeader>
         <CardContent>

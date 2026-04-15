@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { type ThemeConfig, DEFAULT_THEME } from "./parse-template";
-import type { BrandData } from "./generate-pptx";
+import type { BrandData, SectionType } from "./generate-pptx";
+import type { CreativeAnalysisResult } from "@/lib/ai/creative-analysis";
 
 type Locale = "it" | "en";
 
@@ -27,11 +28,16 @@ function formatDate(locale: Locale): string {
   });
 }
 
+function trunc(text: string | null | undefined, max: number): string {
+  if (!text) return "\u2014";
+  return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+}
+
 // Page dimensions (landscape A4)
 const PW = 297; // mm
 const PH = 210;
-const MARGIN = 15;
-const CW = PW - 2 * MARGIN; // content width
+const MARGIN = 12;
+const CW = PW - 2 * MARGIN;
 
 /**
  * Fill the entire page with the background color.
@@ -55,37 +61,33 @@ function drawBarChart(
 ) {
   if (items.length === 0) return;
   const maxVal = Math.max(...items.map((i) => i.value), 1);
-  const barHeight = 7;
-  const gap = 4;
+  const barHeight = 5;
+  const gap = 3;
 
   items.forEach((item, i) => {
     const cy = y + i * (barHeight + gap);
 
-    // Label
     const [tr, tg, tb] = hexToRgb(theme.colors.text);
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setTextColor(tr, tg, tb);
     doc.text(item.name, x, cy + barHeight / 2 + 1);
 
-    // Bar bg
     doc.setFillColor(50, 50, 50);
-    doc.rect(x + 55, cy, maxWidth - 55, barHeight, "F");
+    doc.rect(x + 40, cy, maxWidth - 40, barHeight, "F");
 
-    // Bar fill
-    const barW = ((maxWidth - 55) * item.value) / maxVal;
+    const barW = ((maxWidth - 40) * item.value) / maxVal;
     const [pr, pg, pb] = hexToRgb(theme.colors.primary);
     doc.setFillColor(pr, pg, pb);
-    doc.rect(x + 55, cy, Math.max(barW, 1), barHeight, "F");
+    doc.rect(x + 40, cy, Math.max(barW, 1), barHeight, "F");
 
-    // Value
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setTextColor(tr, tg, tb);
-    doc.text(String(item.value), x + 55 + barW + 3, cy + barHeight / 2 + 1);
+    doc.text(String(item.value), x + 40 + barW + 2, cy + barHeight / 2 + 1);
   });
 }
 
 /**
- * Draw a simple "pie" as stacked proportional row (since jsPDF has no pie chart).
+ * Draw a proportional bar (faux pie).
  */
 function drawProportionalBar(
   doc: jsPDF,
@@ -103,26 +105,25 @@ function drawProportionalBar(
     const w = (item.value / total) * width;
     const [r, g, b] = hexToRgb(item.color);
     doc.setFillColor(r, g, b);
-    doc.rect(cx, y, w, 12, "F");
+    doc.rect(cx, y, w, 8, "F");
     cx += w;
   });
 
-  // Legend
   let lx = x;
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setTextColor(tr, tg, tb);
   items.forEach((item) => {
     const [r, g, b] = hexToRgb(item.color);
     doc.setFillColor(r, g, b);
-    doc.rect(lx, y + 16, 4, 4, "F");
+    doc.rect(lx, y + 11, 3, 3, "F");
     const pct = Math.round((item.value / total) * 100);
-    doc.text(`${item.name} (${pct}%)`, lx + 6, y + 19.5);
-    lx += 50;
+    doc.text(`${item.name} (${pct}%)`, lx + 5, y + 13.5);
+    lx += 45;
   });
 }
 
-// ─── Slide builders (single) ─────────────────────────────────────
+// ─── Single brand PDF slides (dense) ────────────────────────────
 
 function addPdfCoverPage(
   doc: jsPDF,
@@ -132,7 +133,11 @@ function addPdfCoverPage(
 ) {
   fillBg(doc, theme);
 
-  // Logo
+  // Accent bar
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  doc.setFillColor(pr, pg, pb);
+  doc.rect(0, 0, PW, 2, "F");
+
   if (theme.logoBase64 && theme.logoMimeType) {
     try {
       const ext = theme.logoMimeType.includes("png") ? "PNG" : "JPEG";
@@ -140,210 +145,122 @@ function addPdfCoverPage(
         `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
         ext,
         MARGIN,
-        15,
-        40,
-        40
+        10,
+        30,
+        30
       );
     } catch {
-      // Skip logo if it fails
+      // skip
     }
   }
 
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(36);
+  doc.setFontSize(32);
   doc.setTextColor(pr, pg, pb);
-  doc.text(brand.name, MARGIN, 85);
+  doc.text(brand.name, MARGIN, 70);
+
+  doc.setFontSize(16);
+  doc.setTextColor(tr, tg, tb);
+  doc.text(label(locale, "Report Analisi Ads", "Ads Analysis Report"), MARGIN, 85);
+
+  doc.setFontSize(11);
+  doc.setTextColor(tr, tg, tb);
+  doc.text(formatDate(locale), MARGIN, 97);
+
+  doc.setFontSize(8);
+  doc.setTextColor(pr, pg, pb);
+  doc.text("Powered by MAIT \u00B7 NIMA Digital", MARGIN, PH - 10);
+}
+
+function addPdfDashboardPage(
+  doc: jsPDF,
+  brand: BrandData,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  doc.addPage();
+  fillBg(doc, theme);
+
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
   doc.setFontSize(18);
-  doc.setTextColor(tr, tg, tb);
-  doc.text(label(locale, "Report Analisi Ads", "Ads Analysis Report"), MARGIN, 100);
-
-  doc.setFontSize(12);
-  doc.setTextColor(tr, tg, tb);
-  doc.text(formatDate(locale), MARGIN, 115);
-
-  doc.setFontSize(10);
   doc.setTextColor(pr, pg, pb);
-  doc.text("Powered by MAIT", MARGIN, 185);
-}
+  doc.text(label(locale, "Dashboard", "Dashboard"), MARGIN, 18);
 
-function addPdfOverviewPage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-  const [tr, tg, tb] = hexToRgb(theme.colors.text);
-
-  doc.setFontSize(24);
-  doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Panoramica", "Overview"), MARGIN, 25);
-
+  // Stat cards (4 across)
   const total = brand.imageCount + brand.videoCount + brand.carouselCount;
-  const formatMix =
-    total > 0
-      ? `${Math.round((brand.imageCount / total) * 100)}% Image, ${Math.round((brand.videoCount / total) * 100)}% Video, ${Math.round((brand.carouselCount / total) * 100)}% Carousel`
-      : "\u2014";
+  const imgPct = total > 0 ? Math.round((brand.imageCount / total) * 100) : 0;
+  const vidPct = total > 0 ? Math.round((brand.videoCount / total) * 100) : 0;
+  const carPct = total > 0 ? Math.round((brand.carouselCount / total) * 100) : 0;
 
-  const rows: [string, string][] = [
-    [label(locale, "Ads totali", "Total ads"), String(brand.totalAds)],
-    [label(locale, "Ads attive", "Active ads"), String(brand.activeAds)],
-    [label(locale, "Format mix", "Format mix"), formatMix],
-    [
-      label(locale, "Ultimo scan", "Last scan"),
-      brand.lastScrapedAt
-        ? new Date(brand.lastScrapedAt).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT")
-        : "\u2014",
-    ],
+  const stats = [
+    { lbl: label(locale, "Ads totali", "Total ads"), val: String(brand.totalAds) },
+    { lbl: label(locale, "Ads attive", "Active ads"), val: String(brand.activeAds) },
+    { lbl: label(locale, "Durata media", "Avg. duration"), val: brand.avgDuration > 0 ? `${brand.avgDuration}${label(locale, "gg", "d")}` : "\u2014" },
+    { lbl: label(locale, "Refresh rate", "Refresh rate"), val: brand.adsPerWeek > 0 ? `${brand.adsPerWeek}/wk` : "\u2014" },
   ];
 
-  let y = 42;
-  rows.forEach(([lbl, val]) => {
-    doc.setFontSize(12);
+  const cardW = (CW - 12) / 4;
+  stats.forEach((s, i) => {
+    const x = MARGIN + i * (cardW + 4);
+    const y = 26;
+
+    doc.setFillColor(26, 26, 26);
+    doc.roundedRect(x, y, cardW, 22, 2, 2, "F");
+
+    doc.setFontSize(7);
     doc.setTextColor(tr, tg, tb);
-    doc.text(lbl, MARGIN, y);
+    doc.text(s.lbl, x + 4, y + 8);
 
-    doc.setFontSize(14);
+    doc.setFontSize(16);
     doc.setTextColor(pr, pg, pb);
-    doc.text(val, MARGIN + 90, y);
-
-    y += 16;
+    doc.text(s.val, x + 4, y + 18);
   });
-}
 
-function addPdfObjectivePage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-  const [tr, tg, tb] = hexToRgb(theme.colors.text);
-  const obj = brand.objectiveInference;
-
-  doc.setFontSize(24);
-  doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Obiettivo Campagna (stimato)", "Campaign Objective (estimated)"),
-    MARGIN,
-    25
-  );
-
-  doc.setFontSize(20);
+  // Second row
+  const row2y = 54;
+  // Copy length
+  doc.setFillColor(26, 26, 26);
+  doc.roundedRect(MARGIN, row2y, CW / 2 - 2, 18, 2, 2, "F");
+  doc.setFontSize(7);
   doc.setTextColor(tr, tg, tb);
-  doc.text(obj.objective.replace(/_/g, " ").toUpperCase(), MARGIN, 50);
+  doc.text(label(locale, "Lunghezza media copy", "Avg. copy length"), MARGIN + 4, row2y + 8);
+  doc.setFontSize(14);
+  doc.setTextColor(pr, pg, pb);
+  doc.text(brand.avgCopyLength > 0 ? `${brand.avgCopyLength} ${label(locale, "chr", "chr")}` : "\u2014", MARGIN + 4, row2y + 15);
 
-  // Confidence bar
-  doc.setFillColor(50, 50, 50);
-  doc.rect(MARGIN, 58, 150, 6, "F");
-  doc.setFillColor(pr, pg, pb);
-  doc.rect(MARGIN, 58, 150 * (obj.confidence / 100), 6, "F");
-
+  // Format mix
+  const fmx = MARGIN + CW / 2 + 2;
+  doc.setFillColor(26, 26, 26);
+  doc.roundedRect(fmx, row2y, CW / 2 - 2, 18, 2, 2, "F");
+  doc.setFontSize(7);
+  doc.setTextColor(tr, tg, tb);
+  doc.text(label(locale, "Format mix", "Format mix"), fmx + 4, row2y + 8);
   doc.setFontSize(10);
   doc.setTextColor(tr, tg, tb);
-  doc.text(
-    `${label(locale, "Confidenza", "Confidence")}: ${obj.confidence}%`,
-    MARGIN + 155,
-    63
-  );
+  doc.text(`${imgPct}% Img  |  ${vidPct}% Vid  |  ${carPct}% Car`, fmx + 4, row2y + 15);
 
-  // Signals
-  doc.setFontSize(9);
-  doc.setTextColor(tr, tg, tb);
-  let y = 78;
-  doc.text(`${label(locale, "Segnali", "Signals")}:`, MARGIN, y);
-  y += 8;
-  obj.signals.forEach((s) => {
-    doc.text(`\u2022 ${s}`, MARGIN + 4, y);
-    y += 6;
-  });
-}
-
-function addPdfFormatPage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-
-  doc.setFontSize(24);
+  // Bottom: CTA bars + Platforms proportional bar
+  const botY = 80;
+  doc.setFontSize(10);
   doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Distribuzione Formati", "Format Distribution"),
-    MARGIN,
-    25
-  );
-
-  drawProportionalBar(
-    doc,
-    [
-      { name: "Image", value: brand.imageCount, color: theme.colors.primary },
-      { name: "Video", value: brand.videoCount, color: theme.colors.secondary },
-      { name: "Carousel", value: brand.carouselCount, color: theme.colors.accent },
-    ],
-    MARGIN,
-    45,
-    CW,
-    theme
-  );
-}
-
-function addPdfCtaPage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-
-  doc.setFontSize(24);
-  doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Top CTA", "Top CTAs"), MARGIN, 25);
+  doc.text(label(locale, "Top CTA", "Top CTAs"), MARGIN, botY);
 
   drawBarChart(
     doc,
-    brand.topCtas.slice(0, 8).map((c) => ({ name: c.name, value: c.count })),
+    brand.topCtas.slice(0, 6).map((c) => ({ name: c.name, value: c.count })),
     MARGIN,
-    40,
-    CW,
+    botY + 5,
+    CW * 0.55,
     theme
   );
-}
 
-function addPdfPlatformPage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-
-  doc.setFontSize(24);
+  const platX = MARGIN + CW * 0.6;
+  doc.setFontSize(10);
   doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Distribuzione Piattaforme", "Platform Distribution"),
-    MARGIN,
-    25
-  );
+  doc.text(label(locale, "Piattaforme", "Platforms"), platX, botY);
 
   const palette = [
     theme.colors.primary,
@@ -351,9 +268,7 @@ function addPdfPlatformPage(
     theme.colors.accent,
     "#8a6bb0",
     "#5ba09b",
-    "#a06b5b",
   ];
-
   drawProportionalBar(
     doc,
     brand.platforms.map((p, i) => ({
@@ -361,66 +276,54 @@ function addPdfPlatformPage(
       value: p.count,
       color: palette[i % palette.length],
     })),
-    MARGIN,
-    45,
-    CW,
+    platX,
+    botY + 5,
+    CW * 0.38,
     theme
   );
-}
 
-function addPdfStatsPage(
-  doc: jsPDF,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
+  // Objective section (bottom area)
+  const objY = 135;
+  const obj = brand.objectiveInference;
 
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-  const [tr, tg, tb] = hexToRgb(theme.colors.text);
-
-  doc.setFontSize(24);
+  doc.setFontSize(10);
   doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Durata Campagna & Lunghezza Copy", "Campaign Duration & Copy Length"),
-    MARGIN,
-    25
-  );
+  doc.text(label(locale, "Obiettivo campagna (stimato)", "Campaign objective (estimated)"), MARGIN, objY);
 
-  const stats: [string, string][] = [
-    [
-      label(locale, "Durata media campagna", "Avg. campaign duration"),
-      brand.avgDuration > 0
-        ? `${brand.avgDuration} ${label(locale, "giorni", "days")}`
-        : "\u2014",
-    ],
-    [
-      label(locale, "Lunghezza media copy", "Avg. copy length"),
-      brand.avgCopyLength > 0
-        ? `${brand.avgCopyLength} ${label(locale, "caratteri", "chars")}`
-        : "\u2014",
-    ],
-    [
-      label(locale, "Refresh rate (90gg)", "Refresh rate (90d)"),
-      brand.adsPerWeek > 0
-        ? `${brand.adsPerWeek} ${label(locale, "ads/settimana", "ads/week")}`
-        : "\u2014",
-    ],
-  ];
+  doc.setFontSize(14);
+  doc.setTextColor(tr, tg, tb);
+  doc.text(obj.objective.replace(/_/g, " ").toUpperCase(), MARGIN, objY + 10);
 
-  let y = 50;
-  stats.forEach(([lbl, val]) => {
-    doc.setFontSize(11);
-    doc.setTextColor(tr, tg, tb);
-    doc.text(lbl, MARGIN, y);
+  // Confidence bar
+  doc.setFillColor(50, 50, 50);
+  doc.rect(MARGIN, objY + 14, CW * 0.4, 4, "F");
+  doc.setFillColor(pr, pg, pb);
+  doc.rect(MARGIN, objY + 14, CW * 0.4 * (obj.confidence / 100), 4, "F");
+  doc.setFontSize(8);
+  doc.setTextColor(tr, tg, tb);
+  doc.text(`${obj.confidence}%`, MARGIN + CW * 0.4 + 4, objY + 17);
 
-    doc.setFontSize(22);
-    doc.setTextColor(pr, pg, pb);
-    doc.text(val, MARGIN, y + 14);
-
-    y += 35;
+  // Signals
+  doc.setFontSize(7);
+  let sy = objY + 24;
+  obj.signals.slice(0, 5).forEach((s) => {
+    doc.text(`\u2022 ${s}`, MARGIN + 2, sy);
+    sy += 5;
   });
+
+  // Format proportional bar
+  drawProportionalBar(
+    doc,
+    [
+      { name: "Image", value: brand.imageCount, color: theme.colors.primary },
+      { name: "Video", value: brand.videoCount, color: theme.colors.secondary },
+      { name: "Carousel", value: brand.carouselCount, color: theme.colors.accent },
+    ],
+    MARGIN + CW * 0.55,
+    objY + 5,
+    CW * 0.43,
+    theme
+  );
 }
 
 function addPdfLatestAdsPage(
@@ -435,31 +338,176 @@ function addPdfLatestAdsPage(
   const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(24);
+  doc.setFontSize(18);
   doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Ultime Ads", "Latest Ads"), MARGIN, 25);
+  doc.text(label(locale, "Ultime Ads", "Latest Ads"), MARGIN, 18);
 
   const ads = brand.latestAds.slice(0, 6);
-  let y = 42;
-  ads.forEach((ad) => {
-    const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 8)}`;
+  const cols = 3;
+  const cardW = (CW - 8) / cols;
+  const cardH = 50;
 
-    // Card bg
+  ads.forEach((ad, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = MARGIN + col * (cardW + 4);
+    const y = 26 + row * (cardH + 6);
+
+    const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 10)}`;
+
     doc.setFillColor(26, 26, 26);
-    doc.roundedRect(MARGIN, y - 4, CW, 14, 2, 2, "F");
+    doc.roundedRect(x, y, cardW, cardH, 2, 2, "F");
 
-    // Border
-    doc.setDrawColor(pr, pg, pb);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(MARGIN, y - 4, CW, 14, 2, 2, "S");
+    // Top accent line
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(x, y, cardW, 1.5, "F");
 
-    doc.setFontSize(10);
+    doc.setFontSize(8);
     doc.setTextColor(tr, tg, tb);
-    doc.text(headline, MARGIN + 4, y + 4);
+    doc.text(headline, x + 4, y + 12, { maxWidth: cardW - 8 });
 
-    y += 18;
+    doc.setFontSize(5);
+    doc.setTextColor(tr, tg, tb);
+    doc.text(`ID: ${ad.ad_archive_id.slice(0, 18)}\u2026`, x + 4, y + cardH - 4);
   });
 }
+
+// ─── AI Analysis pages (PDF) ────────────────────────────────────
+
+function addPdfCopyAnalysis(
+  doc: jsPDF,
+  copyReport: NonNullable<CreativeAnalysisResult["copywriterReport"]>,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  doc.addPage();
+  fillBg(doc, theme);
+
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  const [tr, tg, tb] = hexToRgb(theme.colors.text);
+
+  doc.setFontSize(18);
+  doc.setTextColor(pr, pg, pb);
+  doc.text(label(locale, "Analisi Copy (AI)", "Copy Analysis (AI)"), MARGIN, 18);
+
+  const analyses = copyReport.brandAnalyses;
+  const numBrands = analyses.length;
+  const colW = (CW - (numBrands - 1) * 4) / numBrands;
+
+  analyses.forEach((a, i) => {
+    const x = MARGIN + i * (colW + 4);
+    let y = 28;
+
+    // Brand name header
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(x, y, colW, 7, "F");
+    const [bgr, bgg, bgb] = hexToRgb(theme.colors.background);
+    doc.setFontSize(8);
+    doc.setTextColor(bgr, bgg, bgb);
+    doc.text(a.brandName, x + 3, y + 5);
+    y += 10;
+
+    const fields: [string, string][] = [
+      [label(locale, "Tono di voce", "Tone of voice"), trunc(a.toneOfVoice, 100)],
+      [label(locale, "Stile copy", "Copy style"), trunc(a.copyStyle, 100)],
+      [label(locale, "Trigger emozionali", "Emotional triggers"), a.emotionalTriggers?.join(", ") ?? "\u2014"],
+      [label(locale, "Pattern CTA", "CTA patterns"), trunc(a.ctaPatterns, 90)],
+      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 90)],
+      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 90)],
+    ];
+
+    fields.forEach(([lbl, val]) => {
+      doc.setFontSize(6);
+      doc.setTextColor(pr, pg, pb);
+      doc.text(lbl, x + 2, y);
+
+      doc.setFontSize(7);
+      doc.setTextColor(tr, tg, tb);
+      const lines = doc.splitTextToSize(val, colW - 6);
+      doc.text(lines, x + 2, y + 5);
+      y += 5 + lines.length * 3.5 + 3;
+    });
+  });
+
+  // Comparison at bottom
+  if (copyReport.comparison) {
+    const compY = PH - 40;
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(MARGIN, compY, CW, 0.8, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(tr, tg, tb);
+    const compLines = doc.splitTextToSize(trunc(copyReport.comparison, 500), CW - 8);
+    doc.text(compLines, MARGIN + 2, compY + 5);
+  }
+}
+
+function addPdfVisualAnalysis(
+  doc: jsPDF,
+  visualReport: NonNullable<CreativeAnalysisResult["creativeDirectorReport"]>,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  doc.addPage();
+  fillBg(doc, theme);
+
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  const [tr, tg, tb] = hexToRgb(theme.colors.text);
+
+  doc.setFontSize(18);
+  doc.setTextColor(pr, pg, pb);
+  doc.text(label(locale, "Analisi Creativa (AI)", "Creative Analysis (AI)"), MARGIN, 18);
+
+  const analyses = visualReport.brandAnalyses;
+  const numBrands = analyses.length;
+  const colW = (CW - (numBrands - 1) * 4) / numBrands;
+
+  analyses.forEach((a, i) => {
+    const x = MARGIN + i * (colW + 4);
+    let y = 28;
+
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(x, y, colW, 7, "F");
+    const [bgr, bgg, bgb] = hexToRgb(theme.colors.background);
+    doc.setFontSize(8);
+    doc.setTextColor(bgr, bgg, bgb);
+    doc.text(a.brandName, x + 3, y + 5);
+    y += 10;
+
+    const fields: [string, string][] = [
+      [label(locale, "Stile visivo", "Visual style"), trunc(a.visualStyle, 100)],
+      [label(locale, "Palette colori", "Color palette"), trunc(a.colorPalette, 100)],
+      [label(locale, "Stile fotografico", "Photography style"), trunc(a.photographyStyle, 100)],
+      [label(locale, "Coerenza brand", "Brand consistency"), trunc(a.brandConsistency, 90)],
+      [label(locale, "Preferenze formato", "Format preferences"), trunc(a.formatPreferences, 90)],
+      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 90)],
+      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 90)],
+    ];
+
+    fields.forEach(([lbl, val]) => {
+      doc.setFontSize(6);
+      doc.setTextColor(pr, pg, pb);
+      doc.text(lbl, x + 2, y);
+
+      doc.setFontSize(7);
+      doc.setTextColor(tr, tg, tb);
+      const lines = doc.splitTextToSize(val, colW - 6);
+      doc.text(lines, x + 2, y + 5);
+      y += 5 + lines.length * 3.5 + 3;
+    });
+  });
+
+  if (visualReport.comparison) {
+    const compY = PH - 40;
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(MARGIN, compY, CW, 0.8, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(tr, tg, tb);
+    const compLines = doc.splitTextToSize(trunc(visualReport.comparison, 500), CW - 8);
+    doc.text(compLines, MARGIN + 2, compY + 5);
+  }
+}
+
+// ─── Closing ────────────────────────────────────────────────────
 
 function addPdfClosingPage(
   doc: jsPDF,
@@ -469,39 +517,43 @@ function addPdfClosingPage(
   doc.addPage();
   fillBg(doc, theme);
 
+  // Accent bar
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  doc.setFillColor(pr, pg, pb);
+  doc.rect(0, 0, PW, 2, "F");
+
   if (theme.logoBase64 && theme.logoMimeType) {
     try {
       const ext = theme.logoMimeType.includes("png") ? "PNG" : "JPEG";
       doc.addImage(
         `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
         ext,
-        PW / 2 - 20,
-        40,
-        40,
-        40
+        PW / 2 - 15,
+        35,
+        30,
+        30
       );
     } catch {
-      // Skip logo
+      // skip
     }
   }
 
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
   doc.setFontSize(28);
   doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Grazie.", "Thank you."), PW / 2, 110, {
+  doc.text(label(locale, "Grazie.", "Thank you."), PW / 2, 95, {
     align: "center",
   });
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(tr, tg, tb);
-  doc.text("Powered by MAIT \u00B7 NIMA Digital", PW / 2, 130, {
+  doc.text("Powered by MAIT \u00B7 NIMA Digital", PW / 2, 110, {
     align: "center",
   });
 }
 
-// ─── Comparison pages ────────────────────────────────────────────
+// ─── Comparison PDF pages (dense) ───────────────────────────────
 
 function addPdfComparisonCover(
   doc: jsPDF,
@@ -511,6 +563,10 @@ function addPdfComparisonCover(
 ) {
   fillBg(doc, theme);
 
+  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
+  doc.setFillColor(pr, pg, pb);
+  doc.rect(0, 0, PW, 2, "F");
+
   if (theme.logoBase64 && theme.logoMimeType) {
     try {
       const ext = theme.logoMimeType.includes("png") ? "PNG" : "JPEG";
@@ -518,40 +574,39 @@ function addPdfComparisonCover(
         `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
         ext,
         MARGIN,
-        15,
-        40,
-        40
+        10,
+        30,
+        30
       );
     } catch {
-      // Skip
+      // skip
     }
   }
 
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(30);
+  doc.setFontSize(28);
   doc.setTextColor(pr, pg, pb);
-  doc.text(brands.map((b) => b.name).join(" vs "), MARGIN, 85);
+  doc.text(brands.map((b) => b.name).join(" vs "), MARGIN, 70);
 
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setTextColor(tr, tg, tb);
   doc.text(
-    label(locale, "Report Confronto Brand", "Brand Comparison Report"),
+    label(locale, "Report Confronto", "Comparison Report"),
     MARGIN,
-    100
+    85
   );
 
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(tr, tg, tb);
-  doc.text(formatDate(locale), MARGIN, 115);
+  doc.text(formatDate(locale), MARGIN, 97);
 
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setTextColor(pr, pg, pb);
-  doc.text("Powered by MAIT", MARGIN, 185);
+  doc.text("Powered by MAIT \u00B7 NIMA Digital", MARGIN, PH - 10);
 }
 
-function addPdfComparisonOverview(
+function addPdfComparisonDashboard(
   doc: jsPDF,
   brands: BrandData[],
   theme: ThemeConfig,
@@ -563,121 +618,113 @@ function addPdfComparisonOverview(
   const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(24);
+  doc.setFontSize(18);
   doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Panoramica Comparativa", "Comparative Overview"), MARGIN, 25);
+  doc.text(label(locale, "Panoramica Comparativa", "Comparative Overview"), MARGIN, 18);
 
+  // Table
   const colW = CW / (brands.length + 1);
-  let y = 45;
+  let y = 30;
 
-  // Header row
-  doc.setFontSize(10);
-  doc.setTextColor(pr, pg, pb);
+  // Header
+  doc.setFillColor(pr, pg, pb);
+  doc.rect(MARGIN, y - 5, CW, 8, "F");
+  const [bgr, bgg, bgb] = hexToRgb(theme.colors.background);
+  doc.setFontSize(8);
+  doc.setTextColor(bgr, bgg, bgb);
   brands.forEach((b, i) => {
-    doc.text(b.name, MARGIN + colW * (i + 1), y, { maxWidth: colW - 5 });
+    doc.text(b.name, MARGIN + colW * (i + 1), y, { maxWidth: colW - 4 });
   });
+
+  y += 8;
+
+  const total = (b: BrandData) => b.imageCount + b.videoCount + b.carouselCount;
+  const fmtMix = (b: BrandData) => {
+    const t = total(b);
+    if (t === 0) return "\u2014";
+    return `${Math.round((b.imageCount / t) * 100)}%I ${Math.round((b.videoCount / t) * 100)}%V ${Math.round((b.carouselCount / t) * 100)}%C`;
+  };
 
   const metrics: [string, (b: BrandData) => string][] = [
     [label(locale, "Ads totali", "Total ads"), (b) => String(b.totalAds)],
     [label(locale, "Ads attive", "Active ads"), (b) => String(b.activeAds)],
-    [label(locale, "Durata media", "Avg. duration"), (b) => b.avgDuration > 0 ? `${b.avgDuration}d` : "\u2014"],
+    [label(locale, "Durata media", "Avg. duration"), (b) => b.avgDuration > 0 ? `${b.avgDuration}${label(locale, "gg", "d")}` : "\u2014"],
     [label(locale, "Lungh. copy", "Copy length"), (b) => b.avgCopyLength > 0 ? `${b.avgCopyLength}` : "\u2014"],
     [label(locale, "Refresh rate", "Refresh rate"), (b) => b.adsPerWeek > 0 ? `${b.adsPerWeek}/wk` : "\u2014"],
+    [label(locale, "Format mix", "Format mix"), fmtMix],
   ];
 
-  y += 14;
-  metrics.forEach(([lbl, fn]) => {
-    // Separator line
-    doc.setDrawColor(50, 50, 50);
-    doc.setLineWidth(0.2);
-    doc.line(MARGIN, y - 3, MARGIN + CW, y - 3);
-
-    doc.setFontSize(9);
-    doc.setTextColor(tr, tg, tb);
-    doc.text(lbl, MARGIN, y + 2);
-
-    doc.setTextColor(pr, pg, pb);
-    brands.forEach((b, i) => {
-      doc.text(fn(b), MARGIN + colW * (i + 1), y + 2);
-    });
-
-    y += 14;
-  });
-}
-
-function addPdfComparisonObjectives(
-  doc: jsPDF,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-  const [tr, tg, tb] = hexToRgb(theme.colors.text);
-
-  doc.setFontSize(24);
-  doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Obiettivi Campagna (stimati)", "Campaign Objectives (estimated)"),
-    MARGIN,
-    25
-  );
-
-  const colW = CW / brands.length;
-
-  brands.forEach((b, i) => {
-    const x = MARGIN + i * colW;
-    const obj = b.objectiveInference;
-
-    doc.setFontSize(11);
-    doc.setTextColor(pr, pg, pb);
-    doc.text(b.name, x, 48);
-
-    doc.setFontSize(14);
-    doc.setTextColor(tr, tg, tb);
-    doc.text(obj.objective.replace(/_/g, " ").toUpperCase(), x, 62);
-
-    // Confidence bar
-    doc.setFillColor(50, 50, 50);
-    doc.rect(x, 68, colW - 10, 5, "F");
-    doc.setFillColor(pr, pg, pb);
-    doc.rect(x, 68, (colW - 10) * (obj.confidence / 100), 5, "F");
+  metrics.forEach(([lbl, fn], idx) => {
+    // Alternating row bg
+    if (idx % 2 === 0) {
+      doc.setFillColor(20, 20, 20);
+      doc.rect(MARGIN, y - 3, CW, 10, "F");
+    }
 
     doc.setFontSize(8);
     doc.setTextColor(tr, tg, tb);
-    doc.text(`${obj.confidence}%`, x, 82);
+    doc.text(lbl, MARGIN + 2, y + 3);
+
+    doc.setTextColor(pr, pg, pb);
+    brands.forEach((b, i) => {
+      doc.text(fn(b), MARGIN + colW * (i + 1), y + 3);
+    });
+
+    y += 10;
   });
-}
 
-function addPdfComparisonFormat(
-  doc: jsPDF,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-
-  doc.setFontSize(24);
+  // Objectives section below
+  y += 5;
+  doc.setFontSize(12);
   doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Distribuzione Formati", "Format Distribution"),
-    MARGIN,
-    25
-  );
-
-  const colW = CW / brands.length;
+  doc.text(label(locale, "Obiettivi Campagna", "Campaign Objectives"), MARGIN, y);
+  y += 8;
 
   brands.forEach((b, i) => {
-    const x = MARGIN + i * colW;
+    const x = MARGIN + i * colW + (i > 0 ? colW : 0);
+    const obj = b.objectiveInference;
+
+    doc.setFontSize(8);
+    doc.setTextColor(pr, pg, pb);
+    doc.text(b.name, x, y);
 
     doc.setFontSize(10);
+    doc.setTextColor(tr, tg, tb);
+    doc.text(obj.objective.replace(/_/g, " ").toUpperCase(), x, y + 8);
+
+    // Confidence bar
+    const barW = colW - 10;
+    doc.setFillColor(50, 50, 50);
+    doc.rect(x, y + 12, barW, 3, "F");
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(x, y + 12, barW * (obj.confidence / 100), 3, "F");
+
+    doc.setFontSize(6);
+    doc.setTextColor(tr, tg, tb);
+    doc.text(`${obj.confidence}%`, x + barW + 2, y + 14);
+
+    // Top signals
+    doc.setFontSize(6);
+    let sy = y + 20;
+    obj.signals.slice(0, 3).forEach((s) => {
+      doc.text(`\u2022 ${s}`, x + 1, sy);
+      sy += 4;
+    });
+  });
+
+  // Format distribution bar at the very bottom
+  const fmtY = PH - 35;
+  doc.setFontSize(10);
+  doc.setTextColor(pr, pg, pb);
+  doc.text(label(locale, "Distribuzione Formati", "Format Distribution"), MARGIN, fmtY);
+
+  brands.forEach((b, i) => {
+    const x = MARGIN + i * (CW / brands.length);
+    const w = CW / brands.length - 4;
+
+    doc.setFontSize(7);
     doc.setTextColor(pr, pg, pb);
-    doc.text(b.name, x, 42);
+    doc.text(b.name, x, fmtY + 7);
 
     drawProportionalBar(
       doc,
@@ -687,14 +734,14 @@ function addPdfComparisonFormat(
         { name: "Car", value: b.carouselCount, color: theme.colors.accent },
       ],
       x,
-      50,
-      colW - 10,
+      fmtY + 10,
+      w,
       theme
     );
   });
 }
 
-function addPdfComparisonCta(
+function addPdfComparisonCtaAndPlatforms(
   doc: jsPDF,
   brands: BrandData[],
   theme: ThemeConfig,
@@ -706,54 +753,65 @@ function addPdfComparisonCta(
   const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(24);
+  doc.setFontSize(18);
   doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Top CTA per Brand", "Top CTAs per Brand"), MARGIN, 25);
+  doc.text(label(locale, "CTA & Piattaforme", "CTAs & Platforms"), MARGIN, 18);
 
-  const colW = CW / brands.length;
+  // CTAs per brand
+  const ctaW = CW * 0.55;
+  doc.setFontSize(10);
+  doc.setTextColor(pr, pg, pb);
+  doc.text(label(locale, "Top CTA", "Top CTAs"), MARGIN, 28);
 
+  const ctaColW = ctaW / brands.length;
   brands.forEach((b, i) => {
-    const x = MARGIN + i * colW;
+    const x = MARGIN + i * ctaColW;
 
-    doc.setFontSize(10);
+    doc.setFontSize(8);
     doc.setTextColor(pr, pg, pb);
-    doc.text(b.name, x, 42);
+    doc.text(b.name, x, 36);
 
-    let y = 52;
-    doc.setFontSize(9);
+    doc.setFontSize(7);
     doc.setTextColor(tr, tg, tb);
+    let cy = 42;
     b.topCtas.slice(0, 5).forEach((cta) => {
-      doc.text(`${cta.name} (${cta.count})`, x, y);
-      y += 8;
+      doc.text(`${cta.name} (${cta.count})`, x + 1, cy);
+      cy += 6;
     });
   });
-}
 
-function addPdfComparisonRefresh(
-  doc: jsPDF,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  doc.addPage();
-  fillBg(doc, theme);
-
-  const [pr, pg, pb] = hexToRgb(theme.colors.primary);
-
-  doc.setFontSize(24);
+  // Platform distribution
+  const platX = MARGIN + CW * 0.6;
+  doc.setFontSize(10);
   doc.setTextColor(pr, pg, pb);
-  doc.text(
-    label(locale, "Refresh Rate (90 giorni)", "Refresh Rate (90 days)"),
-    MARGIN,
-    25
-  );
+  doc.text(label(locale, "Piattaforme", "Platforms"), platX, 28);
 
-  drawBarChart(
+  const palette = [
+    theme.colors.primary,
+    theme.colors.secondary,
+    theme.colors.accent,
+    "#8a6bb0",
+    "#5ba09b",
+  ];
+
+  const platMap = new Map<string, number>();
+  brands.forEach((b) => {
+    b.platforms.forEach((p) => {
+      platMap.set(p.name, (platMap.get(p.name) ?? 0) + p.count);
+    });
+  });
+  const mergedPlats = [...platMap.entries()].sort((a, b) => b[1] - a[1]);
+
+  drawProportionalBar(
     doc,
-    brands.map((b) => ({ name: b.name, value: b.adsPerWeek })),
-    MARGIN,
-    45,
-    CW,
+    mergedPlats.map((p, i) => ({
+      name: p[0],
+      value: p[1],
+      color: palette[i % palette.length],
+    })),
+    platX,
+    36,
+    CW * 0.38,
     theme
   );
 }
@@ -770,35 +828,42 @@ function addPdfComparisonLatestAds(
   const [pr, pg, pb] = hexToRgb(theme.colors.primary);
   const [tr, tg, tb] = hexToRgb(theme.colors.text);
 
-  doc.setFontSize(24);
+  doc.setFontSize(18);
   doc.setTextColor(pr, pg, pb);
-  doc.text(label(locale, "Ultime Ads per Brand", "Latest Ads per Brand"), MARGIN, 25);
+  doc.text(label(locale, "Ultime Ads", "Latest Ads"), MARGIN, 18);
 
-  const colW = CW / brands.length;
+  const colW = (CW - (brands.length - 1) * 4) / brands.length;
 
   brands.forEach((b, i) => {
-    const x = MARGIN + i * colW;
+    const x = MARGIN + i * (colW + 4);
 
-    doc.setFontSize(10);
-    doc.setTextColor(pr, pg, pb);
-    doc.text(b.name, x, 42);
+    // Brand header
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(x, 25, colW, 7, "F");
+    const [bgr, bgg, bgb] = hexToRgb(theme.colors.background);
+    doc.setFontSize(8);
+    doc.setTextColor(bgr, bgg, bgb);
+    doc.text(b.name, x + 3, 30);
 
-    let y = 52;
+    let y = 36;
     b.latestAds.slice(0, 4).forEach((ad) => {
-      const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 8)}`;
+      const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 10)}`;
 
       doc.setFillColor(26, 26, 26);
-      doc.roundedRect(x, y - 4, colW - 10, 12, 1, 1, "F");
+      doc.roundedRect(x, y, colW, 28, 1, 1, "F");
 
-      doc.setDrawColor(pr, pg, pb);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(x, y - 4, colW - 10, 12, 1, 1, "S");
+      // Accent top line
+      doc.setFillColor(pr, pg, pb);
+      doc.rect(x, y, colW, 1, "F");
 
-      doc.setFontSize(8);
+      doc.setFontSize(7);
       doc.setTextColor(tr, tg, tb);
-      doc.text(headline, x + 3, y + 3, { maxWidth: colW - 16 });
+      doc.text(headline, x + 3, y + 8, { maxWidth: colW - 6 });
 
-      y += 16;
+      doc.setFontSize(5);
+      doc.text(`ID: ${ad.ad_archive_id.slice(0, 16)}\u2026`, x + 3, y + 24);
+
+      y += 32;
     });
   });
 }
@@ -808,19 +873,42 @@ function addPdfComparisonLatestAds(
 export async function generateSinglePdf(
   brand: BrandData,
   theme?: ThemeConfig | null,
-  locale: Locale = "it"
+  locale: Locale = "it",
+  sections: SectionType[] = ["technical"],
+  copyAnalysis?: CreativeAnalysisResult["copywriterReport"] | null,
+  visualAnalysis?: CreativeAnalysisResult["creativeDirectorReport"] | null
 ): Promise<ArrayBuffer> {
   const t = theme ?? DEFAULT_THEME;
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
+  const hasTechnical = sections.includes("technical");
+  const hasCopy = sections.includes("copy");
+  const hasVisual = sections.includes("visual");
+
+  // Cover
   addPdfCoverPage(doc, brand, t, locale);
-  addPdfOverviewPage(doc, brand, t, locale);
-  addPdfObjectivePage(doc, brand, t, locale);
-  addPdfFormatPage(doc, brand, t, locale);
-  addPdfCtaPage(doc, brand, t, locale);
-  addPdfPlatformPage(doc, brand, t, locale);
-  addPdfStatsPage(doc, brand, t, locale);
-  addPdfLatestAdsPage(doc, brand, t, locale);
+
+  // Dashboard (all metrics on one page)
+  if (hasTechnical) {
+    addPdfDashboardPage(doc, brand, t, locale);
+  }
+
+  // Latest Ads
+  if (hasTechnical) {
+    addPdfLatestAdsPage(doc, brand, t, locale);
+  }
+
+  // Copy Analysis
+  if (hasCopy && copyAnalysis?.brandAnalyses?.length) {
+    addPdfCopyAnalysis(doc, copyAnalysis, t, locale);
+  }
+
+  // Visual Analysis
+  if (hasVisual && visualAnalysis?.brandAnalyses?.length) {
+    addPdfVisualAnalysis(doc, visualAnalysis, t, locale);
+  }
+
+  // Closing
   addPdfClosingPage(doc, t, locale);
 
   return doc.output("arraybuffer");
@@ -829,18 +917,47 @@ export async function generateSinglePdf(
 export async function generateComparisonPdf(
   brands: BrandData[],
   theme?: ThemeConfig | null,
-  locale: Locale = "it"
+  locale: Locale = "it",
+  sections: SectionType[] = ["technical"],
+  copyAnalysis?: CreativeAnalysisResult["copywriterReport"] | null,
+  visualAnalysis?: CreativeAnalysisResult["creativeDirectorReport"] | null
 ): Promise<ArrayBuffer> {
   const t = theme ?? DEFAULT_THEME;
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
+  const hasTechnical = sections.includes("technical");
+  const hasCopy = sections.includes("copy");
+  const hasVisual = sections.includes("visual");
+
+  // Cover
   addPdfComparisonCover(doc, brands, t, locale);
-  addPdfComparisonOverview(doc, brands, t, locale);
-  addPdfComparisonObjectives(doc, brands, t, locale);
-  addPdfComparisonFormat(doc, brands, t, locale);
-  addPdfComparisonCta(doc, brands, t, locale);
-  addPdfComparisonRefresh(doc, brands, t, locale);
-  addPdfComparisonLatestAds(doc, brands, t, locale);
+
+  // Dashboard (overview + objectives + formats all on one page)
+  if (hasTechnical) {
+    addPdfComparisonDashboard(doc, brands, t, locale);
+  }
+
+  // CTA + Platforms
+  if (hasTechnical) {
+    addPdfComparisonCtaAndPlatforms(doc, brands, t, locale);
+  }
+
+  // Latest Ads
+  if (hasTechnical) {
+    addPdfComparisonLatestAds(doc, brands, t, locale);
+  }
+
+  // Copy Analysis
+  if (hasCopy && copyAnalysis?.brandAnalyses?.length) {
+    addPdfCopyAnalysis(doc, copyAnalysis, t, locale);
+  }
+
+  // Visual Analysis
+  if (hasVisual && visualAnalysis?.brandAnalyses?.length) {
+    addPdfVisualAnalysis(doc, visualAnalysis, t, locale);
+  }
+
+  // Closing
   addPdfClosingPage(doc, t, locale);
 
   return doc.output("arraybuffer");

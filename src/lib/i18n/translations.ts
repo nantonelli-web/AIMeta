@@ -487,6 +487,11 @@ const translations = {
     errorGeneration: { it: "Errore nella generazione del report.", en: "Error generating the report." },
     templateUploaded: { it: "Template caricato.", en: "Template uploaded." },
     templateDeleted: { it: "Template eliminato.", en: "Template deleted." },
+    contentSelection: { it: "Contenuto report", en: "Report content" },
+    sectionTechnical: { it: "Analisi tecnica", en: "Technical analysis" },
+    sectionCopy: { it: "Analisi copy (AI)", en: "Copy analysis (AI)" },
+    sectionVisual: { it: "Analisi creativa (AI)", en: "Creative analysis (AI)" },
+    selectSections: { it: "Seleziona le sezioni da includere nel report.", en: "Select sections to include in the report." },
   },
 
   // ─── Alerts ────────────────────────────────────────────────

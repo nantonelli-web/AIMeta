@@ -1,5 +1,10 @@
 import PptxGenJS from "pptxgenjs";
 import { type ThemeConfig, DEFAULT_THEME } from "./parse-template";
+import type {
+  CopywriterBrandAnalysis,
+  CreativeDirectorBrandAnalysis,
+  CreativeAnalysisResult,
+} from "@/lib/ai/creative-analysis";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -29,13 +34,14 @@ export interface BrandData {
   }[];
 }
 
+export type SectionType = "technical" | "copy" | "visual";
+
 type Locale = "it" | "en";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-function hexToRgb(hex: string): string {
-  // pptxgenjs accepts hex WITHOUT the '#' prefix
-  return hex.replace("#", "");
+function hex(color: string): string {
+  return color.replace("#", "");
 }
 
 function label(locale: Locale, it: string, en: string): string {
@@ -50,695 +56,823 @@ function formatDate(locale: Locale): string {
   });
 }
 
-// ─── Slide builders (single) ─────────────────────────────────────
+/** Lighten a hex color by mixing with white. factor 0-1, 0=same, 1=white */
+function lighten(hexColor: string, factor: number): string {
+  const h = hexColor.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const nr = Math.round(r + (255 - r) * factor);
+  const ng = Math.round(g + (255 - g) * factor);
+  const nb = Math.round(b + (255 - b) * factor);
+  return [nr, ng, nb].map((c) => c.toString(16).padStart(2, "0")).join("");
+}
 
-function addCoverSlide(
+/** Darken a hex color by mixing with black. factor 0-1, 0=same, 1=black */
+function darken(hexColor: string, factor: number): string {
+  const h = hexColor.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const nr = Math.round(r * (1 - factor));
+  const ng = Math.round(g * (1 - factor));
+  const nb = Math.round(b * (1 - factor));
+  return [nr, ng, nb].map((c) => c.toString(16).padStart(2, "0")).join("");
+}
+
+// Slide dimensions: 10" x 5.63" (default widescreen)
+const SW = 10;
+const SH = 5.63;
+const PAD = 0.3; // padding
+
+/** Truncate text to max characters */
+function trunc(text: string | null | undefined, max: number): string {
+  if (!text) return "\u2014";
+  return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+}
+
+// ─── Card background helper ─────────────────────────────────────
+
+function addCardBg(
+  slide: PptxGenJS.Slide,
+  pptx: PptxGenJS,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string
+) {
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x,
+    y,
+    w,
+    h,
+    fill: { color: hex(color) },
+    rectRadius: 0.05,
+    line: { type: "none" },
+  });
+}
+
+// ─── SINGLE BRAND SLIDES ────────────────────────────────────────
+
+function singleCover(
   pptx: PptxGenJS,
   brand: BrandData,
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
+
+  // Full bleed accent bar at top
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: SW,
+    h: 0.06,
+    fill: { color: hex(theme.colors.primary) },
+    line: { type: "none" },
+  });
 
   // Logo
   if (theme.logoBase64 && theme.logoMimeType) {
     slide.addImage({
       data: `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
-      x: 0.5,
-      y: 0.4,
-      w: 1.5,
-      h: 1.5,
-      sizing: { type: "contain", w: 1.5, h: 1.5 },
+      x: PAD,
+      y: 0.3,
+      w: 1.2,
+      h: 1.2,
+      sizing: { type: "contain", w: 1.2, h: 1.2 },
     });
   }
 
   slide.addText(brand.name, {
-    x: 0.5,
-    y: 2.2,
-    w: 9,
-    h: 1.2,
+    x: PAD,
+    y: 1.8,
+    w: SW - 2 * PAD,
+    h: 1.0,
     fontSize: 36,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
   slide.addText(
     label(locale, "Report Analisi Ads", "Ads Analysis Report"),
     {
-      x: 0.5,
-      y: 3.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 18,
+      x: PAD,
+      y: 2.8,
+      w: SW - 2 * PAD,
+      h: 0.5,
+      fontSize: 16,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
+      color: hex(theme.colors.text),
     }
   );
 
   slide.addText(formatDate(locale), {
-    x: 0.5,
-    y: 4.0,
-    w: 9,
-    h: 0.4,
-    fontSize: 12,
+    x: PAD,
+    y: 3.3,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 11,
     fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.text),
+    color: hex(theme.colors.text),
     transparency: 40,
   });
 
-  slide.addText("Powered by MAIT", {
-    x: 0.5,
-    y: 4.8,
-    w: 9,
+  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+    x: PAD,
+    y: SH - 0.5,
+    w: SW - 2 * PAD,
     h: 0.3,
-    fontSize: 10,
+    fontSize: 8,
     fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     transparency: 50,
   });
 }
 
-function addOverviewSlide(
+function singleDashboard(
   pptx: PptxGenJS,
   brand: BrandData,
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
-  slide.addText(label(locale, "Panoramica", "Overview"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
+  // Title
+  slide.addText(label(locale, "Dashboard", "Dashboard"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.4,
+    fontSize: 14,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
+  // Top stats row: 4 cards
   const total = brand.imageCount + brand.videoCount + brand.carouselCount;
-  const formatMix =
-    total > 0
-      ? `${Math.round((brand.imageCount / total) * 100)}% Image, ${Math.round((brand.videoCount / total) * 100)}% Video, ${Math.round((brand.carouselCount / total) * 100)}% Carousel`
-      : "—";
+  const imgPct = total > 0 ? Math.round((brand.imageCount / total) * 100) : 0;
+  const vidPct = total > 0 ? Math.round((brand.videoCount / total) * 100) : 0;
+  const carPct = total > 0 ? Math.round((brand.carouselCount / total) * 100) : 0;
 
-  const rows: [string, string][] = [
-    [label(locale, "Ads totali", "Total ads"), String(brand.totalAds)],
-    [label(locale, "Ads attive", "Active ads"), String(brand.activeAds)],
-    [label(locale, "Format mix", "Format mix"), formatMix],
-    [
-      label(locale, "Ultimo scan", "Last scan"),
-      brand.lastScrapedAt
-        ? new Date(brand.lastScrapedAt).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT")
-        : "—",
-    ],
+  const cardBg = lighten(theme.colors.background, 0.12);
+  const statCards = [
+    { lbl: label(locale, "Ads totali", "Total ads"), val: String(brand.totalAds) },
+    { lbl: label(locale, "Ads attive", "Active ads"), val: String(brand.activeAds) },
+    { lbl: label(locale, "Durata media", "Avg. duration"), val: brand.avgDuration > 0 ? `${brand.avgDuration} ${label(locale, "gg", "d")}` : "\u2014" },
+    { lbl: label(locale, "Refresh rate", "Refresh rate"), val: brand.adsPerWeek > 0 ? `${brand.adsPerWeek} ${label(locale, "ads/sett.", "ads/wk")}` : "\u2014" },
   ];
 
-  const tableRows: PptxGenJS.TableRow[] = rows.map(([lbl, val]) => [
-    {
-      text: lbl,
-      options: {
-        fontSize: 13,
-        fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.text),
-        fill: { color: hexToRgb(theme.colors.background) },
-        border: { type: "none" as const },
-        transparency: 30,
-      },
-    },
-    {
-      text: val,
-      options: {
-        fontSize: 13,
-        fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.primary),
-        bold: true,
-        fill: { color: hexToRgb(theme.colors.background) },
-        border: { type: "none" as const },
-      },
-    },
-  ]);
-
-  slide.addTable(tableRows, {
-    x: 0.5,
-    y: 1.2,
-    w: 9,
-    colW: [4.5, 4.5],
-    rowH: 0.6,
+  const cardW = (SW - 2 * PAD - 0.15 * 3) / 4;
+  statCards.forEach((c, i) => {
+    const x = PAD + i * (cardW + 0.15);
+    const y = 0.65;
+    addCardBg(slide, pptx, x, y, cardW, 0.7, cardBg);
+    slide.addText(c.lbl, { x: x + 0.1, y: y + 0.05, w: cardW - 0.2, h: 0.25, fontSize: 7, fontFace: theme.fonts.body, color: hex(theme.colors.text), transparency: 40 });
+    slide.addText(c.val, { x: x + 0.1, y: y + 0.28, w: cardW - 0.2, h: 0.35, fontSize: 18, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true });
   });
+
+  // Second row: copy length + format mix
+  const row2y = 1.55;
+  // Copy length card
+  addCardBg(slide, pptx, PAD, row2y, cardW * 2 + 0.15, 0.6, cardBg);
+  slide.addText(label(locale, "Lunghezza media copy", "Avg. copy length"), { x: PAD + 0.1, y: row2y + 0.05, w: cardW * 2 - 0.1, h: 0.2, fontSize: 7, fontFace: theme.fonts.body, color: hex(theme.colors.text), transparency: 40 });
+  slide.addText(brand.avgCopyLength > 0 ? `${brand.avgCopyLength} ${label(locale, "caratteri", "chars")}` : "\u2014", { x: PAD + 0.1, y: row2y + 0.25, w: cardW * 2 - 0.1, h: 0.3, fontSize: 16, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true });
+
+  // Format mix card
+  const fmx = PAD + cardW * 2 + 0.3;
+  addCardBg(slide, pptx, fmx, row2y, cardW * 2 + 0.15, 0.6, cardBg);
+  slide.addText(label(locale, "Format mix", "Format mix"), { x: fmx + 0.1, y: row2y + 0.05, w: cardW * 2 - 0.1, h: 0.2, fontSize: 7, fontFace: theme.fonts.body, color: hex(theme.colors.text), transparency: 40 });
+  slide.addText(`${imgPct}% Img  |  ${vidPct}% Vid  |  ${carPct}% Car`, { x: fmx + 0.1, y: row2y + 0.25, w: cardW * 2 - 0.1, h: 0.3, fontSize: 12, fontFace: theme.fonts.body, color: hex(theme.colors.text) });
+
+  // Bottom section: LEFT = Top CTAs bar chart, RIGHT = Platform pie
+  const leftW = (SW - 2 * PAD) * 0.55;
+  const rightW = (SW - 2 * PAD) * 0.4;
+  const rightX = PAD + leftW + (SW - 2 * PAD) * 0.05;
+  const botY = 2.35;
+  const botH = SH - botY - 0.15;
+
+  // CTA bar chart
+  slide.addText(label(locale, "Top CTA", "Top CTAs"), { x: PAD, y: botY, w: leftW, h: 0.25, fontSize: 9, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true });
+
+  const ctas = brand.topCtas.slice(0, 6);
+  if (ctas.length > 0) {
+    slide.addChart(pptx.ChartType.bar, [
+      { name: "CTA", labels: ctas.map((c) => c.name), values: ctas.map((c) => c.count) },
+    ], {
+      x: PAD,
+      y: botY + 0.3,
+      w: leftW,
+      h: botH - 0.35,
+      barDir: "bar",
+      showLegend: false,
+      catAxisLabelColor: hex(theme.colors.text),
+      catAxisLabelFontSize: 7,
+      valAxisLabelColor: hex(theme.colors.text),
+      valAxisLabelFontSize: 7,
+      chartColors: [hex(theme.colors.primary)],
+    });
+  }
+
+  // Platform pie chart
+  slide.addText(label(locale, "Piattaforme", "Platforms"), { x: rightX, y: botY, w: rightW, h: 0.25, fontSize: 9, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true });
+
+  const plats = brand.platforms;
+  if (plats.length > 0) {
+    const palette = [
+      hex(theme.colors.primary),
+      hex(theme.colors.secondary),
+      hex(theme.colors.accent),
+      "8a6bb0",
+      "5ba09b",
+      "a06b5b",
+    ];
+    slide.addChart(pptx.ChartType.doughnut, [
+      { name: label(locale, "Piattaforme", "Platforms"), labels: plats.map((p) => p.name), values: plats.map((p) => p.count) },
+    ], {
+      x: rightX,
+      y: botY + 0.3,
+      w: rightW,
+      h: botH - 0.35,
+      showLegend: true,
+      legendPos: "b",
+      legendFontSize: 7,
+      legendColor: hex(theme.colors.text),
+      showPercent: true,
+      dataLabelFontSize: 8,
+      dataLabelColor: hex(theme.colors.text),
+      chartColors: palette.slice(0, plats.length),
+    });
+  }
 }
 
-function addObjectiveSlide(
+function singleObjectiveAndFormat(
   pptx: PptxGenJS,
   brand: BrandData,
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
-  slide.addText(
-    label(locale, "Obiettivo Campagna (stimato)", "Campaign Objective (estimated)"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
-
-  const obj = brand.objectiveInference;
-
-  slide.addText(obj.objective.replace(/_/g, " ").toUpperCase(), {
-    x: 0.5,
-    y: 1.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 20,
+  // Title
+  slide.addText(label(locale, "Obiettivo & Formati", "Objective & Formats"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.4,
+    fontSize: 14,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.text),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
-  // Confidence bar background
+  const obj = brand.objectiveInference;
+  const leftW = (SW - 2 * PAD) * 0.55;
+  const rightW = (SW - 2 * PAD) * 0.4;
+  const rightX = PAD + leftW + (SW - 2 * PAD) * 0.05;
+  const cardBg = lighten(theme.colors.background, 0.12);
+
+  // LEFT: Objective
+  addCardBg(slide, pptx, PAD, 0.7, leftW, 4.6, cardBg);
+
+  slide.addText(label(locale, "Obiettivo campagna (stimato)", "Campaign objective (estimated)"), {
+    x: PAD + 0.15,
+    y: 0.8,
+    w: leftW - 0.3,
+    h: 0.25,
+    fontSize: 9,
+    fontFace: theme.fonts.body,
+    color: hex(theme.colors.text),
+    transparency: 40,
+  });
+
+  slide.addText(obj.objective.replace(/_/g, " ").toUpperCase(), {
+    x: PAD + 0.15,
+    y: 1.15,
+    w: leftW - 0.3,
+    h: 0.35,
+    fontSize: 16,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  // Confidence bar
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.5,
-    y: 2.1,
-    w: 6,
-    h: 0.3,
+    x: PAD + 0.15,
+    y: 1.6,
+    w: leftW - 0.6,
+    h: 0.18,
     fill: { color: "333333" },
     line: { type: "none" },
   });
-
-  // Confidence bar fill
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.5,
-    y: 2.1,
-    w: 6 * (obj.confidence / 100),
-    h: 0.3,
-    fill: { color: hexToRgb(theme.colors.primary) },
+    x: PAD + 0.15,
+    y: 1.6,
+    w: Math.max((leftW - 0.6) * (obj.confidence / 100), 0.02),
+    h: 0.18,
+    fill: { color: hex(theme.colors.primary) },
     line: { type: "none" },
   });
-
-  slide.addText(`${label(locale, "Confidenza", "Confidence")}: ${obj.confidence}%`, {
-    x: 6.7,
-    y: 2.05,
-    w: 3,
-    h: 0.4,
-    fontSize: 12,
+  slide.addText(`${obj.confidence}%`, {
+    x: PAD + leftW - 0.6,
+    y: 1.55,
+    w: 0.4,
+    h: 0.25,
+    fontSize: 9,
     fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.text),
+    color: hex(theme.colors.text),
   });
 
   // Signals
-  const signalText = obj.signals.map((s) => `  \u2022 ${s}`).join("\n");
-  slide.addText(
-    `${label(locale, "Segnali", "Signals")}:\n${signalText}`,
-    {
-      x: 0.5,
-      y: 2.8,
-      w: 9,
-      h: 2.5,
-      fontSize: 10,
+  slide.addText(label(locale, "Segnali", "Signals"), {
+    x: PAD + 0.15,
+    y: 1.95,
+    w: leftW - 0.3,
+    h: 0.2,
+    fontSize: 8,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  const signals = obj.signals.slice(0, 8);
+  signals.forEach((s, i) => {
+    slide.addText(`\u2022 ${s}`, {
+      x: PAD + 0.2,
+      y: 2.2 + i * 0.28,
+      w: leftW - 0.4,
+      h: 0.25,
+      fontSize: 7,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      transparency: 30,
-      valign: "top",
-    }
-  );
-}
+      color: hex(theme.colors.text),
+      transparency: 20,
+    });
+  });
 
-function addFormatPieSlide(
-  pptx: PptxGenJS,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  // RIGHT: Format pie chart
+  addCardBg(slide, pptx, rightX, 0.7, rightW, 4.6, cardBg);
 
-  slide.addText(
-    label(locale, "Distribuzione Formati", "Format Distribution"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
+  slide.addText(label(locale, "Distribuzione formati", "Format distribution"), {
+    x: rightX + 0.1,
+    y: 0.8,
+    w: rightW - 0.2,
+    h: 0.25,
+    fontSize: 9,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
 
-  const chartData = [
+  slide.addChart(pptx.ChartType.pie, [
     {
       name: label(locale, "Formati", "Formats"),
       labels: ["Image", "Video", "Carousel"],
       values: [brand.imageCount, brand.videoCount, brand.carouselCount],
     },
-  ];
-
-  slide.addChart(pptx.ChartType.pie, chartData, {
-    x: 1.5,
+  ], {
+    x: rightX + 0.1,
     y: 1.2,
-    w: 7,
-    h: 4,
+    w: rightW - 0.2,
+    h: 3.8,
     showLegend: true,
     legendPos: "b",
-    legendFontSize: 11,
-    legendColor: hexToRgb(theme.colors.text),
+    legendFontSize: 8,
+    legendColor: hex(theme.colors.text),
     showPercent: true,
-    dataLabelFontSize: 11,
-    dataLabelColor: hexToRgb(theme.colors.text),
+    dataLabelFontSize: 9,
+    dataLabelColor: hex(theme.colors.text),
     chartColors: [
-      hexToRgb(theme.colors.primary),
-      hexToRgb(theme.colors.secondary),
-      hexToRgb(theme.colors.accent),
+      hex(theme.colors.primary),
+      hex(theme.colors.secondary),
+      hex(theme.colors.accent),
     ],
   });
 }
 
-function addCtaBarSlide(
+function singleLatestAds(
   pptx: PptxGenJS,
   brand: BrandData,
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
-
-  slide.addText(label(locale, "Top CTA", "Top CTAs"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
-    fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
-    bold: true,
-  });
-
-  const ctas = brand.topCtas.slice(0, 8);
-  if (ctas.length === 0) {
-    slide.addText(label(locale, "Nessun dato CTA", "No CTA data"), {
-      x: 0.5,
-      y: 2.5,
-      w: 9,
-      h: 0.5,
-      fontSize: 14,
-      fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      transparency: 40,
-    });
-    return;
-  }
-
-  const chartData = [
-    {
-      name: "CTA",
-      labels: ctas.map((c) => c.name),
-      values: ctas.map((c) => c.count),
-    },
-  ];
-
-  slide.addChart(pptx.ChartType.bar, chartData, {
-    x: 0.5,
-    y: 1.2,
-    w: 9,
-    h: 4,
-    barDir: "bar",
-    showLegend: false,
-    catAxisLabelColor: hexToRgb(theme.colors.text),
-    catAxisLabelFontSize: 10,
-    valAxisLabelColor: hexToRgb(theme.colors.text),
-    valAxisLabelFontSize: 10,
-    chartColors: [hexToRgb(theme.colors.primary)],
-  });
-}
-
-function addPlatformPieSlide(
-  pptx: PptxGenJS,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
-
-  slide.addText(
-    label(locale, "Distribuzione Piattaforme", "Platform Distribution"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
-
-  const plats = brand.platforms;
-  if (plats.length === 0) {
-    slide.addText(label(locale, "Nessun dato piattaforma", "No platform data"), {
-      x: 0.5,
-      y: 2.5,
-      w: 9,
-      h: 0.5,
-      fontSize: 14,
-      fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      transparency: 40,
-    });
-    return;
-  }
-
-  const chartData = [
-    {
-      name: label(locale, "Piattaforme", "Platforms"),
-      labels: plats.map((p) => p.name),
-      values: plats.map((p) => p.count),
-    },
-  ];
-
-  const palette = [
-    hexToRgb(theme.colors.primary),
-    hexToRgb(theme.colors.secondary),
-    hexToRgb(theme.colors.accent),
-    "8a6bb0",
-    "5ba09b",
-    "a06b5b",
-  ];
-
-  slide.addChart(pptx.ChartType.pie, chartData, {
-    x: 1.5,
-    y: 1.2,
-    w: 7,
-    h: 4,
-    showLegend: true,
-    legendPos: "b",
-    legendFontSize: 11,
-    legendColor: hexToRgb(theme.colors.text),
-    showPercent: true,
-    dataLabelFontSize: 11,
-    dataLabelColor: hexToRgb(theme.colors.text),
-    chartColors: palette.slice(0, plats.length),
-  });
-}
-
-function addStatsSlide(
-  pptx: PptxGenJS,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
-
-  slide.addText(
-    label(locale, "Durata Campagna & Lunghezza Copy", "Campaign Duration & Copy Length"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
-
-  const stats: [string, string][] = [
-    [
-      label(locale, "Durata media campagna", "Avg. campaign duration"),
-      brand.avgDuration > 0
-        ? `${brand.avgDuration} ${label(locale, "giorni", "days")}`
-        : "—",
-    ],
-    [
-      label(locale, "Lunghezza media copy", "Avg. copy length"),
-      brand.avgCopyLength > 0
-        ? `${brand.avgCopyLength} ${label(locale, "caratteri", "chars")}`
-        : "—",
-    ],
-    [
-      label(locale, "Refresh rate (90gg)", "Refresh rate (90d)"),
-      brand.adsPerWeek > 0
-        ? `${brand.adsPerWeek} ${label(locale, "ads/settimana", "ads/week")}`
-        : "—",
-    ],
-  ];
-
-  stats.forEach(([lbl, val], i) => {
-    const y = 1.4 + i * 1.2;
-
-    slide.addText(lbl, {
-      x: 0.5,
-      y,
-      w: 9,
-      h: 0.4,
-      fontSize: 13,
-      fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      transparency: 30,
-    });
-
-    slide.addText(val, {
-      x: 0.5,
-      y: y + 0.35,
-      w: 9,
-      h: 0.5,
-      fontSize: 28,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    });
-  });
-}
-
-function addLatestAdsSlide(
-  pptx: PptxGenJS,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
   slide.addText(label(locale, "Ultime Ads", "Latest Ads"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.4,
+    fontSize: 14,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
   const ads = brand.latestAds.slice(0, 6);
   if (ads.length === 0) {
     slide.addText(label(locale, "Nessuna ad recente", "No recent ads"), {
-      x: 0.5,
+      x: PAD,
       y: 2.5,
-      w: 9,
-      h: 0.5,
-      fontSize: 14,
+      w: SW - 2 * PAD,
+      h: 0.4,
+      fontSize: 11,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
+      color: hex(theme.colors.text),
       transparency: 40,
     });
     return;
   }
 
   const cols = 3;
-  const cardW = 2.7;
-  const cardH = 0.5;
+  const cardW = (SW - 2 * PAD - 0.2 * (cols - 1)) / cols;
+  const cardH = 1.8;
+  const cardBg = lighten(theme.colors.background, 0.12);
 
   ads.forEach((ad, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = 0.5 + col * (cardW + 0.3);
-    const y = 1.2 + row * (cardH + 0.3);
+    const x = PAD + col * (cardW + 0.2);
+    const y = 0.7 + row * (cardH + 0.15);
 
-    const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 8)}`;
+    addCardBg(slide, pptx, x, y, cardW, cardH, cardBg);
 
-    slide.addShape(pptx.ShapeType.roundRect, {
+    // Border line at top
+    slide.addShape(pptx.ShapeType.rect, {
       x,
       y,
       w: cardW,
-      h: cardH,
-      fill: { color: "1A1A1A" },
-      rectRadius: 0.05,
-      line: { color: hexToRgb(theme.colors.primary), width: 0.5 },
+      h: 0.03,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
     });
 
+    const headline = trunc(ad.headline, 80) || `Ad #${ad.ad_archive_id.slice(0, 10)}`;
     slide.addText(headline, {
       x: x + 0.1,
-      y,
+      y: y + 0.12,
       w: cardW - 0.2,
-      h: cardH,
+      h: 0.6,
       fontSize: 9,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      valign: "middle",
+      color: hex(theme.colors.text),
+      valign: "top",
+    });
+
+    slide.addText(`ID: ${ad.ad_archive_id.slice(0, 16)}\u2026`, {
+      x: x + 0.1,
+      y: y + cardH - 0.35,
+      w: cardW - 0.2,
+      h: 0.25,
+      fontSize: 6,
+      fontFace: theme.fonts.body,
+      color: hex(theme.colors.text),
+      transparency: 50,
     });
   });
 }
 
-function addClosingSlide(
+// ─── AI ANALYSIS SLIDES (shared for single and comparison) ──────
+
+function addCopyAnalysisSlide(
   pptx: PptxGenJS,
+  analyses: CopywriterBrandAnalysis[],
+  comparison: string,
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
-  if (theme.logoBase64 && theme.logoMimeType) {
-    slide.addImage({
-      data: `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
-      x: 3.75,
-      y: 1.0,
-      w: 2.5,
-      h: 2.5,
-      sizing: { type: "contain", w: 2.5, h: 2.5 },
+  slide.addText(label(locale, "Analisi Copy (AI)", "Copy Analysis (AI)"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 14,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  const cardBg = lighten(theme.colors.background, 0.12);
+  const numBrands = analyses.length;
+  const colW = (SW - 2 * PAD - 0.15 * (numBrands - 1)) / numBrands;
+
+  analyses.forEach((a, i) => {
+    const x = PAD + i * (colW + 0.15);
+    const y = 0.6;
+    const h = 3.8;
+
+    addCardBg(slide, pptx, x, y, colW, h, cardBg);
+
+    // Brand name header
+    slide.addShape(pptx.ShapeType.rect, {
+      x,
+      y,
+      w: colW,
+      h: 0.28,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(a.brandName, {
+      x: x + 0.08,
+      y,
+      w: colW - 0.16,
+      h: 0.28,
+      fontSize: 9,
+      fontFace: theme.fonts.heading,
+      color: hex(theme.colors.background),
+      bold: true,
+    });
+
+    const fields: [string, string][] = [
+      [label(locale, "Tono di voce", "Tone of voice"), trunc(a.toneOfVoice, 120)],
+      [label(locale, "Stile copy", "Copy style"), trunc(a.copyStyle, 120)],
+      [label(locale, "Trigger emozionali", "Emotional triggers"), a.emotionalTriggers?.join(", ") ?? "\u2014"],
+      [label(locale, "Pattern CTA", "CTA patterns"), trunc(a.ctaPatterns, 100)],
+      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 100)],
+      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 100)],
+    ];
+
+    let fy = y + 0.38;
+    fields.forEach(([lbl, val]) => {
+      slide.addText(lbl, {
+        x: x + 0.08,
+        y: fy,
+        w: colW - 0.16,
+        h: 0.18,
+        fontSize: 6,
+        fontFace: theme.fonts.heading,
+        color: hex(theme.colors.primary),
+        bold: true,
+      });
+      slide.addText(val, {
+        x: x + 0.08,
+        y: fy + 0.17,
+        w: colW - 0.16,
+        h: 0.38,
+        fontSize: 7,
+        fontFace: theme.fonts.body,
+        color: hex(theme.colors.text),
+        valign: "top",
+      });
+      fy += 0.56;
+    });
+  });
+
+  // Comparison box at bottom
+  if (comparison) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: PAD,
+      y: 4.5,
+      w: SW - 2 * PAD,
+      h: 0.03,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(trunc(comparison, 300), {
+      x: PAD + 0.05,
+      y: 4.55,
+      w: SW - 2 * PAD - 0.1,
+      h: 0.9,
+      fontSize: 7,
+      fontFace: theme.fonts.body,
+      color: hex(theme.colors.text),
+      transparency: 15,
+      valign: "top",
     });
   }
-
-  slide.addText(label(locale, "Grazie.", "Thank you."), {
-    x: 0.5,
-    y: 3.6,
-    w: 9,
-    h: 0.8,
-    fontSize: 28,
-    fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
-    bold: true,
-    align: "center",
-  });
-
-  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
-    x: 0.5,
-    y: 4.5,
-    w: 9,
-    h: 0.4,
-    fontSize: 10,
-    fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.text),
-    transparency: 50,
-    align: "center",
-  });
 }
 
-// ─── Comparison slide builders ───────────────────────────────────
+function addVisualAnalysisSlide(
+  pptx: PptxGenJS,
+  analyses: CreativeDirectorBrandAnalysis[],
+  comparison: string,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  const slide = pptx.addSlide();
+  slide.background = { color: hex(theme.colors.background) };
 
-function addComparisonCoverSlide(
+  slide.addText(label(locale, "Analisi Creativa (AI)", "Creative Analysis (AI)"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 14,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  const cardBg = lighten(theme.colors.background, 0.12);
+  const numBrands = analyses.length;
+  const colW = (SW - 2 * PAD - 0.15 * (numBrands - 1)) / numBrands;
+
+  analyses.forEach((a, i) => {
+    const x = PAD + i * (colW + 0.15);
+    const y = 0.6;
+    const h = 3.8;
+
+    addCardBg(slide, pptx, x, y, colW, h, cardBg);
+
+    // Brand name header
+    slide.addShape(pptx.ShapeType.rect, {
+      x,
+      y,
+      w: colW,
+      h: 0.28,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(a.brandName, {
+      x: x + 0.08,
+      y,
+      w: colW - 0.16,
+      h: 0.28,
+      fontSize: 9,
+      fontFace: theme.fonts.heading,
+      color: hex(theme.colors.background),
+      bold: true,
+    });
+
+    const fields: [string, string][] = [
+      [label(locale, "Stile visivo", "Visual style"), trunc(a.visualStyle, 120)],
+      [label(locale, "Palette colori", "Color palette"), trunc(a.colorPalette, 120)],
+      [label(locale, "Stile fotografico", "Photography style"), trunc(a.photographyStyle, 120)],
+      [label(locale, "Coerenza brand", "Brand consistency"), trunc(a.brandConsistency, 100)],
+      [label(locale, "Preferenze formato", "Format preferences"), trunc(a.formatPreferences, 100)],
+      [label(locale, "Punti di forza", "Strengths"), trunc(a.strengths, 100)],
+      [label(locale, "Punti deboli", "Weaknesses"), trunc(a.weaknesses, 100)],
+    ];
+
+    let fy = y + 0.38;
+    fields.forEach(([lbl, val]) => {
+      slide.addText(lbl, {
+        x: x + 0.08,
+        y: fy,
+        w: colW - 0.16,
+        h: 0.16,
+        fontSize: 6,
+        fontFace: theme.fonts.heading,
+        color: hex(theme.colors.primary),
+        bold: true,
+      });
+      slide.addText(val, {
+        x: x + 0.08,
+        y: fy + 0.15,
+        w: colW - 0.16,
+        h: 0.32,
+        fontSize: 7,
+        fontFace: theme.fonts.body,
+        color: hex(theme.colors.text),
+        valign: "top",
+      });
+      fy += 0.48;
+    });
+  });
+
+  // Comparison box at bottom
+  if (comparison) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: PAD,
+      y: 4.5,
+      w: SW - 2 * PAD,
+      h: 0.03,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(trunc(comparison, 300), {
+      x: PAD + 0.05,
+      y: 4.55,
+      w: SW - 2 * PAD - 0.1,
+      h: 0.9,
+      fontSize: 7,
+      fontFace: theme.fonts.body,
+      color: hex(theme.colors.text),
+      transparency: 15,
+      valign: "top",
+    });
+  }
+}
+
+// ─── COMPARISON SLIDES ──────────────────────────────────────────
+
+function compCover(
   pptx: PptxGenJS,
   brands: BrandData[],
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
+  // Full bleed accent bar at top
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: SW,
+    h: 0.06,
+    fill: { color: hex(theme.colors.primary) },
+    line: { type: "none" },
+  });
+
+  // Logo
   if (theme.logoBase64 && theme.logoMimeType) {
     slide.addImage({
       data: `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
-      x: 0.5,
-      y: 0.4,
-      w: 1.5,
-      h: 1.5,
-      sizing: { type: "contain", w: 1.5, h: 1.5 },
+      x: PAD,
+      y: 0.3,
+      w: 1.2,
+      h: 1.2,
+      sizing: { type: "contain", w: 1.2, h: 1.2 },
     });
   }
 
-  const brandNames = brands.map((b) => b.name).join(" vs ");
-  slide.addText(brandNames, {
-    x: 0.5,
-    y: 2.2,
-    w: 9,
-    h: 1.2,
+  slide.addText(brands.map((b) => b.name).join(" vs "), {
+    x: PAD,
+    y: 1.8,
+    w: SW - 2 * PAD,
+    h: 1.0,
     fontSize: 30,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
   slide.addText(
-    label(locale, "Report Confronto Brand", "Brand Comparison Report"),
+    label(locale, "Report Confronto", "Comparison Report"),
     {
-      x: 0.5,
-      y: 3.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 18,
+      x: PAD,
+      y: 2.8,
+      w: SW - 2 * PAD,
+      h: 0.5,
+      fontSize: 16,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
+      color: hex(theme.colors.text),
     }
   );
 
   slide.addText(formatDate(locale), {
-    x: 0.5,
-    y: 4.0,
-    w: 9,
-    h: 0.4,
-    fontSize: 12,
+    x: PAD,
+    y: 3.3,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 11,
     fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.text),
+    color: hex(theme.colors.text),
     transparency: 40,
   });
 
-  slide.addText("Powered by MAIT", {
-    x: 0.5,
-    y: 4.8,
-    w: 9,
+  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+    x: PAD,
+    y: SH - 0.5,
+    w: SW - 2 * PAD,
     h: 0.3,
-    fontSize: 10,
+    fontSize: 8,
     fontFace: theme.fonts.body,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     transparency: 50,
   });
 }
 
-function addComparisonOverviewSlide(
+function compOverviewDashboard(
   pptx: PptxGenJS,
   brands: BrandData[],
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
   slide.addText(label(locale, "Panoramica Comparativa", "Comparative Overview"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.4,
+    fontSize: 14,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
+  // Full-width comparison table
   const headerRow: PptxGenJS.TableRow = [
     {
       text: "",
       options: {
-        fontSize: 11,
+        fontSize: 9,
         fontFace: theme.fonts.heading,
-        color: hexToRgb(theme.colors.text),
-        fill: { color: "1A1A1A" },
+        color: hex(theme.colors.text),
+        fill: { color: hex(theme.colors.primary) },
         bold: true,
         border: { type: "none" as const },
       },
@@ -746,10 +880,10 @@ function addComparisonOverviewSlide(
     ...brands.map((b) => ({
       text: b.name,
       options: {
-        fontSize: 11,
+        fontSize: 9,
         fontFace: theme.fonts.heading,
-        color: hexToRgb(theme.colors.primary),
-        fill: { color: "1A1A1A" },
+        color: hex(theme.colors.background),
+        fill: { color: hex(theme.colors.primary) },
         bold: true,
         align: "center" as const,
         border: { type: "none" as const },
@@ -757,358 +891,483 @@ function addComparisonOverviewSlide(
     })),
   ];
 
+  const total = (b: BrandData) => b.imageCount + b.videoCount + b.carouselCount;
+  const fmtMix = (b: BrandData) => {
+    const t = total(b);
+    if (t === 0) return "\u2014";
+    return `${Math.round((b.imageCount / t) * 100)}% Img, ${Math.round((b.videoCount / t) * 100)}% Vid, ${Math.round((b.carouselCount / t) * 100)}% Car`;
+  };
+
   const metrics: [string, (b: BrandData) => string][] = [
     [label(locale, "Ads totali", "Total ads"), (b) => String(b.totalAds)],
     [label(locale, "Ads attive", "Active ads"), (b) => String(b.activeAds)],
-    [label(locale, "Durata media", "Avg. duration"), (b) => b.avgDuration > 0 ? `${b.avgDuration}d` : "—"],
-    [label(locale, "Lungh. copy", "Copy length"), (b) => b.avgCopyLength > 0 ? `${b.avgCopyLength}` : "—"],
-    [label(locale, "Refresh rate", "Refresh rate"), (b) => b.adsPerWeek > 0 ? `${b.adsPerWeek}/wk` : "—"],
+    [label(locale, "Durata media", "Avg. duration"), (b) => b.avgDuration > 0 ? `${b.avgDuration} ${label(locale, "gg", "d")}` : "\u2014"],
+    [label(locale, "Lungh. copy", "Copy length"), (b) => b.avgCopyLength > 0 ? `${b.avgCopyLength} ${label(locale, "chr", "chr")}` : "\u2014"],
+    [label(locale, "Refresh rate", "Refresh rate"), (b) => b.adsPerWeek > 0 ? `${b.adsPerWeek}/wk` : "\u2014"],
+    [label(locale, "Format mix", "Format mix"), fmtMix],
   ];
 
-  const dataRows: PptxGenJS.TableRow[] = metrics.map(([lbl, fn]) => [
+  const altBg = lighten(theme.colors.background, 0.08);
+
+  const dataRows: PptxGenJS.TableRow[] = metrics.map(([lbl, fn], idx) => [
     {
       text: lbl,
       options: {
-        fontSize: 10,
+        fontSize: 9,
         fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.text),
-        fill: { color: hexToRgb(theme.colors.background) },
+        color: hex(theme.colors.text),
+        fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
         border: { type: "none" as const },
-        transparency: 20,
+        bold: true,
       },
     },
     ...brands.map((b) => ({
       text: fn(b),
       options: {
-        fontSize: 10,
+        fontSize: 9,
         fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.text),
-        fill: { color: hexToRgb(theme.colors.background) },
+        color: hex(theme.colors.primary),
+        fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
         align: "center" as const,
         border: { type: "none" as const },
+        bold: true,
       },
     })),
   ]);
 
-  const colW =
-    brands.length === 2
-      ? [3, 3, 3]
-      : [2.5, 2.17, 2.17, 2.17];
+  const labelColW = 2.5;
+  const dataColW = (SW - 2 * PAD - labelColW) / brands.length;
+  const colWidths = [labelColW, ...brands.map(() => dataColW)];
 
   slide.addTable([headerRow, ...dataRows], {
-    x: 0.5,
-    y: 1.2,
-    w: 9,
-    colW,
-    rowH: 0.5,
+    x: PAD,
+    y: 0.65,
+    w: SW - 2 * PAD,
+    colW: colWidths,
+    rowH: 0.4,
   });
 }
 
-function addComparisonObjectivesSlide(
+function compObjectivesAndFormat(
   pptx: PptxGenJS,
   brands: BrandData[],
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
-  slide.addText(
-    label(locale, "Obiettivi Campagna (stimati)", "Campaign Objectives (estimated)"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
+  slide.addText(label(locale, "Obiettivi & Formati", "Objectives & Formats"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 14,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
 
-  const colWidth = 9 / brands.length;
+  const cardBg = lighten(theme.colors.background, 0.12);
+
+  // TOP HALF: Objectives side by side
+  const topH = 2.2;
+  const colW = (SW - 2 * PAD - 0.15 * (brands.length - 1)) / brands.length;
 
   brands.forEach((b, i) => {
-    const x = 0.5 + i * colWidth;
+    const x = PAD + i * (colW + 0.15);
+    const y = 0.6;
     const obj = b.objectiveInference;
 
-    slide.addText(b.name, {
+    addCardBg(slide, pptx, x, y, colW, topH, cardBg);
+
+    // Brand name header bar
+    slide.addShape(pptx.ShapeType.rect, {
       x,
-      y: 1.2,
-      w: colWidth - 0.2,
-      h: 0.4,
-      fontSize: 12,
+      y,
+      w: colW,
+      h: 0.25,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(b.name, {
+      x: x + 0.08,
+      y,
+      w: colW - 0.16,
+      h: 0.25,
+      fontSize: 8,
       fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
+      color: hex(theme.colors.background),
       bold: true,
     });
 
     slide.addText(obj.objective.replace(/_/g, " ").toUpperCase(), {
-      x,
-      y: 1.7,
-      w: colWidth - 0.2,
-      h: 0.4,
-      fontSize: 14,
+      x: x + 0.08,
+      y: y + 0.35,
+      w: colW - 0.16,
+      h: 0.3,
+      fontSize: 12,
       fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.text),
+      color: hex(theme.colors.text),
       bold: true,
     });
 
-    // Confidence bar bg
+    // Confidence bar
+    const barW = colW - 0.4;
     slide.addShape(pptx.ShapeType.rect, {
-      x,
-      y: 2.2,
-      w: colWidth - 0.3,
-      h: 0.2,
+      x: x + 0.08,
+      y: y + 0.7,
+      w: barW,
+      h: 0.14,
       fill: { color: "333333" },
       line: { type: "none" },
     });
-
-    // Confidence bar fill
     slide.addShape(pptx.ShapeType.rect, {
-      x,
-      y: 2.2,
-      w: (colWidth - 0.3) * (obj.confidence / 100),
-      h: 0.2,
-      fill: { color: hexToRgb(theme.colors.primary) },
+      x: x + 0.08,
+      y: y + 0.7,
+      w: Math.max(barW * (obj.confidence / 100), 0.02),
+      h: 0.14,
+      fill: { color: hex(theme.colors.primary) },
       line: { type: "none" },
     });
-
     slide.addText(`${obj.confidence}%`, {
-      x,
-      y: 2.5,
-      w: colWidth - 0.2,
-      h: 0.3,
-      fontSize: 10,
+      x: x + 0.08 + barW + 0.05,
+      y: y + 0.65,
+      w: 0.3,
+      h: 0.2,
+      fontSize: 7,
       fontFace: theme.fonts.body,
-      color: hexToRgb(theme.colors.text),
-      transparency: 40,
+      color: hex(theme.colors.text),
+    });
+
+    // Top 3 signals
+    const sigs = obj.signals.slice(0, 3);
+    sigs.forEach((s, j) => {
+      slide.addText(`\u2022 ${s}`, {
+        x: x + 0.08,
+        y: y + 0.95 + j * 0.28,
+        w: colW - 0.16,
+        h: 0.25,
+        fontSize: 7,
+        fontFace: theme.fonts.body,
+        color: hex(theme.colors.text),
+        transparency: 20,
+      });
     });
   });
-}
 
-function addComparisonFormatSlide(
-  pptx: PptxGenJS,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  // BOTTOM HALF: Format grouped bar chart
+  const botY = topH + 0.8;
+  const botH = SH - botY - 0.15;
 
-  slide.addText(
-    label(locale, "Distribuzione Formati", "Format Distribution"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
+  slide.addText(label(locale, "Distribuzione formati", "Format distribution"), {
+    x: PAD,
+    y: botY,
+    w: SW - 2 * PAD,
+    h: 0.25,
+    fontSize: 9,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
 
-  const chartData = [
-    {
-      name: "Image",
-      labels: brands.map((b) => b.name),
-      values: brands.map((b) => b.imageCount),
-    },
-    {
-      name: "Video",
-      labels: brands.map((b) => b.name),
-      values: brands.map((b) => b.videoCount),
-    },
-    {
-      name: "Carousel",
-      labels: brands.map((b) => b.name),
-      values: brands.map((b) => b.carouselCount),
-    },
-  ];
-
-  slide.addChart(pptx.ChartType.bar, chartData, {
-    x: 0.5,
-    y: 1.2,
-    w: 9,
-    h: 4,
+  slide.addChart(pptx.ChartType.bar, [
+    { name: "Image", labels: brands.map((b) => b.name), values: brands.map((b) => b.imageCount) },
+    { name: "Video", labels: brands.map((b) => b.name), values: brands.map((b) => b.videoCount) },
+    { name: "Carousel", labels: brands.map((b) => b.name), values: brands.map((b) => b.carouselCount) },
+  ], {
+    x: PAD,
+    y: botY + 0.3,
+    w: SW - 2 * PAD,
+    h: botH - 0.35,
     barDir: "col",
     barGrouping: "clustered",
     showLegend: true,
     legendPos: "b",
-    legendFontSize: 11,
-    legendColor: hexToRgb(theme.colors.text),
-    catAxisLabelColor: hexToRgb(theme.colors.text),
-    catAxisLabelFontSize: 10,
-    valAxisLabelColor: hexToRgb(theme.colors.text),
-    valAxisLabelFontSize: 10,
+    legendFontSize: 7,
+    legendColor: hex(theme.colors.text),
+    catAxisLabelColor: hex(theme.colors.text),
+    catAxisLabelFontSize: 8,
+    valAxisLabelColor: hex(theme.colors.text),
+    valAxisLabelFontSize: 7,
     chartColors: [
-      hexToRgb(theme.colors.primary),
-      hexToRgb(theme.colors.secondary),
-      hexToRgb(theme.colors.accent),
+      hex(theme.colors.primary),
+      hex(theme.colors.secondary),
+      hex(theme.colors.accent),
     ],
   });
 }
 
-function addComparisonCtaSlide(
+function compCtaAndPlatforms(
   pptx: PptxGenJS,
   brands: BrandData[],
   theme: ThemeConfig,
   locale: Locale
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
+  slide.background = { color: hex(theme.colors.background) };
 
-  slide.addText(label(locale, "Top CTA per Brand", "Top CTAs per Brand"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
+  slide.addText(label(locale, "CTA & Piattaforme", "CTAs & Platforms"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 14,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
-  const colWidth = 9 / brands.length;
+  // LEFT: CTA per brand (65%)
+  const leftW = (SW - 2 * PAD) * 0.6;
+  const rightW = (SW - 2 * PAD) * 0.35;
+  const rightX = PAD + leftW + (SW - 2 * PAD) * 0.05;
+  const cardBg = lighten(theme.colors.background, 0.12);
 
+  // CTA section — stacked bars per brand
+  slide.addText(label(locale, "Top CTA per brand", "Top CTAs per brand"), {
+    x: PAD,
+    y: 0.6,
+    w: leftW,
+    h: 0.25,
+    fontSize: 9,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  const ctaColW = leftW / brands.length;
   brands.forEach((b, i) => {
-    const x = 0.5 + i * colWidth;
+    const x = PAD + i * ctaColW;
 
     slide.addText(b.name, {
       x,
-      y: 1.2,
-      w: colWidth - 0.2,
-      h: 0.4,
-      fontSize: 12,
+      y: 0.9,
+      w: ctaColW - 0.1,
+      h: 0.25,
+      fontSize: 8,
       fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
+      color: hex(theme.colors.primary),
       bold: true,
     });
 
-    b.topCtas.slice(0, 5).forEach((cta, j) => {
-      slide.addText(`${cta.name} (${cta.count})`, {
-        x,
-        y: 1.8 + j * 0.4,
-        w: colWidth - 0.2,
-        h: 0.35,
-        fontSize: 10,
+    const ctas = b.topCtas.slice(0, 5);
+    ctas.forEach((cta, j) => {
+      const maxVal = Math.max(...b.topCtas.map((c) => c.count), 1);
+      const barW = Math.max(((ctaColW - 0.3) * cta.count) / maxVal, 0.1);
+      const cy = 1.2 + j * 0.35;
+
+      slide.addText(cta.name, {
+        x: x + 0.05,
+        y: cy,
+        w: ctaColW - 0.15,
+        h: 0.15,
+        fontSize: 6,
         fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.text),
+        color: hex(theme.colors.text),
+        transparency: 30,
+      });
+
+      slide.addShape(pptx.ShapeType.rect, {
+        x: x + 0.05,
+        y: cy + 0.15,
+        w: barW,
+        h: 0.12,
+        fill: { color: hex(theme.colors.primary) },
+        line: { type: "none" },
+      });
+
+      slide.addText(String(cta.count), {
+        x: x + 0.05 + barW + 0.05,
+        y: cy + 0.12,
+        w: 0.4,
+        h: 0.18,
+        fontSize: 7,
+        fontFace: theme.fonts.body,
+        color: hex(theme.colors.text),
       });
     });
   });
-}
 
-function addComparisonRefreshSlide(
-  pptx: PptxGenJS,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
-
-  slide.addText(
-    label(locale, "Refresh Rate (90 giorni)", "Refresh Rate (90 days)"),
-    {
-      x: 0.5,
-      y: 0.3,
-      w: 9,
-      h: 0.6,
-      fontSize: 24,
-      fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
-      bold: true,
-    }
-  );
-
-  const chartData = [
-    {
-      name: label(locale, "Ads/settimana", "Ads/week"),
-      labels: brands.map((b) => b.name),
-      values: brands.map((b) => b.adsPerWeek),
-    },
-  ];
-
-  slide.addChart(pptx.ChartType.bar, chartData, {
-    x: 0.5,
-    y: 1.2,
-    w: 9,
-    h: 4,
-    barDir: "bar",
-    showLegend: false,
-    catAxisLabelColor: hexToRgb(theme.colors.text),
-    catAxisLabelFontSize: 11,
-    valAxisLabelColor: hexToRgb(theme.colors.text),
-    valAxisLabelFontSize: 10,
-    chartColors: [hexToRgb(theme.colors.primary)],
-  });
-}
-
-function addComparisonLatestAdsSlide(
-  pptx: PptxGenJS,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  slide.background = { color: hexToRgb(theme.colors.background) };
-
-  slide.addText(label(locale, "Ultime Ads per Brand", "Latest Ads per Brand"), {
-    x: 0.5,
-    y: 0.3,
-    w: 9,
-    h: 0.6,
-    fontSize: 24,
+  // RIGHT: Platform distribution
+  slide.addText(label(locale, "Piattaforme", "Platforms"), {
+    x: rightX,
+    y: 0.6,
+    w: rightW,
+    h: 0.25,
+    fontSize: 9,
     fontFace: theme.fonts.heading,
-    color: hexToRgb(theme.colors.primary),
+    color: hex(theme.colors.primary),
     bold: true,
   });
 
-  const colWidth = 9 / brands.length;
+  // Merge platform data across brands
+  const platMap = new Map<string, number>();
+  brands.forEach((b) => {
+    b.platforms.forEach((p) => {
+      platMap.set(p.name, (platMap.get(p.name) ?? 0) + p.count);
+    });
+  });
+  const mergedPlats = [...platMap.entries()].sort((a, b) => b[1] - a[1]);
+
+  if (mergedPlats.length > 0) {
+    const palette = [
+      hex(theme.colors.primary),
+      hex(theme.colors.secondary),
+      hex(theme.colors.accent),
+      "8a6bb0",
+      "5ba09b",
+    ];
+    slide.addChart(pptx.ChartType.doughnut, [
+      { name: "Platforms", labels: mergedPlats.map((p) => p[0]), values: mergedPlats.map((p) => p[1]) },
+    ], {
+      x: rightX,
+      y: 0.95,
+      w: rightW,
+      h: SH - 1.2,
+      showLegend: true,
+      legendPos: "b",
+      legendFontSize: 7,
+      legendColor: hex(theme.colors.text),
+      showPercent: true,
+      dataLabelFontSize: 8,
+      dataLabelColor: hex(theme.colors.text),
+      chartColors: palette.slice(0, mergedPlats.length),
+    });
+  }
+}
+
+function compLatestAds(
+  pptx: PptxGenJS,
+  brands: BrandData[],
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  const slide = pptx.addSlide();
+  slide.background = { color: hex(theme.colors.background) };
+
+  slide.addText(label(locale, "Ultime Ads", "Latest Ads"), {
+    x: PAD,
+    y: 0.15,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 14,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+  });
+
+  const cardBg = lighten(theme.colors.background, 0.12);
+  const colW = (SW - 2 * PAD - 0.15 * (brands.length - 1)) / brands.length;
 
   brands.forEach((b, i) => {
-    const x = 0.5 + i * colWidth;
+    const x = PAD + i * (colW + 0.15);
 
-    slide.addText(b.name, {
+    // Brand name header
+    slide.addShape(pptx.ShapeType.rect, {
       x,
-      y: 1.2,
-      w: colWidth - 0.2,
-      h: 0.4,
-      fontSize: 12,
+      y: 0.6,
+      w: colW,
+      h: 0.25,
+      fill: { color: hex(theme.colors.primary) },
+      line: { type: "none" },
+    });
+    slide.addText(b.name, {
+      x: x + 0.08,
+      y: 0.6,
+      w: colW - 0.16,
+      h: 0.25,
+      fontSize: 8,
       fontFace: theme.fonts.heading,
-      color: hexToRgb(theme.colors.primary),
+      color: hex(theme.colors.background),
       bold: true,
     });
 
-    b.latestAds.slice(0, 4).forEach((ad, j) => {
-      const headline = ad.headline ?? `Ad #${ad.ad_archive_id.slice(0, 8)}`;
-      const y = 1.8 + j * 0.5;
+    const ads = b.latestAds.slice(0, 4);
+    ads.forEach((ad, j) => {
+      const cy = 0.95 + j * 1.05;
+      const headline = trunc(ad.headline, 80) || `Ad #${ad.ad_archive_id.slice(0, 10)}`;
 
-      slide.addShape(pptx.ShapeType.roundRect, {
-        x,
-        y,
-        w: colWidth - 0.3,
-        h: 0.4,
-        fill: { color: "1A1A1A" },
-        rectRadius: 0.03,
-        line: { color: hexToRgb(theme.colors.primary), width: 0.5 },
-      });
+      addCardBg(slide, pptx, x, cy, colW, 0.9, cardBg);
 
       slide.addText(headline, {
-        x: x + 0.05,
-        y,
-        w: colWidth - 0.4,
-        h: 0.4,
-        fontSize: 8,
+        x: x + 0.08,
+        y: cy + 0.05,
+        w: colW - 0.16,
+        h: 0.5,
+        fontSize: 7,
         fontFace: theme.fonts.body,
-        color: hexToRgb(theme.colors.text),
-        valign: "middle",
+        color: hex(theme.colors.text),
+        valign: "top",
+      });
+
+      slide.addText(`ID: ${ad.ad_archive_id.slice(0, 14)}\u2026`, {
+        x: x + 0.08,
+        y: cy + 0.6,
+        w: colW - 0.16,
+        h: 0.2,
+        fontSize: 5,
+        fontFace: theme.fonts.body,
+        color: hex(theme.colors.text),
+        transparency: 50,
       });
     });
+  });
+}
+
+// ─── Closing slide (shared) ─────────────────────────────────────
+
+function closingSlide(
+  pptx: PptxGenJS,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  const slide = pptx.addSlide();
+  slide.background = { color: hex(theme.colors.background) };
+
+  // Accent bar
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: SW,
+    h: 0.06,
+    fill: { color: hex(theme.colors.primary) },
+    line: { type: "none" },
+  });
+
+  if (theme.logoBase64 && theme.logoMimeType) {
+    slide.addImage({
+      data: `data:${theme.logoMimeType};base64,${theme.logoBase64}`,
+      x: SW / 2 - 0.8,
+      y: 1.2,
+      w: 1.6,
+      h: 1.6,
+      sizing: { type: "contain", w: 1.6, h: 1.6 },
+    });
+  }
+
+  slide.addText(label(locale, "Grazie.", "Thank you."), {
+    x: PAD,
+    y: 3.2,
+    w: SW - 2 * PAD,
+    h: 0.7,
+    fontSize: 28,
+    fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary),
+    bold: true,
+    align: "center",
+  });
+
+  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+    x: PAD,
+    y: 4.0,
+    w: SW - 2 * PAD,
+    h: 0.35,
+    fontSize: 9,
+    fontFace: theme.fonts.body,
+    color: hex(theme.colors.text),
+    transparency: 50,
+    align: "center",
   });
 }
 
@@ -1117,23 +1376,64 @@ function addComparisonLatestAdsSlide(
 export async function generateSinglePptx(
   brand: BrandData,
   theme?: ThemeConfig | null,
-  locale: Locale = "it"
+  locale: Locale = "it",
+  sections: SectionType[] = ["technical"],
+  copyAnalysis?: CreativeAnalysisResult["copywriterReport"] | null,
+  visualAnalysis?: CreativeAnalysisResult["creativeDirectorReport"] | null
 ): Promise<Buffer> {
   const t = theme ?? DEFAULT_THEME;
   const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
+  pptx.defineLayout({ name: "CUSTOM", width: SW, height: SH });
+  pptx.layout = "CUSTOM";
   pptx.author = "MAIT \u00B7 NIMA Digital";
   pptx.title = `${brand.name} \u2014 Report`;
 
-  addCoverSlide(pptx, brand, t, locale);
-  addOverviewSlide(pptx, brand, t, locale);
-  addObjectiveSlide(pptx, brand, t, locale);
-  addFormatPieSlide(pptx, brand, t, locale);
-  addCtaBarSlide(pptx, brand, t, locale);
-  addPlatformPieSlide(pptx, brand, t, locale);
-  addStatsSlide(pptx, brand, t, locale);
-  addLatestAdsSlide(pptx, brand, t, locale);
-  addClosingSlide(pptx, t, locale);
+  const hasTechnical = sections.includes("technical");
+  const hasCopy = sections.includes("copy");
+  const hasVisual = sections.includes("visual");
+
+  // Slide 1: Cover
+  singleCover(pptx, brand, t, locale);
+
+  // Slide 2: Full Dashboard (technical)
+  if (hasTechnical) {
+    singleDashboard(pptx, brand, t, locale);
+  }
+
+  // Slide 3: Objective + Format pie (technical)
+  if (hasTechnical) {
+    singleObjectiveAndFormat(pptx, brand, t, locale);
+  }
+
+  // Slide 4: Latest Ads (technical)
+  if (hasTechnical) {
+    singleLatestAds(pptx, brand, t, locale);
+  }
+
+  // Slide 5: Copy Analysis (if selected and data available)
+  if (hasCopy && copyAnalysis?.brandAnalyses?.length) {
+    addCopyAnalysisSlide(
+      pptx,
+      copyAnalysis.brandAnalyses,
+      copyAnalysis.comparison ?? "",
+      t,
+      locale
+    );
+  }
+
+  // Slide 6: Visual Analysis (if selected and data available)
+  if (hasVisual && visualAnalysis?.brandAnalyses?.length) {
+    addVisualAnalysisSlide(
+      pptx,
+      visualAnalysis.brandAnalyses,
+      visualAnalysis.comparison ?? "",
+      t,
+      locale
+    );
+  }
+
+  // Closing
+  closingSlide(pptx, t, locale);
 
   const output = await pptx.write({ outputType: "nodebuffer" });
   return output as Buffer;
@@ -1142,22 +1442,69 @@ export async function generateSinglePptx(
 export async function generateComparisonPptx(
   brands: BrandData[],
   theme?: ThemeConfig | null,
-  locale: Locale = "it"
+  locale: Locale = "it",
+  sections: SectionType[] = ["technical"],
+  copyAnalysis?: CreativeAnalysisResult["copywriterReport"] | null,
+  visualAnalysis?: CreativeAnalysisResult["creativeDirectorReport"] | null
 ): Promise<Buffer> {
   const t = theme ?? DEFAULT_THEME;
   const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE";
+  pptx.defineLayout({ name: "CUSTOM", width: SW, height: SH });
+  pptx.layout = "CUSTOM";
   pptx.author = "MAIT \u00B7 NIMA Digital";
   pptx.title = `${brands.map((b) => b.name).join(" vs ")} \u2014 Comparison Report`;
 
-  addComparisonCoverSlide(pptx, brands, t, locale);
-  addComparisonOverviewSlide(pptx, brands, t, locale);
-  addComparisonObjectivesSlide(pptx, brands, t, locale);
-  addComparisonFormatSlide(pptx, brands, t, locale);
-  addComparisonCtaSlide(pptx, brands, t, locale);
-  addComparisonRefreshSlide(pptx, brands, t, locale);
-  addComparisonLatestAdsSlide(pptx, brands, t, locale);
-  addClosingSlide(pptx, t, locale);
+  const hasTechnical = sections.includes("technical");
+  const hasCopy = sections.includes("copy");
+  const hasVisual = sections.includes("visual");
+
+  // Slide 1: Cover
+  compCover(pptx, brands, t, locale);
+
+  // Slide 2: Overview Dashboard table
+  if (hasTechnical) {
+    compOverviewDashboard(pptx, brands, t, locale);
+  }
+
+  // Slide 3: Objectives + Format Distribution
+  if (hasTechnical) {
+    compObjectivesAndFormat(pptx, brands, t, locale);
+  }
+
+  // Slide 4: CTA + Platforms
+  if (hasTechnical) {
+    compCtaAndPlatforms(pptx, brands, t, locale);
+  }
+
+  // Slide 5: Latest Ads
+  if (hasTechnical) {
+    compLatestAds(pptx, brands, t, locale);
+  }
+
+  // Slide 6: Copy Analysis
+  if (hasCopy && copyAnalysis?.brandAnalyses?.length) {
+    addCopyAnalysisSlide(
+      pptx,
+      copyAnalysis.brandAnalyses,
+      copyAnalysis.comparison ?? "",
+      t,
+      locale
+    );
+  }
+
+  // Slide 7: Visual Analysis
+  if (hasVisual && visualAnalysis?.brandAnalyses?.length) {
+    addVisualAnalysisSlide(
+      pptx,
+      visualAnalysis.brandAnalyses,
+      visualAnalysis.comparison ?? "",
+      t,
+      locale
+    );
+  }
+
+  // Closing
+  closingSlide(pptx, t, locale);
 
   const output = await pptx.write({ outputType: "nodebuffer" });
   return output as Buffer;

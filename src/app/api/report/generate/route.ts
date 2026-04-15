@@ -3,11 +3,12 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inferObjective } from "@/lib/analytics/objective-inference";
-import { generateSinglePptx, generateComparisonPptx, type BrandData } from "@/lib/report/generate-pptx";
+import { generateSinglePptx, generateComparisonPptx, type BrandData, type SectionType } from "@/lib/report/generate-pptx";
 import { generateSinglePdf, generateComparisonPdf } from "@/lib/report/generate-pdf";
+import { analyzeCopy, analyzeVisuals, type BrandAdData, type CreativeAnalysisResult } from "@/lib/ai/creative-analysis";
 import type { ThemeConfig } from "@/lib/report/parse-template";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const schema = z.object({
   type: z.enum(["single", "comparison"]),
@@ -15,6 +16,7 @@ const schema = z.object({
   template_id: z.string().uuid().optional(),
   format: z.enum(["pptx", "pdf"]),
   locale: z.enum(["it", "en"]),
+  sections: z.array(z.enum(["technical", "copy", "visual"])).optional(),
 });
 
 /**
@@ -155,6 +157,44 @@ async function fetchBrandData(
   };
 }
 
+/**
+ * Fetch ad data for AI analysis (copy & visual agents).
+ */
+async function fetchBrandAdData(
+  admin: ReturnType<typeof createAdminClient>,
+  competitorId: string,
+  brandName: string
+): Promise<BrandAdData> {
+  const { data: ads } = await admin
+    .from("mait_ads_external")
+    .select("headline, ad_text, cta, image_url, raw_data")
+    .eq("competitor_id", competitorId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  type AdRow = {
+    headline: string | null;
+    ad_text: string | null;
+    cta: string | null;
+    image_url: string | null;
+    raw_data: Record<string, unknown> | null;
+  };
+
+  const adsList = (ads ?? []) as AdRow[];
+
+  return {
+    brandName,
+    competitorId,
+    ads: adsList.map((a) => ({
+      headline: a.headline,
+      ad_text: a.ad_text,
+      description: ((a.raw_data?.snapshot as Record<string, unknown> | undefined)?.link_description as string | undefined) ?? null,
+      cta: a.cta,
+      image_url: a.image_url,
+    })),
+  };
+}
+
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
@@ -169,6 +209,7 @@ export async function POST(req: Request) {
   }
 
   const { type, competitor_ids, template_id, format, locale } = parsed.data;
+  const sections: SectionType[] = (parsed.data.sections as SectionType[] | undefined) ?? ["technical"];
 
   // Validate: single requires exactly 1, comparison requires 2-3
   if (type === "single" && competitor_ids.length !== 1) {
@@ -198,6 +239,29 @@ export async function POST(req: Request) {
     competitor_ids.map((id) => fetchBrandData(admin, id))
   );
 
+  // Fetch AI analysis if needed
+  let copyAnalysis: CreativeAnalysisResult["copywriterReport"] | null = null;
+  let visualAnalysis: CreativeAnalysisResult["creativeDirectorReport"] | null = null;
+
+  const needsCopy = sections.includes("copy");
+  const needsVisual = sections.includes("visual");
+
+  if (needsCopy || needsVisual) {
+    // Fetch ad data for AI analysis
+    const brandAdData = await Promise.all(
+      brands.map((b) => fetchBrandAdData(admin, b.id, b.name))
+    );
+
+    // Run AI analyses in parallel
+    const [copyResult, visualResult] = await Promise.all([
+      needsCopy ? analyzeCopy(brandAdData) : null,
+      needsVisual ? analyzeVisuals(brandAdData) : null,
+    ]);
+
+    copyAnalysis = copyResult;
+    visualAnalysis = visualResult;
+  }
+
   let fileBytes: Uint8Array;
   let fileName: string;
   let contentType: string;
@@ -208,12 +272,12 @@ export async function POST(req: Request) {
       const safeName = brand.name.replace(/[^a-zA-Z0-9_-]/g, "_");
 
       if (format === "pptx") {
-        const buf = await generateSinglePptx(brand, themeConfig, locale);
+        const buf = await generateSinglePptx(brand, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
         fileName = `MAIT_Report_${safeName}.pptx`;
         contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
       } else {
-        const buf = await generateSinglePdf(brand, themeConfig, locale);
+        const buf = await generateSinglePdf(brand, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
         fileName = `MAIT_Report_${safeName}.pdf`;
         contentType = "application/pdf";
@@ -222,12 +286,12 @@ export async function POST(req: Request) {
       const brandNames = brands.map((b) => b.name.replace(/[^a-zA-Z0-9_-]/g, "_")).join("_vs_");
 
       if (format === "pptx") {
-        const buf = await generateComparisonPptx(brands, themeConfig, locale);
+        const buf = await generateComparisonPptx(brands, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
         fileName = `MAIT_Comparison_${brandNames}.pptx`;
         contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
       } else {
-        const buf = await generateComparisonPdf(brands, themeConfig, locale);
+        const buf = await generateComparisonPdf(brands, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
         fileName = `MAIT_Comparison_${brandNames}.pdf`;
         contentType = "application/pdf";
