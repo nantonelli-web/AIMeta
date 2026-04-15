@@ -373,6 +373,15 @@ const translations = {
     refreshRate: { it: "Refresh rate (90gg)", en: "Refresh rate (90d)" },
     adsPerWeek: { it: "ads/sett.", en: "ads/wk" },
     latestAds: { it: "Ultime ads", en: "Latest ads" },
+    generatedAt: { it: "Generato il", en: "Generated on" },
+    regenerate: { it: "Rigenera", en: "Regenerate" },
+    regenerating: { it: "Rigenerazione...", en: "Regenerating..." },
+    staleWarning: {
+      it: "Dati potenzialmente non aggiornati \u2014 nuove ads rilevate dall'ultima analisi",
+      en: "Data may be outdated \u2014 new ads detected since last analysis",
+    },
+    generating: { it: "Generazione confronto...", en: "Generating comparison..." },
+    generatingAi: { it: "Analisi AI in corso...", en: "AI analysis in progress..." },
   },
 
   // ─── Library ───────────────────────────────────────────────

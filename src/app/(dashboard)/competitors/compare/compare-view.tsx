@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Pen, Palette, Loader2, AlertCircle, Target, Info } from "lucide-react";
+import {
+  BarChart3,
+  Pen,
+  Palette,
+  Loader2,
+  AlertCircle,
+  Target,
+  Info,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import { AnalysisReport } from "./analysis-report";
@@ -37,6 +46,27 @@ interface CompStats {
   }[];
 }
 
+interface CachedComparison {
+  technical_data: CompStats[] | null;
+  copy_analysis: CreativeAnalysisResult["copywriterReport"] | null;
+  visual_analysis: CreativeAnalysisResult["creativeDirectorReport"] | null;
+  created_at: string;
+  stale: boolean;
+}
+
+function formatTimestamp(isoDate: string, locale: string): string {
+  return new Date(isoDate).toLocaleString(
+    locale === "it" ? "it-IT" : "en-GB",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
+}
+
 export function CompareView({
   competitors,
 }: {
@@ -46,15 +76,20 @@ export function CompareView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<Tab>("technical");
 
-  // Technical data
+  // Cached comparison state
+  const [cache, setCache] = useState<CachedComparison | null>(null);
   const [stats, setStats] = useState<CompStats[] | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<CreativeAnalysisResult | null>(
+    null
+  );
 
-  // AI analysis
-  const [aiResult, setAiResult] = useState<CreativeAnalysisResult | null>(null);
+  // Loading states
+  const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const aiLoadedForRef = useRef<string>("");
+
+  const fetchingRef = useRef<string>("");
 
   const { t, locale } = useT();
   const selectedIds = [...selected];
@@ -67,60 +102,224 @@ export function CompareView({
       else if (next.size < 3) next.add(id);
       return next;
     });
-    // Reset AI when selection changes
+    // Reset all state when selection changes
+    setCache(null);
+    setStats(null);
     setAiResult(null);
     setAiError(null);
-    aiLoadedForRef.current = "";
+    fetchingRef.current = "";
   }
 
-  // Fetch technical stats when selection changes
+  // Fetch or generate comparison when selection changes
+  const fetchComparison = useCallback(
+    async (ids: string[]) => {
+      if (ids.length < 2) return;
+
+      const key = [...ids].sort().join(",");
+      if (fetchingRef.current === key) return;
+      fetchingRef.current = key;
+
+      setLoading(true);
+      setAiError(null);
+
+      try {
+        // 1. Try fetching from cache
+        const getRes = await fetch(
+          `/api/comparisons?ids=${key}&locale=${locale}`
+        );
+
+        if (getRes.ok) {
+          const data = await getRes.json();
+          setCache({
+            technical_data: data.technical_data,
+            copy_analysis: data.copy_analysis,
+            visual_analysis: data.visual_analysis,
+            created_at: data.created_at,
+            stale: data.stale,
+          });
+          if (data.technical_data) {
+            setStats(data.technical_data);
+          }
+          if (data.copy_analysis || data.visual_analysis) {
+            setAiResult({
+              copywriterReport: data.copy_analysis ?? null,
+              creativeDirectorReport: data.visual_analysis ?? null,
+            });
+          }
+          setLoading(false);
+          return;
+        }
+
+        // 2. Not found — generate technical data
+        const postRes = await fetch("/api/comparisons", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            competitor_ids: ids,
+            locale,
+            sections: ["technical"],
+          }),
+        });
+
+        if (postRes.ok) {
+          const data = await postRes.json();
+          setCache({
+            technical_data: data.technical_data,
+            copy_analysis: data.copy_analysis ?? null,
+            visual_analysis: data.visual_analysis ?? null,
+            created_at: data.created_at,
+            stale: data.stale ?? false,
+          });
+          if (data.technical_data) {
+            setStats(data.technical_data);
+          }
+        }
+      } catch {
+        // Silently fail — user sees no data
+      } finally {
+        setLoading(false);
+      }
+    },
+    [locale]
+  );
+
   useEffect(() => {
-    if (selected.size < 2) {
-      setStats(null);
-      return;
+    if (selected.size >= 2) {
+      fetchComparison(selectedIds);
     }
-    setStatsLoading(true);
-    fetch("/api/competitors/compare", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids: selectedIds }),
-    })
-      .then((r) => r.json())
-      .then((d) => setStats(d))
-      .catch(() => setStats(null))
-      .finally(() => setStatsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey]);
 
-  // Auto-launch AI when copy or visual tab is selected
+  // Generate AI analysis when copy/visual tab is selected and not cached
   useEffect(() => {
-    if (
-      (activeTab === "copy" || activeTab === "visual") &&
-      selected.size >= 2 &&
-      !aiResult &&
-      !aiLoading &&
-      aiLoadedForRef.current !== selectedKey
-    ) {
-      aiLoadedForRef.current = selectedKey;
-      setAiLoading(true);
-      setAiError(null);
-      fetch("/api/ai/creative-analysis", {
+    if (selected.size < 2) return;
+    if (activeTab !== "copy" && activeTab !== "visual") return;
+
+    // Check if we already have the data
+    if (activeTab === "copy" && cache?.copy_analysis) {
+      if (!aiResult?.copywriterReport) {
+        setAiResult((prev) => ({
+          copywriterReport: cache.copy_analysis,
+          creativeDirectorReport: prev?.creativeDirectorReport ?? null,
+        }));
+      }
+      return;
+    }
+    if (activeTab === "visual" && cache?.visual_analysis) {
+      if (!aiResult?.creativeDirectorReport) {
+        setAiResult((prev) => ({
+          copywriterReport: prev?.copywriterReport ?? null,
+          creativeDirectorReport: cache.visual_analysis,
+        }));
+      }
+      return;
+    }
+
+    // Need to generate
+    const section = activeTab === "copy" ? "copy" : "visual";
+    const alreadyHas =
+      section === "copy"
+        ? aiResult?.copywriterReport
+        : aiResult?.creativeDirectorReport;
+    if (alreadyHas || aiLoading) return;
+
+    setAiLoading(true);
+    setAiError(null);
+
+    fetch("/api/comparisons", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        competitor_ids: selectedIds,
+        locale,
+        sections: [section],
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setAiError(data.error ?? t("creativeAnalysis", "analysisFailed"));
+          return;
+        }
+        const data = await res.json();
+        // Update cache
+        setCache((prev) => ({
+          technical_data: prev?.technical_data ?? data.technical_data,
+          copy_analysis: data.copy_analysis ?? prev?.copy_analysis ?? null,
+          visual_analysis:
+            data.visual_analysis ?? prev?.visual_analysis ?? null,
+          created_at: data.updated_at ?? data.created_at,
+          stale: data.stale ?? false,
+        }));
+        // Update AI result
+        setAiResult((prev) => ({
+          copywriterReport:
+            data.copy_analysis ?? prev?.copywriterReport ?? null,
+          creativeDirectorReport:
+            data.visual_analysis ?? prev?.creativeDirectorReport ?? null,
+        }));
+      })
+      .catch(() => setAiError(t("creativeAnalysis", "analysisFailed")))
+      .finally(() => setAiLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedKey, cache?.copy_analysis, cache?.visual_analysis]);
+
+  // Regenerate handler
+  async function handleRegenerate() {
+    if (selected.size < 2) return;
+    setRegenerating(true);
+    setAiError(null);
+
+    try {
+      // Delete cache
+      await fetch("/api/comparisons", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          competitor_ids: selectedIds,
+          locale,
+        }),
+      });
+
+      // Determine which sections to regenerate
+      const sections: string[] = ["technical"];
+      if (cache?.copy_analysis || aiResult?.copywriterReport)
+        sections.push("copy");
+      if (cache?.visual_analysis || aiResult?.creativeDirectorReport)
+        sections.push("visual");
+
+      // Regenerate
+      const res = await fetch("/api/comparisons", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ competitor_ids: selectedIds, locale }),
-      })
-        .then(async (res) => {
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setAiError(data.error ?? t("creativeAnalysis", "analysisFailed"));
-            return;
-          }
-          const data: CreativeAnalysisResult = await res.json();
-          setAiResult(data);
-        })
-        .catch(() => setAiError(t("creativeAnalysis", "analysisFailed")))
-        .finally(() => setAiLoading(false));
+        body: JSON.stringify({
+          competitor_ids: selectedIds,
+          locale,
+          sections,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCache({
+          technical_data: data.technical_data,
+          copy_analysis: data.copy_analysis ?? null,
+          visual_analysis: data.visual_analysis ?? null,
+          created_at: data.created_at,
+          stale: data.stale ?? false,
+        });
+        if (data.technical_data) setStats(data.technical_data);
+        setAiResult({
+          copywriterReport: data.copy_analysis ?? null,
+          creativeDirectorReport: data.visual_analysis ?? null,
+        });
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setRegenerating(false);
     }
-  }, [activeTab, selectedKey]);
+  }
 
   const hasResults = selected.size >= 2;
 
@@ -164,6 +363,60 @@ export function CompareView({
         </p>
       )}
 
+      {/* Timestamp + Stale Warning + Regenerate */}
+      {hasResults && cache && (
+        <div className="space-y-2">
+          {cache.stale && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+              <AlertTriangle className="size-4 text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-300 flex-1">
+                {t("compare", "staleWarning")}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shrink-0"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+              >
+                {regenerating ? (
+                  <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <RefreshCw className="size-3.5 mr-1.5" />
+                )}
+                {regenerating
+                  ? t("compare", "regenerating")
+                  : t("compare", "regenerate")}
+              </Button>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {t("compare", "generatedAt")}{" "}
+              {formatTimestamp(cache.created_at, locale)}
+            </p>
+            {!cache.stale && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+              >
+                {regenerating ? (
+                  <Loader2 className="size-3 animate-spin mr-1.5" />
+                ) : (
+                  <RefreshCw className="size-3 mr-1.5" />
+                )}
+                {regenerating
+                  ? t("compare", "regenerating")
+                  : t("compare", "regenerate")}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       {hasResults && (
         <>
@@ -191,13 +444,22 @@ export function CompareView({
           </div>
 
           {/* Technical Tab */}
-          {activeTab === "technical" && (
-            statsLoading ? (
-              <LoadingState text={t("compare", "calculating")} />
+          {activeTab === "technical" &&
+            (loading || regenerating ? (
+              <LoadingState text={t("compare", "generating")} />
             ) : stats && stats.length >= 2 ? (
               <div className="space-y-4">
-                <CompareTable label={t("compare", "totalAds")} stats={stats} render={(s) => String(s.totalAds)} />
-                <CompareTable label={t("compare", "activeAds")} stats={stats} render={(s) => String(s.activeAds)} highlight />
+                <CompareTable
+                  label={t("compare", "totalAds")}
+                  stats={stats}
+                  render={(s) => String(s.totalAds)}
+                />
+                <CompareTable
+                  label={t("compare", "activeAds")}
+                  stats={stats}
+                  render={(s) => String(s.activeAds)}
+                  highlight
+                />
 
                 {/* Estimated Campaign Objective */}
                 <ObjectiveCard stats={stats} t={t} />
@@ -208,46 +470,78 @@ export function CompareView({
                   render={(s) => {
                     const total = s.imageCount + s.videoCount;
                     if (total === 0) return "\u2014";
-                    const imgPct = Math.round((s.imageCount / total) * 100);
+                    const imgPct = Math.round(
+                      (s.imageCount / total) * 100
+                    );
                     return `${imgPct}% img \u00B7 ${100 - imgPct}% video`;
                   }}
                 />
                 <CompareTable
                   label={t("compare", "topCta")}
                   stats={stats}
-                  render={(s) => s.topCtas.slice(0, 3).map((c) => c.name).join(", ") || "\u2014"}
+                  render={(s) =>
+                    s.topCtas
+                      .slice(0, 3)
+                      .map((c) => c.name)
+                      .join(", ") || "\u2014"
+                  }
                 />
                 <CompareTable
                   label={t("compare", "platformsLabel")}
                   stats={stats}
-                  render={(s) => s.platforms.map((p) => p.name).join(", ") || "\u2014"}
+                  render={(s) =>
+                    s.platforms.map((p) => p.name).join(", ") || "\u2014"
+                  }
                 />
                 <CompareTable
                   label={t("compare", "avgDuration")}
                   stats={stats}
-                  render={(s) => s.avgDuration > 0 ? `${s.avgDuration} ${t("compare", "avgDurationDays")}` : "\u2014"}
+                  render={(s) =>
+                    s.avgDuration > 0
+                      ? `${s.avgDuration} ${t("compare", "avgDurationDays")}`
+                      : "\u2014"
+                  }
                 />
                 <CompareTable
                   label={t("compare", "avgCopyLength")}
                   stats={stats}
-                  render={(s) => s.avgCopyLength > 0 ? `${s.avgCopyLength} ${t("compare", "avgCopyChars")}` : "\u2014"}
+                  render={(s) =>
+                    s.avgCopyLength > 0
+                      ? `${s.avgCopyLength} ${t("compare", "avgCopyChars")}`
+                      : "\u2014"
+                  }
                 />
                 <CompareTable
                   label={t("compare", "refreshRate")}
                   stats={stats}
-                  render={(s) => s.adsPerWeek > 0 ? `${s.adsPerWeek} ${t("compare", "adsPerWeek")}` : "\u2014"}
+                  render={(s) =>
+                    s.adsPerWeek > 0
+                      ? `${s.adsPerWeek} ${t("compare", "adsPerWeek")}`
+                      : "\u2014"
+                  }
                   highlight
                 />
                 {/* Latest ads */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm">{t("compare", "latestAds")}</CardTitle>
+                    <CardTitle className="text-sm">
+                      {t("compare", "latestAds")}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className={cn("grid gap-4", stats.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                    <div
+                      className={cn(
+                        "grid gap-4",
+                        stats.length === 2
+                          ? "grid-cols-2"
+                          : "grid-cols-3"
+                      )}
+                    >
                       {stats.map((s) => (
                         <div key={s.id} className="space-y-3">
-                          <p className="text-xs font-medium text-gold">{s.name}</p>
+                          <p className="text-xs font-medium text-gold">
+                            {s.name}
+                          </p>
                           {s.latestAds.slice(0, 3).map((ad) => (
                             <a
                               key={ad.ad_archive_id}
@@ -256,15 +550,24 @@ export function CompareView({
                               rel="noreferrer"
                               className="block rounded-lg border border-border overflow-hidden hover:border-gold/40 transition-colors"
                             >
-                              {ad.image_url && !ad.image_url.includes("/render_ad/") ? (
+                              {ad.image_url &&
+                              !ad.image_url.includes("/render_ad/") ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={ad.image_url} alt="" className="w-full aspect-video object-cover" />
+                                <img
+                                  src={ad.image_url}
+                                  alt=""
+                                  className="w-full aspect-video object-cover"
+                                />
                               ) : (
                                 <div className="aspect-video bg-muted grid place-items-center text-xs text-muted-foreground">
                                   {ad.headline ?? "Ad"}
                                 </div>
                               )}
-                              {ad.headline && <p className="p-2 text-xs line-clamp-1">{ad.headline}</p>}
+                              {ad.headline && (
+                                <p className="p-2 text-xs line-clamp-1">
+                                  {ad.headline}
+                                </p>
+                              )}
                             </a>
                           ))}
                         </div>
@@ -273,38 +576,35 @@ export function CompareView({
                   </CardContent>
                 </Card>
               </div>
-            ) : null
-          )}
+            ) : null)}
 
           {/* Copy Tab */}
-          {activeTab === "copy" && (
-            aiLoading ? (
-              <LoadingState text={t("creativeAnalysis", "analyzing")} />
+          {activeTab === "copy" &&
+            (aiLoading || regenerating ? (
+              <LoadingState text={t("compare", "generatingAi")} />
             ) : aiError ? (
               <ErrorState text={aiError} />
-            ) : aiResult ? (
+            ) : aiResult?.copywriterReport ? (
               <AnalysisReport
                 result={aiResult}
                 mode="copywriter"
                 onClose={() => setActiveTab("technical")}
               />
-            ) : null
-          )}
+            ) : null)}
 
           {/* Visual Tab */}
-          {activeTab === "visual" && (
-            aiLoading ? (
-              <LoadingState text={t("creativeAnalysis", "analyzing")} />
+          {activeTab === "visual" &&
+            (aiLoading || regenerating ? (
+              <LoadingState text={t("compare", "generatingAi")} />
             ) : aiError ? (
               <ErrorState text={aiError} />
-            ) : aiResult ? (
+            ) : aiResult?.creativeDirectorReport ? (
               <AnalysisReport
                 result={aiResult}
                 mode="creativeDirector"
                 onClose={() => setActiveTab("technical")}
               />
-            ) : null
-          )}
+            ) : null)}
         </>
       )}
     </div>
@@ -368,7 +668,7 @@ function ObjectiveCard({
   const OBJECTIVE_LABELS: Record<string, Record<string, string>> = {
     sales: { it: "Vendite / Conversioni", en: "Sales / Conversions" },
     traffic: { it: "Traffico", en: "Traffic" },
-    awareness: { it: "Notorietà / Awareness", en: "Awareness" },
+    awareness: { it: "Notoriet\u00E0 / Awareness", en: "Awareness" },
     app_install: { it: "Installazione app", en: "App Install" },
     engagement: { it: "Interazione", en: "Engagement" },
     lead_generation: { it: "Lead Generation", en: "Lead Generation" },
@@ -388,14 +688,22 @@ function ObjectiveCard({
           {t("compare", "estimate")}
         </span>
       </div>
-      <div className={cn("grid divide-x divide-border", stats.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+      <div
+        className={cn(
+          "grid divide-x divide-border",
+          stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+        )}
+      >
         {stats.map((s) => {
           const obj = s.objectiveInference;
-          const label = OBJECTIVE_LABELS[obj.objective]?.it ?? obj.objective;
+          const label =
+            OBJECTIVE_LABELS[obj.objective]?.it ?? obj.objective;
           const isExpanded = expanded === s.id;
           return (
             <div key={s.id} className="px-4 py-3">
-              <p className="text-[10px] text-muted-foreground mb-1 truncate">{s.name}</p>
+              <p className="text-[10px] text-muted-foreground mb-1 truncate">
+                {s.name}
+              </p>
               <p className="text-sm font-medium text-amber-400">{label}</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -404,20 +712,29 @@ function ObjectiveCard({
                     style={{ width: `${obj.confidence}%` }}
                   />
                 </div>
-                <span className="text-[10px] text-muted-foreground">{obj.confidence}%</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {obj.confidence}%
+                </span>
               </div>
               <button
                 onClick={() => setExpanded(isExpanded ? null : s.id)}
                 className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Info className="size-3" />
-                {isExpanded ? t("compare", "hideSignals") : t("compare", "showSignals")}
+                {isExpanded
+                  ? t("compare", "hideSignals")
+                  : t("compare", "showSignals")}
               </button>
               {isExpanded && (
                 <ul className="mt-2 space-y-1">
                   {obj.signals.map((signal, i) => (
-                    <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1.5">
-                      <span className="text-amber-400 mt-0.5">•</span>
+                    <li
+                      key={i}
+                      className="text-[10px] text-muted-foreground flex items-start gap-1.5"
+                    >
+                      <span className="text-amber-400 mt-0.5">
+                        &bull;
+                      </span>
                       {signal}
                     </li>
                   ))}
@@ -448,15 +765,34 @@ function CompareTable({
   highlight?: boolean;
 }) {
   return (
-    <div className={cn("rounded-lg border border-border overflow-hidden", highlight && "border-gold/20")}>
+    <div
+      className={cn(
+        "rounded-lg border border-border overflow-hidden",
+        highlight && "border-gold/20"
+      )}
+    >
       <div className="bg-muted/30 px-4 py-2">
         <p className="text-xs font-medium text-foreground">{label}</p>
       </div>
-      <div className={cn("grid divide-x divide-border", stats.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+      <div
+        className={cn(
+          "grid divide-x divide-border",
+          stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+        )}
+      >
         {stats.map((s) => (
           <div key={s.id} className="px-4 py-3">
-            <p className="text-[10px] text-muted-foreground mb-1 truncate">{s.name}</p>
-            <p className={cn("text-sm font-medium", highlight && "text-gold")}>{render(s)}</p>
+            <p className="text-[10px] text-muted-foreground mb-1 truncate">
+              {s.name}
+            </p>
+            <p
+              className={cn(
+                "text-sm font-medium",
+                highlight && "text-gold"
+              )}
+            >
+              {render(s)}
+            </p>
           </div>
         ))}
       </div>

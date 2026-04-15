@@ -133,6 +133,12 @@ export async function POST(req: Request) {
         message: `${result.records.length} ads sincronizzate.`,
       });
 
+      // Mark any cached comparisons that include this competitor as stale
+      await admin
+        .from("mait_comparisons")
+        .update({ stale: true, updated_at: new Date().toISOString() })
+        .contains("competitor_ids", [competitor.id]);
+
       // Send email notification to workspace members
       try {
         const { data: members } = await admin
