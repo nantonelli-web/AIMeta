@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @next/next/no-page-custom-font */
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,18 @@ type ReportType = "single" | "comparison";
 type ReportFormat = "pptx" | "pdf";
 type ReportLocale = "it" | "en";
 
+const FONT_OPTIONS = [
+  { value: "Inter", label: "Inter", preview: "Aa Bb Cc 123" },
+  { value: "Montserrat", label: "Montserrat", preview: "Aa Bb Cc 123" },
+  { value: "Poppins", label: "Poppins", preview: "Aa Bb Cc 123" },
+  { value: "Roboto", label: "Roboto", preview: "Aa Bb Cc 123" },
+  { value: "Open Sans", label: "Open Sans", preview: "Aa Bb Cc 123" },
+  { value: "Lato", label: "Lato", preview: "Aa Bb Cc 123" },
+  { value: "Playfair Display", label: "Playfair Display", preview: "Aa Bb Cc 123" },
+  { value: "Raleway", label: "Raleway", preview: "Aa Bb Cc 123" },
+  { value: "Nunito", label: "Nunito", preview: "Aa Bb Cc 123" },
+];
+
 // ─── Component ───────────────────────────────────────────────────
 
 export function ReportBuilder({
@@ -57,6 +70,7 @@ export function ReportBuilder({
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [reportLocale, setReportLocale] = useState<ReportLocale>(locale as ReportLocale);
   const [contentSections, setContentSections] = useState<Set<'technical' | 'copy' | 'visual'>>(new Set(['technical']));
+  const [fontFamily, setFontFamily] = useState("Inter");
   const [format, setFormat] = useState<ReportFormat>("pptx");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -135,6 +149,7 @@ export function ReportBuilder({
           format,
           locale: reportLocale,
           sections: [...contentSections],
+          font_family: fontFamily,
         }),
       });
 
@@ -213,8 +228,15 @@ export function ReportBuilder({
 
   // ─── Render ──────────────────────────────────────────────────
 
+  const googleFontsUrl = "https://fonts.googleapis.com/css2?family=" +
+    FONT_OPTIONS.map((f) => f.value.replace(/ /g, "+")).join("&family=") +
+    "&display=swap";
+
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Load Google Fonts for preview */}
+      <link rel="stylesheet" href={googleFontsUrl} />
+
       {/* Step 1: Report Type */}
       <Card>
         <CardHeader>
@@ -463,11 +485,43 @@ export function ReportBuilder({
         </CardContent>
       </Card>
 
-      {/* Step 6: Format */}
+      {/* Step 6: Font */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            6. {t("report", "format")}
+            6. {t("report", "font")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {FONT_OPTIONS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setFontFamily(f.value)}
+                className={cn(
+                  "rounded-md border px-3 py-2.5 text-left transition-colors",
+                  fontFamily === f.value
+                    ? "bg-gold/15 text-gold border-gold/40"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-gold/30"
+                )}
+              >
+                <span className="text-sm font-medium" style={{ fontFamily: f.value }}>
+                  {f.label}
+                </span>
+                <span className="block text-[10px] text-muted-foreground mt-0.5" style={{ fontFamily: f.value }}>
+                  {f.preview}
+                </span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Step 7: Format */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">
+            7. {t("report", "format")}
           </CardTitle>
         </CardHeader>
         <CardContent>

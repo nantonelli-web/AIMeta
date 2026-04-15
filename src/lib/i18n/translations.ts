@@ -479,6 +479,7 @@ const translations = {
     uploadBtn: { it: "Carica", en: "Upload" },
     usingTemplate: { it: "Usando template", en: "Using template" },
     language: { it: "Lingua", en: "Language" },
+    font: { it: "Font", en: "Font" },
     format: { it: "Formato", en: "Format" },
     generateBtn: { it: "Genera report", en: "Generate report" },
     generating: { it: "Generazione in corso\u2026", en: "Generating\u2026" },

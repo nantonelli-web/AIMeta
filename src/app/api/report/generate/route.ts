@@ -17,6 +17,7 @@ const schema = z.object({
   format: z.enum(["pptx", "pdf"]),
   locale: z.enum(["it", "en"]),
   sections: z.array(z.enum(["technical", "copy", "visual"])).optional(),
+  font_family: z.string().max(60).optional(),
 });
 
 /**
@@ -260,6 +261,20 @@ export async function POST(req: Request) {
 
     copyAnalysis = copyResult;
     visualAnalysis = visualResult;
+  }
+
+  // Override font if user selected one
+  if (parsed.data.font_family) {
+    const base = themeConfig ?? {} as Partial<ThemeConfig>;
+    themeConfig = {
+      colors: base.colors ?? { primary: "#D4A843", secondary: "#5b7ea3", background: "#0A0A0A", text: "#F5F5F5", accent: "#6b8e6b" },
+      fonts: {
+        heading: parsed.data.font_family,
+        body: parsed.data.font_family,
+      },
+      logoBase64: base.logoBase64 ?? null,
+      logoMimeType: base.logoMimeType ?? null,
+    };
   }
 
   let fileBytes: Uint8Array;
