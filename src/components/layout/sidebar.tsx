@@ -6,12 +6,12 @@ import {
   LayoutDashboard,
   Users,
   Library,
-  BarChart3,
   Target,
   Bell,
   Settings,
   GitCompareArrows,
   FolderHeart,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
@@ -23,6 +23,7 @@ const itemDefs = [
   { href: "/library", key: "library", icon: Library },
   { href: "/collections", key: "collections", icon: FolderHeart },
   { href: "/benchmarks", key: "benchmarks", icon: Target },
+  { href: "/report", key: "report", icon: FileText },
   { href: "/alerts", key: "alerts", icon: Bell },
   { href: "/settings", key: "settings", icon: Settings },
 ] as const;

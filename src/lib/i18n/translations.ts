@@ -64,6 +64,7 @@ const translations = {
     library: { it: "Creative Library", en: "Creative Library" },
     collections: { it: "Collezioni", en: "Collections" },
     benchmarks: { it: "Benchmarks", en: "Benchmarks" },
+    report: { it: "Report", en: "Report" },
     alerts: { it: "Alerts", en: "Alerts" },
     settings: { it: "Settings", en: "Settings" },
     footer: { it: "NIMA Digital \u00B7 v0.1", en: "NIMA Digital \u00B7 v0.1" },
@@ -457,6 +458,35 @@ const translations = {
     avgVariantsChart: { it: "Media varianti per ad", en: "Avg. variants per ad" },
     variantsLabel: { it: "Varianti", en: "Variants" },
     topTargetedCountries: { it: "Top paesi target", en: "Top targeted countries" },
+  },
+
+  // ─── Report ────────────────────────────────────────────────
+  report: {
+    title: { it: "Report", en: "Report" },
+    subtitle: {
+      it: "Genera report brandizzati in PPTX o PDF per singoli brand o confronti.",
+      en: "Generate branded PPTX or PDF reports for single brands or comparisons.",
+    },
+    typeSingle: { it: "Singolo brand", en: "Single brand" },
+    typeComparison: { it: "Confronto brand", en: "Brand comparison" },
+    selectBrand: { it: "Seleziona brand", en: "Select brand" },
+    selectBrands: { it: "Seleziona brand", en: "Select brands" },
+    template: { it: "Template", en: "Template" },
+    noTemplate: { it: "Nessun template (stile MAIT default)", en: "No template (MAIT default style)" },
+    defaultStyle: { it: "Stile MAIT default", en: "MAIT default style" },
+    uploadTemplate: { it: "Carica template", en: "Upload template" },
+    templateName: { it: "Nome template", en: "Template name" },
+    uploadBtn: { it: "Carica", en: "Upload" },
+    usingTemplate: { it: "Usando template", en: "Using template" },
+    language: { it: "Lingua", en: "Language" },
+    format: { it: "Formato", en: "Format" },
+    generateBtn: { it: "Genera report", en: "Generate report" },
+    generating: { it: "Generazione in corso\u2026", en: "Generating\u2026" },
+    generated: { it: "Report generato", en: "Report generated" },
+    downloadReady: { it: "Download pronto \u2014 il file \u00E8 stato scaricato.", en: "Download ready \u2014 the file has been downloaded." },
+    errorGeneration: { it: "Errore nella generazione del report.", en: "Error generating the report." },
+    templateUploaded: { it: "Template caricato.", en: "Template uploaded." },
+    templateDeleted: { it: "Template eliminato.", en: "Template deleted." },
   },
 
   // ─── Alerts ────────────────────────────────────────────────
