@@ -11,6 +11,7 @@ import { AdCard } from "@/components/ads/ad-card";
 import { OrganicPostCard } from "@/components/organic/organic-post-card";
 import { TagButton } from "@/components/ads/tag-button";
 import { ScanButton } from "./scan-button";
+import { ScanGoogleButton } from "./scan-google-button";
 import { ScanInstagramButton } from "./scan-instagram-button";
 import { FrequencySelector } from "./frequency-selector";
 import { JobHistory } from "./job-history";
@@ -151,6 +152,10 @@ export default async function CompetitorDetailPage({
             </a>
           </Button>
           <ScanInstagramButton competitorId={c.id} />
+          <ScanGoogleButton
+            competitorId={c.id}
+            hasGoogleConfig={!!(c.google_advertiser_id || c.google_domain)}
+          />
           <ScanButton competitorId={c.id} />
         </div>
       </div>

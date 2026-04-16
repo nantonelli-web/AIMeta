@@ -186,6 +186,9 @@ const translations = {
     selectCategory: { it: "Seleziona categoria", en: "Select category" },
     instagramLabel: { it: "Username Instagram", en: "Instagram username" },
     instagramPlaceholder: { it: "es. nike (senza @)", en: "e.g. nike (without @)" },
+    googleAdsSection: { it: "Google Ads (opzionale)", en: "Google Ads (optional)" },
+    googleDomainLabel: { it: "Dominio Google Ads", en: "Google Ads domain" },
+    googleAdvertiserIdLabel: { it: "Google Advertiser ID", en: "Google Advertiser ID" },
     searchCountry: { it: "Cerca paese...", en: "Search country..." },
     noCountryMatch: { it: "Nessun paese trovato.", en: "No country found." },
   },
@@ -230,6 +233,12 @@ const translations = {
     scanAllProgress: { it: "Scanning brand", en: "Scanning brands" },
     scanAllDone: { it: "Scan completato!", en: "Scan completed!" },
     scanAllPartial: { it: "brand completati", en: "brands completed" },
+    scanGoogle: { it: "Scan Google Ads", en: "Scan Google Ads" },
+    scanningGoogle: { it: "Scanning Google\u2026", en: "Scanning Google\u2026" },
+    scrapingGoogleInProgress: {
+      it: "Scraping Google Ads\u2026 (pu\u00F2 richiedere 20-60s)",
+      en: "Scraping Google Ads\u2026 (may take 20-60s)",
+    },
   },
 
   // ─── Frequency Selector ────────────────────────────────────

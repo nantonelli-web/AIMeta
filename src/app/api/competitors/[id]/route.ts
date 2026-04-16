@@ -13,6 +13,8 @@ const patchSchema = z.object({
   category: z.string().max(80).nullable().optional(),
   client_id: z.string().uuid().nullable().optional(),
   instagram_username: z.string().max(60).nullable().optional(),
+  google_advertiser_id: z.string().max(80).nullable().optional(),
+  google_domain: z.string().max(200).nullable().optional(),
 });
 
 export async function PATCH(
@@ -32,8 +34,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { frequency, max_items, page_name, page_url, country, category, client_id, instagram_username } =
-    parsed.data;
+  const {
+    frequency, max_items, page_name, page_url, country, category,
+    client_id, instagram_username, google_advertiser_id, google_domain,
+  } = parsed.data;
 
   // Separate monitor_config fields from direct fields
   const directUpdate: Record<string, unknown> = {};
@@ -43,6 +47,8 @@ export async function PATCH(
   if (category !== undefined) directUpdate.category = category;
   if (client_id !== undefined) directUpdate.client_id = client_id;
   if (instagram_username !== undefined) directUpdate.instagram_username = instagram_username;
+  if (google_advertiser_id !== undefined) directUpdate.google_advertiser_id = google_advertiser_id;
+  if (google_domain !== undefined) directUpdate.google_domain = google_domain;
 
   // Handle monitor_config merge if frequency or max_items changed
   if (frequency !== undefined || max_items !== undefined) {

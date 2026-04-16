@@ -2,18 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { scrapeMetaAds } from "@/lib/apify/service";
-import { resolvePageId } from "@/lib/meta/resolve-page-id";
-import { sendNewAdsNotification } from "@/lib/email/resend";
+import { scrapeGoogleAds } from "@/lib/apify/google-ads-service";
 
-export const maxDuration = 300; // seconds (Vercel hobby allows 60; pro 300)
+export const maxDuration = 300;
 
 const schema = z.object({
   competitor_id: z.string().uuid(),
   max_items: z.number().int().min(1).max(1000).optional(),
-  date_from: z.string().optional(),
-  date_to: z.string().optional(),
-  active_status: z.enum(["ACTIVE", "ALL"]).optional(),
+  country_code: z.string().length(2).optional(),
 });
 
 export async function POST(req: Request) {
@@ -21,7 +17,8 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
@@ -42,31 +39,30 @@ export async function POST(req: Request) {
   // Validate ownership via RLS read
   const { data: competitor, error: compErr } = await supabase
     .from("mait_competitors")
-    .select("id, workspace_id, page_id, page_url, page_name, country")
+    .select(
+      "id, workspace_id, page_name, google_advertiser_id, google_domain, country"
+    )
     .eq("id", parsed.data.competitor_id)
     .single();
 
   if (compErr || !competitor) {
-    return NextResponse.json({ error: "Competitor not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Competitor not found" },
+      { status: 404 }
+    );
+  }
+
+  if (!competitor.google_advertiser_id && !competitor.google_domain) {
+    return NextResponse.json(
+      {
+        error:
+          "Nessun Google Advertiser ID o dominio configurato per questo competitor.",
+      },
+      { status: 400 }
+    );
   }
 
   const admin = createAdminClient();
-
-  // If page_id was never resolved, try again now
-  let pageId = competitor.page_id;
-  if (!pageId) {
-    const resolved = await resolvePageId(
-      competitor.page_url,
-      competitor.page_name ?? undefined
-    );
-    if (resolved) {
-      pageId = resolved;
-      await admin
-        .from("mait_competitors")
-        .update({ page_id: resolved })
-        .eq("id", competitor.id);
-    }
-  }
 
   // Create job row
   const { data: job, error: jobErr } = await admin
@@ -80,26 +76,34 @@ export async function POST(req: Request) {
     .single();
 
   if (jobErr || !job) {
-    return NextResponse.json({ error: jobErr?.message ?? "Job error" }, { status: 500 });
+    return NextResponse.json(
+      { error: jobErr?.message ?? "Job error" },
+      { status: 500 }
+    );
   }
 
   try {
-    const result = await scrapeMetaAds({
-      pageId: pageId ?? undefined,
-      pageName: competitor.page_name ?? undefined,
-      pageUrl: competitor.page_url,
-      country: competitor.country ?? undefined,
-      maxItems: parsed.data.max_items ?? 200,
-      active: parsed.data.active_status !== "ALL",
-      dateFrom: parsed.data.date_from,
-      dateTo: parsed.data.date_to,
+    // Determine country code: use explicit param, or first country from competitor
+    const countryCode =
+      parsed.data.country_code ??
+      competitor.country?.split(",")[0]?.trim() ??
+      undefined;
+
+    const result = await scrapeGoogleAds({
+      advertiserId: competitor.google_advertiser_id ?? undefined,
+      advertiserDomain: competitor.google_domain ?? undefined,
+      advertiserName: !competitor.google_advertiser_id && !competitor.google_domain
+        ? competitor.page_name ?? undefined
+        : undefined,
+      countryCode,
+      maxResults: parsed.data.max_items ?? 200,
     });
 
-    // Upsert ads
+    // Upsert ads with source = 'google'
     if (result.records.length > 0) {
       const rows = result.records.map((r) => ({
         ...r,
-        source: "meta" as const,
+        source: "google" as const,
         workspace_id: competitor.workspace_id,
         competitor_id: competitor.id,
       }));
@@ -131,7 +135,7 @@ export async function POST(req: Request) {
         workspace_id: competitor.workspace_id,
         competitor_id: competitor.id,
         type: "new_ads",
-        message: `${result.records.length} ads sincronizzate.`,
+        message: `${result.records.length} Google Ads sincronizzate.`,
       });
 
       // Mark any cached comparisons that include this competitor as stale
@@ -139,38 +143,13 @@ export async function POST(req: Request) {
         .from("mait_comparisons")
         .update({ stale: true, updated_at: new Date().toISOString() })
         .contains("competitor_ids", [competitor.id]);
-
-      // Send email notification to workspace members
-      try {
-        const { data: members } = await admin
-          .from("mait_users")
-          .select("email")
-          .eq("workspace_id", competitor.workspace_id);
-        const emails = (members ?? []).map((m) => m.email).filter(Boolean);
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-        await sendNewAdsNotification(emails, {
-          competitorName: competitor.page_name ?? "Competitor",
-          adsCount: result.records.length,
-          ads: result.records.slice(0, 5).map((r) => ({
-            headline: r.headline,
-            adText: r.ad_text,
-            imageUrl: r.image_url,
-            adLibraryUrl: r.ad_archive_id
-              ? `https://www.facebook.com/ads/library/?id=${r.ad_archive_id}`
-              : appUrl,
-          })),
-          dashboardUrl: `${appUrl}/competitors/${competitor.id}`,
-        });
-      } catch {
-        // Email failure should not block the scan response
-      }
     }
 
     return NextResponse.json({
       ok: true,
       job_id: job.id,
       records: result.records.length,
-      debug: { startUrl: result.startUrl, pageId: pageId ?? null },
+      debug: { startUrl: result.startUrl },
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Scrape failed";

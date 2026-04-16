@@ -11,6 +11,8 @@ const schema = z.object({
   category: z.string().max(80).nullable().optional(),
   client_id: z.string().uuid().nullable().optional(),
   instagram_username: z.string().max(60).nullable().optional(),
+  google_advertiser_id: z.string().max(80).nullable().optional(),
+  google_domain: z.string().max(200).nullable().optional(),
 });
 
 export async function POST(req: Request) {
@@ -59,6 +61,8 @@ export async function POST(req: Request) {
       category: parsed.data.category ?? null,
       client_id: parsed.data.client_id ?? null,
       instagram_username: parsed.data.instagram_username ?? null,
+      google_advertiser_id: parsed.data.google_advertiser_id ?? null,
+      google_domain: parsed.data.google_domain ?? null,
     })
     .select("id")
     .single();

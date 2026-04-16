@@ -96,6 +96,8 @@ export function EditCompetitorForm({
   );
   const [category, setCategory] = useState(competitor.category ?? "");
   const [instagramUsername, setInstagramUsername] = useState(competitor.instagram_username ?? "");
+  const [googleAdvertiserId, setGoogleAdvertiserId] = useState(competitor.google_advertiser_id ?? "");
+  const [googleDomain, setGoogleDomain] = useState(competitor.google_domain ?? "");
   const [clientId, setClientId] = useState(competitor.client_id ?? "");
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [newClientName, setNewClientName] = useState("");
@@ -141,6 +143,8 @@ export function EditCompetitorForm({
         category: category || null,
         client_id: clientId || null,
         instagram_username: instagramUsername.replace(/^@/, "").trim() || null,
+        google_advertiser_id: googleAdvertiserId.trim() || null,
+        google_domain: googleDomain.trim() || null,
       }),
     });
     setLoading(false);
@@ -202,6 +206,34 @@ export function EditCompetitorForm({
                 placeholder={t("newCompetitor", "instagramPlaceholder")}
               />
             </div>
+
+            {/* Google Ads fields */}
+            <div className="pt-2 border-t border-border/50">
+              <p className="text-xs text-muted-foreground mb-3">
+                {t("newCompetitor", "googleAdsSection")}
+              </p>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="googleDomain">{t("newCompetitor", "googleDomainLabel")}</Label>
+                  <Input
+                    id="googleDomain"
+                    value={googleDomain}
+                    onChange={(e) => setGoogleDomain(e.target.value)}
+                    placeholder="nike.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="googleAdvertiserId">{t("newCompetitor", "googleAdvertiserIdLabel")}</Label>
+                  <Input
+                    id="googleAdvertiserId"
+                    value={googleAdvertiserId}
+                    onChange={(e) => setGoogleAdvertiserId(e.target.value)}
+                    placeholder="AR15497895950085120"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="category">{t("newCompetitor", "categoryLabel")}</Label>
               <select

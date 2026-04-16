@@ -27,6 +27,8 @@ export interface MaitClient {
   created_at: string;
 }
 
+export type AdSource = "meta" | "google";
+
 export interface MaitCompetitor {
   id: string;
   workspace_id: string;
@@ -37,6 +39,8 @@ export interface MaitCompetitor {
   category: string | null;
   country: string | null;
   instagram_username: string | null;
+  google_advertiser_id: string | null;
+  google_domain: string | null;
   monitor_config: Record<string, unknown>;
   last_scraped_at: string | null;
   created_at: string;
@@ -59,6 +63,7 @@ export interface MaitAdExternal {
   start_date: string | null;
   end_date: string | null;
   status: string | null;
+  source: AdSource;
   raw_data: Record<string, unknown> | null;
   created_at: string;
 }
