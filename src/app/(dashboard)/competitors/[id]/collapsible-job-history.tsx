@@ -31,6 +31,8 @@ export function CollapsibleJobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
         className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors text-xs text-muted-foreground"
       >
         <History className="size-3.5 shrink-0" />
+        <span className="font-medium text-foreground">{t("jobHistory", "title")}</span>
+        <span className="text-border">—</span>
         <span>
           {jobs.length} scan · {succeeded} {t("jobHistory", "succeededLabel")} · {totalAds} ads
           {latest?.started_at && (

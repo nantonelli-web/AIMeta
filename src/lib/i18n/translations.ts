@@ -157,6 +157,7 @@ const translations = {
     adsCount: { it: "ads (max 120 pi\u00F9 recenti)", en: "ads (max 120 most recent)" },
     likes: { it: "likes", en: "likes" },
     pageCategories: { it: "Categorie pagina", en: "Page categories" },
+    selectedCountries: { it: "Paesi selezionati:", en: "Selected countries:" },
   },
 
   // ─── New Brand ─────────────────────────────────────────────
