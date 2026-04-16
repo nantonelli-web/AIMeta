@@ -157,25 +157,6 @@ export default async function CompetitorDetailPage({
       {/* ─── Scan history (collapsible) ──────────────────────── */}
       {jobsList.length > 0 && <CollapsibleJobHistory jobs={jobsList} />}
 
-      {/* ─── AI Tag section ──────────────────────────────────── */}
-      {adsList.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("tagButton", "aiTagTitle")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {t("tagButton", "aiTagDescription")}
-                </p>
-              </div>
-              <div className="shrink-0">
-                <TagButton competitorId={c.id} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* ─── Ads grid ────────────────────────────────────────── */}
       {adsList.length === 0 ? (
         <Card>
@@ -185,17 +166,20 @@ export default async function CompetitorDetailPage({
         </Card>
       ) : (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               {adsList.length} {t("competitors", "adsCount")}
             </p>
-            <a
-              href={`/api/export/ads.csv?competitor_id=${c.id}`}
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Download className="size-3" />
-              {t("competitors", "exportCsv")}
-            </a>
+            <div className="flex items-center gap-3">
+              <TagButton competitorId={c.id} />
+              <a
+                href={`/api/export/ads.csv?competitor_id=${c.id}`}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Download className="size-3" />
+                {t("competitors", "exportCsv")}
+              </a>
+            </div>
           </div>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {adsList.map((ad) => (
