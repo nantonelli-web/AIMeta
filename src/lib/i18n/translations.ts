@@ -681,6 +681,10 @@ const translations = {
       it: "Analizza automaticamente ogni ad con AI per classificare settore, tono, formato creativo, obiettivo e stagionalit\u00E0.",
       en: "Automatically analyze each ad with AI to classify sector, tone, creative format, objective, and seasonality.",
     },
+    aiTagShort: {
+      it: "Classifica settore, tono, formato e obiettivo con AI",
+      en: "Classify sector, tone, format and objective with AI",
+    },
     tagging: { it: "Tagging\u2026", en: "Tagging\u2026" },
     error: { it: "Errore", en: "Error" },
   },

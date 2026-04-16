@@ -79,22 +79,36 @@ export function TagButton({ competitorId }: { competitorId?: string }) {
   const allDone = untaggedCount === 0;
 
   return (
-    <Button
-      onClick={onClick}
-      disabled={loading || allDone}
-      variant={allDone ? "outline" : "default"}
-      className="gap-2"
-    >
-      <Sparkles
-        className={loading ? "size-4 animate-pulse" : "size-4"}
-      />
-      {loading
-        ? t("tagButton", "tagging")
-        : allDone
-          ? t("tagButton", "allTaggedBtn")
-          : untaggedCount != null
-            ? `${t("tagButton", "aiTag")} · ${untaggedCount} ads`
+    <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+      <Sparkles className="size-4 text-muted-foreground shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-foreground">
+          {allDone
+            ? t("tagButton", "allTaggedBtn")
+            : untaggedCount != null
+              ? `${untaggedCount} ${t("tagButton", "toTag")}`
+              : t("tagButton", "aiTagTitle")}
+        </p>
+        <p className="text-[10px] text-muted-foreground leading-tight">
+          {t("tagButton", "aiTagShort")}
+        </p>
+      </div>
+      {!allDone && (
+        <Button
+          onClick={onClick}
+          disabled={loading}
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5 text-xs"
+        >
+          {loading
+            ? t("tagButton", "tagging")
             : t("tagButton", "aiTag")}
-    </Button>
+        </Button>
+      )}
+      {allDone && (
+        <span className="text-[10px] text-green-400 shrink-0">✓</span>
+      )}
+    </div>
   );
 }
