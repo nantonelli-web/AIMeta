@@ -117,6 +117,7 @@ export async function POST(req: Request) {
     });
 
     // Upsert posts
+    console.log(`[Instagram route] Scrape done: ${result.records.length} records, runId=${result.runId}`);
     if (result.records.length > 0) {
       const rows = result.records.map((r) => ({
         ...r,
@@ -125,10 +126,15 @@ export async function POST(req: Request) {
         platform: "instagram" as const,
       }));
 
+      console.log(`[Instagram route] Upserting ${rows.length} posts...`);
       const { error: upErr } = await admin
         .from("mait_organic_posts")
         .upsert(rows, { onConflict: "workspace_id,platform,post_id" });
-      if (upErr) throw upErr;
+      if (upErr) {
+        console.error(`[Instagram route] Upsert error:`, upErr);
+        throw upErr;
+      }
+      console.log(`[Instagram route] Upsert OK`);
     }
 
     // Update job as succeeded

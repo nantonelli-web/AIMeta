@@ -126,16 +126,33 @@ export async function scrapeInstagramPosts(
 
   console.log(`[Instagram] Run succeeded, fetching dataset...`);
 
-  const dataset = await apifyFetch(
-    `/datasets/${datasetId}/items?format=json&limit=1000`
-  );
+  let dataset;
+  try {
+    dataset = await apifyFetch(
+      `/datasets/${datasetId}/items?format=json&limit=1000`
+    );
+  } catch (fetchErr) {
+    console.error(`[Instagram] Dataset fetch failed:`, fetchErr);
+    throw fetchErr;
+  }
+
   const items: RawInstagramPost[] = Array.isArray(dataset)
     ? dataset
     : dataset.items ?? [];
 
-  const records = items
-    .map(normalize)
-    .filter((p): p is NormalizedPost => !!p.post_id);
+  console.log(`[Instagram] Dataset: ${items.length} items. Sample keys: ${items[0] ? Object.keys(items[0]).join(", ") : "empty"}`);
+
+  let records: NormalizedPost[];
+  try {
+    records = items
+      .map(normalize)
+      .filter((p): p is NormalizedPost => !!p.post_id);
+  } catch (normErr) {
+    console.error(`[Instagram] Normalize failed:`, normErr);
+    throw normErr;
+  }
+
+  console.log(`[Instagram] Normalized: ${records.length} posts`);
 
   let costCu = 0;
   try {
