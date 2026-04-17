@@ -172,7 +172,34 @@ export function CompareView({
           }
         }
 
-        // 1. Generate technical data (skip cache for non-meta channels)
+        // 1. Try fetching from cache
+        const getRes = await fetch(
+          `/api/comparisons?ids=${ids.sort().join(",")}&locale=${locale}`
+        );
+
+        if (getRes.ok) {
+          const data = await getRes.json();
+          setCache({
+            technical_data: data.technical_data,
+            copy_analysis: data.copy_analysis,
+            visual_analysis: data.visual_analysis,
+            created_at: data.created_at,
+            stale: data.stale,
+          });
+          if (data.technical_data) {
+            setStats(data.technical_data);
+          }
+          if (data.copy_analysis || data.visual_analysis) {
+            setAiResult({
+              copywriterReport: data.copy_analysis ?? null,
+              creativeDirectorReport: data.visual_analysis ?? null,
+            });
+          }
+          setLoading(false);
+          return;
+        }
+
+        // 2. Not cached — generate technical data
         const postRes = await fetch("/api/comparisons", {
           method: "POST",
           headers: { "content-type": "application/json" },
