@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeInstagramPosts } from "@/lib/instagram/service";
+import { storeAdImages } from "@/lib/media/store-ad-images";
 
 export const maxDuration = 300; // seconds
 
@@ -116,11 +117,21 @@ export async function POST(req: Request) {
       maxPosts: parsed.data.max_posts ?? 30,
     });
 
-    // Upsert posts
+    // Download images to permanent storage, then upsert
     console.log(`[Instagram route] Scrape done: ${result.records.length} records, runId=${result.runId}`);
     if (result.records.length > 0) {
+      // Map to storeAdImages format (expects ad_archive_id + image_url)
+      const mediaRows = result.records.map((r) => ({
+        ad_archive_id: r.post_id,
+        image_url: r.display_url,
+      }));
+      await storeAdImages(admin, competitor.workspace_id, mediaRows, "instagram");
+
+      // Apply stored URLs back to records
+      const storedUrls = new Map(mediaRows.map((m) => [m.ad_archive_id, m.image_url]));
       const rows = result.records.map((r) => ({
         ...r,
+        display_url: storedUrls.get(r.post_id) ?? r.display_url,
         workspace_id: competitor.workspace_id,
         competitor_id: competitor.id,
         platform: "instagram" as const,
