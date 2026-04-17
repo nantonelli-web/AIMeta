@@ -85,7 +85,7 @@ export async function storeAdImages(
   admin: SupabaseClient,
   workspaceId: string,
   rows: AdRow[],
-  source: "meta" | "google" = "meta"
+  source: "meta" | "google" | "instagram" = "meta"
 ): Promise<{ stored: number; skipped: number; failed: number }> {
   await ensureBucket(admin);
 
