@@ -83,11 +83,12 @@ export function TagButton({ competitorId }: { competitorId?: string }) {
       <Sparkles className="size-4 text-muted-foreground shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-xs text-foreground">
+          <span className="font-medium">{t("tagButton", "aiTag")}</span>
           {allDone
-            ? t("tagButton", "allTaggedBtn")
+            ? ` — ${t("tagButton", "allTaggedBtn")}`
             : untaggedCount != null
-              ? `${untaggedCount} ${t("tagButton", "toTag")}`
-              : t("tagButton", "aiTagTitle")}
+              ? ` — ${untaggedCount} ${t("tagButton", "toTag")}`
+              : ""}
         </p>
         <p className="text-[10px] text-muted-foreground leading-tight">
           {t("tagButton", "aiTagShort")}
@@ -99,11 +100,9 @@ export function TagButton({ competitorId }: { competitorId?: string }) {
           disabled={loading}
           variant="outline"
           size="sm"
-          className="shrink-0 gap-1.5 text-xs"
+          className="shrink-0 text-xs"
         >
-          {loading
-            ? t("tagButton", "tagging")
-            : t("tagButton", "aiTag")}
+          {loading ? t("tagButton", "tagging") : "Start"}
         </Button>
       )}
       {allDone && (
