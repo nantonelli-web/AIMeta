@@ -94,10 +94,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Parse all country codes from competitor config
-    const countryCodes = competitor.country
-      ? competitor.country.split(",").map((c: string) => c.trim()).filter(Boolean)
-      : undefined;
+    // Use first country code for Apify search
+    const countryCode = competitor.country?.split(",")[0]?.trim() || undefined;
 
     const result = await scrapeGoogleAds({
       advertiserId: competitor.google_advertiser_id ?? undefined,
@@ -105,7 +103,9 @@ export async function POST(req: Request) {
       advertiserName: !competitor.google_advertiser_id && !competitor.google_domain
         ? competitor.page_name ?? undefined
         : undefined,
-      countryCodes,
+      countryCode,
+      dateFrom: parsed.data.date_from,
+      dateTo: parsed.data.date_to,
       maxResults: parsed.data.max_items ?? 200,
     });
 

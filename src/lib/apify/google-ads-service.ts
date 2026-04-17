@@ -67,8 +67,11 @@ export interface GoogleScrapeOptions {
   advertiserDomain?: string;
   advertiserName?: string;
   advertiserId?: string;
-  /** One or more ISO country codes. Runs one Apify call per country. */
-  countryCodes?: string[];
+  /** Primary country code for the Apify search (first selected country). */
+  countryCode?: string;
+  /** Filter results by date range (applied client-side after fetch). */
+  dateFrom?: string;
+  dateTo?: string;
   maxResults?: number;
 }
 
@@ -175,7 +178,7 @@ export async function scrapeGoogleAds(
 ): Promise<ScrapeResult> {
   const maxResults = opts.maxResults ?? 200;
 
-  // Build search input (shared across all country runs)
+  // Build search input — single Apify run (no per-country splitting)
   const searchInput: Record<string, unknown> = {};
 
   if (opts.advertiserId) {
@@ -193,40 +196,21 @@ export async function scrapeGoogleAds(
     );
   }
 
-  const countries = opts.countryCodes?.filter(Boolean) ?? [];
+  // Single run with primary country (or no country filter)
+  const run = await runForCountry(searchInput, opts.countryCode, maxResults);
 
-  // Run countries SEQUENTIALLY with a global time budget.
-  // Vercel has a 300s limit — we reserve 60s for image downloads + upsert.
-  const globalDeadline = Date.now() + 4 * 60 * 1000; // 4 min budget
-  const seen = new Set<string>();
-  const records: NormalizedAd[] = [];
-  let totalCost = 0;
-  let lastRunId = "";
+  let records = run.records;
 
-  const countryList = countries.length > 0 ? countries : [undefined];
-
-  for (const cc of countryList) {
-    // Stop if we're running out of time
-    if (Date.now() > globalDeadline) {
-      console.log(`[Google Ads] Time budget exhausted, skipping remaining countries`);
-      break;
-    }
-    try {
-      const run = await runForCountry(searchInput, cc, maxResults);
-      lastRunId = run.runId;
-      totalCost += run.costCu;
-      for (const r of run.records) {
-        if (!seen.has(r.ad_archive_id)) {
-          seen.add(r.ad_archive_id);
-          records.push(r);
-        }
-      }
-    } catch (e) {
-      // Log and continue with next country instead of failing everything
-      console.error(`[Google Ads] Country ${cc ?? "ALL"} failed:`, e);
-    }
+  // Client-side date filter (Google Transparency actor doesn't support date range)
+  if (opts.dateFrom || opts.dateTo) {
+    const from = opts.dateFrom ? new Date(opts.dateFrom).getTime() : 0;
+    const to = opts.dateTo ? new Date(opts.dateTo).getTime() + 86_400_000 : Infinity;
+    records = records.filter((r) => {
+      const start = r.start_date ? new Date(r.start_date).getTime() : 0;
+      return start >= from && start <= to;
+    });
   }
 
   const startUrl = `https://adstransparency.google.com/?domain=${opts.advertiserDomain ?? opts.advertiserName ?? opts.advertiserId}`;
-  return { runId: lastRunId, records, costCu: totalCost, startUrl };
+  return { runId: run.runId, records, costCu: run.costCu, startUrl };
 }
