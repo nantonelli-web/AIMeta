@@ -103,6 +103,10 @@ export function CompareView({
   const [regenerating, setRegenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Missing data state
+  const [missingBrands, setMissingBrands] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+
   const fetchingRef = useRef<string>("");
 
   const { t, locale } = useT();
@@ -138,42 +142,37 @@ export function CompareView({
     async (ids: string[]) => {
       if (ids.length < 2) return;
 
-      const key = [...ids].sort().join(",");
+      const key = [...ids].sort().join(",") + "|" + channel;
       if (fetchingRef.current === key) return;
       fetchingRef.current = key;
 
       setLoading(true);
       setAiError(null);
+      setMissingBrands([]);
 
       try {
-        // 1. Try fetching from cache
-        const getRes = await fetch(
-          `/api/comparisons?ids=${ids.sort().join(",")}&locale=${locale}&channel=${channel}`
-        );
-
-        if (getRes.ok) {
-          const data = await getRes.json();
-          setCache({
-            technical_data: data.technical_data,
-            copy_analysis: data.copy_analysis,
-            visual_analysis: data.visual_analysis,
-            created_at: data.created_at,
-            stale: data.stale,
-          });
-          if (data.technical_data) {
-            setStats(data.technical_data);
+        // 0. Check if brands have data for this channel
+        if (channel !== "all") {
+          const checkRes = await fetch(
+            `/api/competitors/check-channel?ids=${ids.join(",")}&channel=${channel}`
+          );
+          if (checkRes.ok) {
+            const { results } = await checkRes.json();
+            const missing = (results as { id: string; count: number }[])
+              .filter((r) => r.count === 0)
+              .map((r) => {
+                const comp = competitors.find((c) => c.id === r.id);
+                return comp?.page_name ?? r.id;
+              });
+            if (missing.length > 0) {
+              setMissingBrands(missing);
+              setLoading(false);
+              return;
+            }
           }
-          if (data.copy_analysis || data.visual_analysis) {
-            setAiResult({
-              copywriterReport: data.copy_analysis ?? null,
-              creativeDirectorReport: data.visual_analysis ?? null,
-            });
-          }
-          setLoading(false);
-          return;
         }
 
-        // 2. Not found — generate technical data
+        // 1. Generate technical data (skip cache for non-meta channels)
         const postRes = await fetch("/api/comparisons", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -191,11 +190,17 @@ export function CompareView({
             technical_data: data.technical_data,
             copy_analysis: data.copy_analysis ?? null,
             visual_analysis: data.visual_analysis ?? null,
-            created_at: data.created_at,
+            created_at: data.created_at ?? data.updated_at,
             stale: data.stale ?? false,
           });
           if (data.technical_data) {
             setStats(data.technical_data);
+          }
+          if (data.copy_analysis || data.visual_analysis) {
+            setAiResult({
+              copywriterReport: data.copy_analysis ?? null,
+              creativeDirectorReport: data.visual_analysis ?? null,
+            });
           }
         }
       } catch {
@@ -204,7 +209,7 @@ export function CompareView({
         setLoading(false);
       }
     },
-    [locale, channel]
+    [locale, channel, competitors]
   );
 
   useEffect(() => {
@@ -347,6 +352,44 @@ export function CompareView({
     }
   }
 
+  // Scan missing brands for the selected channel
+  async function handleScanMissing() {
+    setScanning(true);
+    const idsToScan = [...selected].filter((id) => {
+      const comp = competitors.find((c) => c.id === id);
+      return comp && missingBrands.includes(comp.page_name);
+    });
+
+    for (const id of idsToScan) {
+      try {
+        const endpoint =
+          channel === "google"
+            ? "/api/apify/scan-google"
+            : channel === "instagram"
+              ? "/api/instagram/scan"
+              : "/api/apify/scan";
+
+        const body =
+          channel === "instagram"
+            ? { competitor_id: id, max_posts: 30 }
+            : { competitor_id: id, max_items: 200 };
+
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        // Continue with next brand
+      }
+    }
+
+    setScanning(false);
+    setMissingBrands([]);
+    fetchingRef.current = "";
+    fetchComparison(selectedIds);
+  }
+
   const hasResults = selected.size >= 2;
 
   return (
@@ -411,7 +454,41 @@ export function CompareView({
         </CardContent>
       </Card>
 
-      {!hasResults && (
+      {/* Scanning overlay */}
+      {scanning && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <Card className="w-80">
+            <CardContent className="py-8 text-center space-y-4">
+              <Loader2 className="size-8 animate-spin text-gold mx-auto" />
+              <p className="text-sm font-medium">{t("compare", "scanningBrands")}</p>
+              <p className="text-xs text-muted-foreground">{t("compare", "scanningWait")}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Missing data prompt */}
+      {missingBrands.length > 0 && !scanning && (
+        <Card className="border-amber-500/30">
+          <CardContent className="py-6 text-center space-y-4">
+            <AlertTriangle className="size-8 text-amber-400 mx-auto" />
+            <div>
+              <p className="text-sm font-medium">
+                {t("compare", "noDataForChannel")}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {missingBrands.join(", ")} — {channel === "google" ? "Google Ads" : channel === "instagram" ? "Instagram" : "Meta Ads"}
+              </p>
+            </div>
+            <Button onClick={handleScanMissing} className="gap-2">
+              <RefreshCw className="size-4" />
+              {t("compare", "scanNowAndCompare")}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!hasResults && missingBrands.length === 0 && (
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground text-center py-4">
             {t("compare", "selectAtLeast2")}

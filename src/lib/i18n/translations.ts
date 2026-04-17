@@ -406,6 +406,22 @@ const translations = {
     savedComparisons: { it: "Confronti salvati", en: "Saved comparisons" },
     channel: { it: "Canale", en: "Channel" },
     allChannels: { it: "Tutti i canali", en: "All channels" },
+    noDataForChannel: {
+      it: "La scansione per questo canale non \u00E8 stata realizzata per alcuni brand.",
+      en: "The scan for this channel has not been done for some brands.",
+    },
+    scanNowAndCompare: {
+      it: "Scansiona e confronta",
+      en: "Scan and compare",
+    },
+    scanningBrands: {
+      it: "Scansione in corso\u2026",
+      en: "Scanning in progress\u2026",
+    },
+    scanningWait: {
+      it: "Attendi il completamento della scansione per procedere con il confronto.",
+      en: "Wait for the scan to complete before proceeding with the comparison.",
+    },
   },
 
   // ─── Library ───────────────────────────────────────────────
