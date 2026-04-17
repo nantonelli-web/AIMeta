@@ -95,8 +95,8 @@ export default async function CompetitorDetailPage({
       </Link>
 
       {/* ─── Header ────────────────────────────────────────── */}
-      <div className="space-y-4">
-        {/* Row 1: Brand identity */}
+      <div className="space-y-3">
+        {/* Row 1: Brand name + URL + likes */}
         <div className="flex items-center gap-4">
           {pageProfilePicture && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -117,33 +117,33 @@ export default async function CompetitorDetailPage({
                 <Pencil className="size-3.5" />
               </Link>
             </div>
-            {/* Quick info: industry + reach + markets */}
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {c.category && <Badge variant="muted">{c.category}</Badge>}
+            <div className="flex items-center gap-2 mt-1">
+              <a
+                href={c.page_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-gold hover:underline"
+              >
+                {c.page_url.replace(/^https?:\/\/(www\.)?/, "")}
+              </a>
               {pageLikeCount != null && pageLikeCount > 0 && (
-                <Badge variant="gold">
-                  {formatCompactNumber(pageLikeCount)} {t("competitors", "likes")}
-                </Badge>
-              )}
-              {c.country && (
-                <span className="text-xs text-muted-foreground">{c.country}</span>
+                <>
+                  <span className="text-sm text-muted-foreground">—</span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatCompactNumber(pageLikeCount)} {t("competitors", "likes")}
+                  </span>
+                </>
               )}
             </div>
           </div>
         </div>
 
-        {/* Row 2: Meta info — subtle, secondary */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-          <a
-            href={c.page_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-gold/70 hover:text-gold hover:underline truncate max-w-xs"
-          >
-            {c.page_url.replace(/^https?:\/\/(www\.)?/, "")}
-          </a>
-          <span className="text-border">·</span>
-          <span>{t("competitors", "lastScan")} {formatDate(c.last_scraped_at)}</span>
+        {/* Row 2: Category + countries + schedule */}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+          {c.category && <Badge variant="muted">{c.category}</Badge>}
+          {c.country && (
+            <span>{t("competitors", "selectedCountries")} {c.country}</span>
+          )}
           <span className="text-border">·</span>
           <FrequencySelector competitorId={c.id} initial={frequency} />
         </div>
