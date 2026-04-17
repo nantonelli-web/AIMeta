@@ -200,6 +200,17 @@ async function runForCountry(
     : dataset.items ?? [];
   debug.rawItemCount = items.length;
 
+  // Log first item shape for debugging (or empty array warning)
+  if (items.length === 0) {
+    console.warn(`[Google Ads] Dataset empty! Fetching run details for diagnosis...`);
+    try {
+      const runDetail = await apifyFetch(`/actor-runs/${runId}`);
+      console.warn(`[Google Ads] Run stats:`, JSON.stringify(runDetail.data?.stats ?? runDetail.stats ?? {}));
+    } catch { /* ignore */ }
+  } else {
+    console.log(`[Google Ads] Sample item keys:`, Object.keys(items[0]));
+  }
+
   const records = items
     .map(normalize)
     .filter((a): a is NormalizedAd => !!a.ad_archive_id);
@@ -244,8 +255,10 @@ export async function scrapeGoogleAds(
     );
   }
 
-  // Single run with primary country (or no country filter)
-  const run = await runForCountry(searchInput, opts.countryCode, maxResults);
+  // Single run WITHOUT country filter — search by domain/name is global.
+  // Country filtering in the Transparency Center API can exclude results
+  // shown under broader regions (e.g. "Europe" instead of "IT").
+  const run = await runForCountry(searchInput, undefined, maxResults);
 
   let records = run.records;
   const beforeFilter = records.length;
