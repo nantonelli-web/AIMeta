@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Eye, Sparkles, Play, ImageIcon, LayoutGrid, Bot } from "lucide-react";
+import { ExternalLink, Eye, Sparkles, Play, ImageIcon, LayoutGrid, Bot, Type, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SaveToCollection } from "@/components/ads/save-to-collection";
 import { VideoPreview } from "@/components/ads/video-preview";
@@ -22,28 +22,54 @@ export async function AdCard({
     | undefined;
 
   const raw = ad.raw_data as Record<string, unknown> | null;
+  const source = (ad as unknown as Record<string, unknown>).source as string | undefined;
+  const isGoogle = source === "google";
   const snapshot = raw?.snapshot as Record<string, unknown> | null;
-  const adLibraryUrl =
-    (raw?.adLibraryURL as string) ??
-    (ad.ad_archive_id
-      ? `https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`
-      : null);
-  const pageName = (raw?.pageName as string) ?? null;
-  const snapshotUrl = (raw?.adSnapshotUrl as string) ?? ad.image_url;
+
+  // Ad library URL — Meta vs Google
+  const adLibraryUrl = isGoogle
+    ? (raw?.advertiserId
+        ? `https://adstransparency.google.com/advertiser/${raw.advertiserId}`
+        : null)
+    : (raw?.adLibraryURL as string) ??
+      (ad.ad_archive_id
+        ? `https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`
+        : null);
+
+  const pageName = isGoogle
+    ? (raw?.advertiserName as string) ?? null
+    : (raw?.pageName as string) ?? null;
+
+  // Image URL — skip JS-based Google preview URLs
+  const rawImageUrl = ad.image_url;
+  const isJsPreview = rawImageUrl?.includes("/ads/preview/content.js");
+  const snapshotUrl = isJsPreview
+    ? null
+    : isGoogle
+      ? rawImageUrl
+      : (raw?.adSnapshotUrl as string) ?? rawImageUrl;
   const isSnapshotHtml = snapshotUrl?.includes("/render_ad/");
+
   const detailHref =
     competitorId ?? ad.competitor_id
       ? `/competitors/${competitorId ?? ad.competitor_id}/ads/${ad.id}`
       : null;
 
-  // Extract displayFormat from raw_data
-  const displayFormat = (snapshot?.displayFormat as string) ?? null;
+  // Extract displayFormat — Meta uses snapshot.displayFormat, Google uses raw.adFormat
+  const displayFormat = isGoogle
+    ? (raw?.adFormat as string) ?? null
+    : (snapshot?.displayFormat as string) ?? null;
   const isAiGenerated = (raw?.containsDigitalCreatedMedia as boolean) ?? false;
   const pageProfilePicture = (snapshot?.pageProfilePictureUrl as string) ?? null;
 
   // Determine the format badge label and icon
-  const formatLabel =
-    displayFormat === "DPA" || displayFormat === "DCO"
+  const googleFormat = isGoogle ? (displayFormat ?? "").toLowerCase() : "";
+  const formatLabel = isGoogle
+    ? (googleFormat.includes("video") ? "VIDEO"
+      : googleFormat.includes("text") ? "TEXT"
+      : googleFormat.includes("shopping") ? "SHOPPING"
+      : "IMAGE")
+    : displayFormat === "DPA" || displayFormat === "DCO"
       ? "CAROUSEL"
       : displayFormat === "VIDEO"
         ? "VIDEO"
@@ -111,7 +137,7 @@ export async function AdCard({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-[10px] text-gold hover:underline mt-auto"
               >
-                <Eye className="size-3" /> {t("adCard", "viewOnMeta")}
+                <Eye className="size-3" /> {isGoogle ? t("adCard", "viewOnGoogle") : t("adCard", "viewOnMeta")}
               </a>
             )}
           </div>
@@ -126,10 +152,14 @@ export async function AdCard({
         </div>
         <div className="absolute bottom-2 left-2 flex items-center gap-1">
           <span className="inline-flex items-center gap-1 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
-            {isCarousel ? (
+            {formatLabel === "CAROUSEL" ? (
               <LayoutGrid className="size-3" />
-            ) : isVideo ? (
+            ) : formatLabel === "VIDEO" ? (
               <Play className="size-3" />
+            ) : formatLabel === "TEXT" ? (
+              <Type className="size-3" />
+            ) : formatLabel === "SHOPPING" ? (
+              <ShoppingBag className="size-3" />
             ) : (
               <ImageIcon className="size-3" />
             )}

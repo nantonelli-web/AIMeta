@@ -621,6 +621,10 @@ const translations = {
       it: "Vedi creativo su Meta Ad Library",
       en: "View creative on Meta Ad Library",
     },
+    viewOnGoogle: {
+      it: "Vedi su Google Ads Transparency",
+      en: "View on Google Ads Transparency",
+    },
     onPlatforms: { it: "Su:", en: "On:" },
     saveToCollection: { it: "Salva in collezione", en: "Save to collection" },
     notAnalyzed: { it: "Non analizzata dall'AI", en: "Not analyzed by AI" },
