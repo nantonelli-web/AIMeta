@@ -422,6 +422,19 @@ const translations = {
       it: "Attendi il completamento della scansione per procedere con il confronto.",
       en: "Wait for the scan to complete before proceeding with the comparison.",
     },
+    configRequired: {
+      it: "Configurazione mancante per alcuni brand. Completa la configurazione prima di procedere.",
+      en: "Configuration missing for some brands. Complete the setup before proceeding.",
+    },
+    missingGoogleConfig: {
+      it: "Dominio o Advertiser ID Google non configurato",
+      en: "Google domain or Advertiser ID not configured",
+    },
+    missingInstagramConfig: {
+      it: "Username Instagram non configurato",
+      en: "Instagram username not configured",
+    },
+    goToEdit: { it: "Configura", en: "Configure" },
   },
 
   // ─── Library ───────────────────────────────────────────────

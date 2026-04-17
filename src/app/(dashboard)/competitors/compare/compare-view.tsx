@@ -105,6 +105,7 @@ export function CompareView({
 
   // Missing data state
   const [missingBrands, setMissingBrands] = useState<string[]>([]);
+  const [misconfiguredBrands, setMisconfiguredBrands] = useState<{ name: string; id: string; reason: string }[]>([]);
   const [scanning, setScanning] = useState(false);
 
   const fetchingRef = useRef<string>("");
@@ -149,10 +150,38 @@ export function CompareView({
       setLoading(true);
       setAiError(null);
       setMissingBrands([]);
+      setMisconfiguredBrands([]);
 
       try {
-        // 0. Check if brands have data for this channel
+        // 0. Check if brands have data + config for this channel
         if (channel !== "all") {
+          // Check config first
+          const misconfig: { name: string; id: string; reason: string }[] = [];
+          for (const id of ids) {
+            const comp = competitors.find((c) => c.id === id);
+            if (!comp) continue;
+            if (channel === "google" && !comp.google_advertiser_id && !comp.google_domain) {
+              misconfig.push({
+                name: comp.page_name,
+                id: comp.id,
+                reason: t("compare", "missingGoogleConfig"),
+              });
+            }
+            if (channel === "instagram" && !comp.instagram_username) {
+              misconfig.push({
+                name: comp.page_name,
+                id: comp.id,
+                reason: t("compare", "missingInstagramConfig"),
+              });
+            }
+          }
+          if (misconfig.length > 0) {
+            setMisconfiguredBrands(misconfig);
+            setLoading(false);
+            return;
+          }
+
+          // Check data
           const checkRes = await fetch(
             `/api/competitors/check-channel?ids=${ids.join(",")}&channel=${channel}`
           );
@@ -494,8 +523,36 @@ export function CompareView({
         </div>
       )}
 
-      {/* Missing data prompt */}
-      {missingBrands.length > 0 && !scanning && (
+      {/* Misconfigured brands — need setup before scanning */}
+      {misconfiguredBrands.length > 0 && (
+        <Card className="border-red-400/30">
+          <CardContent className="py-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="size-5 text-red-400 shrink-0 mt-0.5" />
+              <div className="space-y-3">
+                <p className="text-sm font-medium">{t("compare", "configRequired")}</p>
+                {misconfiguredBrands.map((b) => (
+                  <div key={b.id} className="flex items-center gap-3">
+                    <div className="text-xs">
+                      <span className="font-medium text-foreground">{b.name}</span>
+                      <span className="text-muted-foreground"> — {b.reason}</span>
+                    </div>
+                    <a
+                      href={`/competitors/${b.id}/edit`}
+                      className="text-xs text-gold hover:underline shrink-0"
+                    >
+                      {t("compare", "goToEdit")}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Missing data prompt — config OK but no scan done */}
+      {missingBrands.length > 0 && !scanning && misconfiguredBrands.length === 0 && (
         <Card className="border-amber-500/30">
           <CardContent className="py-6 text-center space-y-4">
             <AlertTriangle className="size-8 text-amber-400 mx-auto" />
