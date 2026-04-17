@@ -16,6 +16,7 @@ export const maxDuration = 300;
 const postSchema = z.object({
   competitor_ids: z.array(z.string().uuid()).min(2).max(3),
   locale: z.enum(["it", "en"]).optional(),
+  channel: z.enum(["all", "meta", "google", "instagram"]).optional().default("meta"),
   sections: z
     .array(z.enum(["technical", "copy", "visual"]))
     .min(1)
@@ -337,7 +338,10 @@ export async function POST(req: Request) {
 
   // Technical data
   if (sections.includes("technical")) {
-    const stats = await computeTechnicalStats(ids, admin);
+    const source = parsed.data.channel === "all" ? undefined
+      : parsed.data.channel === "instagram" ? undefined
+      : parsed.data.channel as "meta" | "google";
+    const stats = await computeTechnicalStats(ids, admin, source);
     payload.technical_data = stats;
   }
 

@@ -404,6 +404,8 @@ const translations = {
     generatingAi: { it: "Analisi AI in corso...", en: "AI analysis in progress..." },
     staleShort: { it: "da aggiornare", en: "outdated" },
     savedComparisons: { it: "Confronti salvati", en: "Saved comparisons" },
+    channel: { it: "Canale", en: "Channel" },
+    allChannels: { it: "Tutti i canali", en: "All channels" },
   },
 
   // ─── Library ───────────────────────────────────────────────
