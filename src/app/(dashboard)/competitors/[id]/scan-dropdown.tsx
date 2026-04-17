@@ -215,10 +215,6 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
             />
           </div>
           <div className="flex items-center gap-2 pb-0.5">
-            <span className="text-[10px] text-muted-foreground">
-              {dateFrom || dateTo ? rangeLabel : `${t("scan", "last30days")}`}
-              {rangeDays > 0 && ` (${rangeDays}g)`}
-            </span>
             {(dateFrom || dateTo) && (
               <button
                 onClick={() => { setDateFrom(""); setDateTo(""); }}
@@ -243,12 +239,13 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
               onClick={() => scanMeta("ACTIVE")}
               disabled={isLoading || rangeExceeded}
               variant="outline"
-              className="rounded-r-none gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+              size="lg"
+              className="rounded-r-none gap-2.5 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
             >
               {loading === "meta" ? (
-                <RefreshCw className="size-4 animate-spin" />
+                <RefreshCw className="size-5 animate-spin" />
               ) : (
-                <MetaLogo className="size-4" />
+                <MetaLogo className="size-5" />
               )}
               {loading === "meta" ? t("scan", "scanning") : "Meta Ads"}
             </Button>
@@ -256,9 +253,10 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
               onClick={() => setShowMetaMenu(!showMetaMenu)}
               disabled={isLoading || rangeExceeded}
               variant="outline"
-              className="rounded-l-none border-l-0 px-1.5 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+              size="lg"
+              className="rounded-l-none border-l-0 px-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
             >
-              <ChevronDown className="size-3.5" />
+              <ChevronDown className="size-4" />
             </Button>
           </div>
 
@@ -286,12 +284,13 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
             onClick={scanGoogle}
             disabled={isLoading || rangeExceeded}
             variant="outline"
-            className="gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+            size="lg"
+            className="gap-2.5 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
           >
             {loading === "google" ? (
-              <RefreshCw className="size-4 animate-spin" />
+              <RefreshCw className="size-5 animate-spin" />
             ) : (
-              <GoogleLogo className="size-4" />
+              <GoogleLogo className="size-5" />
             )}
             {loading === "google" ? t("scan", "scanningGoogle") : "Google Ads"}
           </Button>
@@ -302,12 +301,13 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
           onClick={scanInstagram}
           disabled={isLoading}
           variant="outline"
-          className="gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+          size="lg"
+          className="gap-2.5 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
         >
           {loading === "instagram" ? (
-            <RefreshCw className="size-4 animate-spin" />
+            <RefreshCw className="size-5 animate-spin" />
           ) : (
-            <InstagramIcon className="size-4" />
+            <InstagramIcon className="size-5" />
           )}
           {loading === "instagram" ? t("organic", "scanning") : "Instagram"}
         </Button>

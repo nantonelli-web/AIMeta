@@ -28,7 +28,8 @@ export function CollapsibleJobHistory({ jobs }: { jobs: MaitScrapeJob[] }) {
       {/* Compact summary bar */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-gold/40 hover:border-gold/60 transition-colors text-xs text-muted-foreground"
+        className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border transition-colors text-xs text-muted-foreground"
+        style={{ borderColor: "rgba(212, 168, 67, 0.4)" }}
       >
         <History className="size-3.5 shrink-0" />
         <span className="font-medium text-foreground">{t("jobHistory", "title")}</span>
