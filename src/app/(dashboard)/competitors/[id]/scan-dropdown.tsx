@@ -3,11 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  RefreshCw,
-  ChevronDown,
-  CalendarRange,
-} from "lucide-react";
+import { RefreshCw, ChevronDown, CalendarRange } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +46,8 @@ function formatRange(from: string, to: string): string {
   return `${f.toLocaleDateString("it-IT", opts)} — ${t.toLocaleDateString("it-IT", opts)}`;
 }
 
+const MAX_RANGE_DAYS = 90;
+
 /* ─── Component ──────────────────────────────────────────── */
 
 interface Props {
@@ -63,37 +61,47 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
   const router = useRouter();
   const { t } = useT();
   const [loading, setLoading] = useState<ScanTarget | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const dateRef = useRef<HTMLDivElement>(null);
 
-  // Shared date range (applies to Meta + Google)
+  // Shared date range
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  // Meta-specific
-  const [adStatus, setAdStatus] = useState<"ACTIVE" | "ALL">("ACTIVE");
 
-  // Close date picker on outside click
+  // Meta status dropdown
+  const [showMetaMenu, setShowMetaMenu] = useState(false);
+  const metaRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dateRef.current && !dateRef.current.contains(e.target as Node)) {
-        setShowDatePicker(false);
+      if (metaRef.current && !metaRef.current.contains(e.target as Node)) {
+        setShowMetaMenu(false);
       }
     }
-    if (showDatePicker) document.addEventListener("mousedown", handleClick);
+    if (showMetaMenu) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [showDatePicker]);
+  }, [showMetaMenu]);
 
   const isLoading = loading !== null;
 
   // Effective range: custom or last 30 days
   const effectiveFrom = dateFrom || daysAgo(30);
   const effectiveTo = dateTo || new Date().toISOString().slice(0, 10);
-  const isCustomRange = !!(dateFrom || dateTo);
   const rangeLabel = formatRange(effectiveFrom, effectiveTo);
 
-  async function scanMeta() {
+  // Date range validation
+  const rangeDays = Math.round(
+    (new Date(effectiveTo).getTime() - new Date(effectiveFrom).getTime()) / 86_400_000
+  );
+  const rangeExceeded = rangeDays > MAX_RANGE_DAYS;
+  const rangeError = rangeExceeded
+    ? `Max ${MAX_RANGE_DAYS} ${t("scan", "days")}`
+    : null;
+
+  // ─── Scan handlers ───
+
+  async function scanMeta(adStatus: "ACTIVE" | "ALL") {
+    setShowMetaMenu(false);
+    if (rangeExceeded) return;
     setLoading("meta");
-    setShowDatePicker(false);
     const toastId = toast.loading(t("scan", "scrapingInProgress"));
     try {
       const res = await fetch("/api/apify/scan", {
@@ -123,8 +131,8 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
   }
 
   async function scanGoogle() {
+    if (rangeExceeded) return;
     setLoading("google");
-    setShowDatePicker(false);
     const toastId = toast.loading(t("scan", "scrapingGoogleInProgress"));
     try {
       const res = await fetch("/api/apify/scan-google", {
@@ -140,7 +148,7 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? "Google Ads scrape failed", { id: toastId });
-        if (json.debug) console.error("[MAIT Google scan error debug]", json);
+        if (json.debug) console.error("[MAIT Google scan error]", json);
       } else {
         if (json.debug) console.log("[MAIT Google scan debug]", json.debug);
         toast.success(`${json.records} Google Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
@@ -155,7 +163,6 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
 
   async function scanInstagram() {
     setLoading("instagram");
-    setShowDatePicker(false);
     const toastId = toast.loading(t("organic", "scanning"));
     try {
       const res = await fetch("/api/instagram/scan", {
@@ -177,31 +184,109 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
     }
   }
 
+  // ─── Render ───
+
   return (
-    <div className="space-y-2">
-      {/* ─── Date range (shared) + scan buttons ─── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Meta Ads */}
-        <Button
-          onClick={scanMeta}
-          disabled={isLoading}
-          className="gap-2"
-        >
-          {loading === "meta" ? (
-            <RefreshCw className="size-4 animate-spin" />
-          ) : (
-            <MetaLogo className="size-4" />
+    <div className="space-y-4">
+      {/* ─── 1. Date range (above scan buttons) ─── */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <CalendarRange className="size-3.5" />
+          <span>{t("scan", "scanPeriod")}</span>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">{t("scan", "dateFrom")}</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              placeholder={daysAgo(30)}
+              className="text-xs h-8 w-36"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">{t("scan", "dateTo")}</Label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="text-xs h-8 w-36"
+            />
+          </div>
+          <div className="flex items-center gap-2 pb-0.5">
+            <span className="text-[10px] text-muted-foreground">
+              {dateFrom || dateTo ? rangeLabel : `${t("scan", "last30days")}`}
+              {rangeDays > 0 && ` (${rangeDays}g)`}
+            </span>
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+        {rangeError && (
+          <p className="text-[10px] text-red-400">{rangeError}</p>
+        )}
+      </div>
+
+      {/* ─── 2. Scan buttons ─── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Meta Ads — with ad status dropdown */}
+        <div className="relative" ref={metaRef}>
+          <div className="flex">
+            <Button
+              onClick={() => scanMeta("ACTIVE")}
+              disabled={isLoading || rangeExceeded}
+              variant="outline"
+              className="rounded-r-none gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+            >
+              {loading === "meta" ? (
+                <RefreshCw className="size-4 animate-spin" />
+              ) : (
+                <MetaLogo className="size-4" />
+              )}
+              {loading === "meta" ? t("scan", "scanning") : "Meta Ads"}
+            </Button>
+            <Button
+              onClick={() => setShowMetaMenu(!showMetaMenu)}
+              disabled={isLoading || rangeExceeded}
+              variant="outline"
+              className="rounded-l-none border-l-0 px-1.5 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
+            >
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </div>
+
+          {showMetaMenu && (
+            <div className="absolute left-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-card shadow-lg p-1">
+              <button
+                onClick={() => scanMeta("ACTIVE")}
+                className="flex items-center w-full rounded-md px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+              >
+                {t("scan", "activeOnly")}
+              </button>
+              <button
+                onClick={() => scanMeta("ALL")}
+                className="flex items-center w-full rounded-md px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+              >
+                {t("scan", "allAds")}
+              </button>
+            </div>
           )}
-          {loading === "meta" ? t("scan", "scanning") : "Meta Ads"}
-        </Button>
+        </div>
 
         {/* Google Ads */}
         {hasGoogleConfig && (
           <Button
             onClick={scanGoogle}
-            disabled={isLoading}
+            disabled={isLoading || rangeExceeded}
             variant="outline"
-            className="gap-2 border-border hover:border-gold/40"
+            className="gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
           >
             {loading === "google" ? (
               <RefreshCw className="size-4 animate-spin" />
@@ -217,7 +302,7 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
           onClick={scanInstagram}
           disabled={isLoading}
           variant="outline"
-          className="gap-2 border-border hover:border-gold/40"
+          className="gap-2 hover:bg-gold/15 hover:text-gold hover:border-gold/40"
         >
           {loading === "instagram" ? (
             <RefreshCw className="size-4 animate-spin" />
@@ -226,65 +311,6 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
           )}
           {loading === "instagram" ? t("organic", "scanning") : "Instagram"}
         </Button>
-      </div>
-
-      {/* ─── Date range indicator + picker ─── */}
-      <div className="relative" ref={dateRef}>
-        <button
-          onClick={() => setShowDatePicker(!showDatePicker)}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <CalendarRange className="size-3" />
-          <span>
-            {isCustomRange ? rangeLabel : `${t("scan", "last30days")} (${rangeLabel})`}
-          </span>
-          <ChevronDown className={`size-3 transition-transform ${showDatePicker ? "rotate-180" : ""}`} />
-        </button>
-
-        {showDatePicker && (
-          <div className="absolute left-0 top-full mt-1 z-20 w-72 rounded-lg border border-border bg-card shadow-lg p-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px]">{t("scan", "dateFrom")}</Label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  placeholder={daysAgo(30)}
-                  className="text-xs h-7"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px]">{t("scan", "dateTo")}</Label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="text-xs h-7"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px]">{t("scan", "adStatusMeta")}</Label>
-              <select
-                value={adStatus}
-                onChange={(e) => setAdStatus(e.target.value as "ACTIVE" | "ALL")}
-                className="flex h-7 w-full rounded-md border border-border bg-muted px-2 text-xs text-foreground"
-              >
-                <option value="ACTIVE">{t("scan", "activeOnly")}</option>
-                <option value="ALL">{t("scan", "allAds")}</option>
-              </select>
-            </div>
-            {isCustomRange && (
-              <button
-                onClick={() => { setDateFrom(""); setDateTo(""); }}
-                className="text-[10px] text-muted-foreground hover:text-foreground"
-              >
-                {t("scan", "resetFilters")}
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
