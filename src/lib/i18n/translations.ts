@@ -435,6 +435,14 @@ const translations = {
       en: "Instagram username not configured",
     },
     goToEdit: { it: "Configura", en: "Configure" },
+    channelDisabledHint: {
+      it: "Alcuni brand selezionati non hanno la configurazione necessaria per questo canale.",
+      en: "Some selected brands don't have the required configuration for this channel.",
+    },
+    channelDisabledExplain: {
+      it: "Alcuni canali sono disabilitati perch\u00E9 uno o pi\u00F9 brand non hanno la configurazione necessaria. Vai nella scheda del brand per completarla.",
+      en: "Some channels are disabled because one or more brands are missing the required configuration. Go to the brand page to complete it.",
+    },
   },
 
   // ─── Library ───────────────────────────────────────────────
