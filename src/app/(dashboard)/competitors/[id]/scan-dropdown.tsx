@@ -140,7 +140,9 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? "Google Ads scrape failed", { id: toastId });
+        if (json.debug) console.error("[MAIT Google scan error debug]", json);
       } else {
+        if (json.debug) console.log("[MAIT Google scan debug]", json.debug);
         toast.success(`${json.records} Google Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
         router.refresh();
       }

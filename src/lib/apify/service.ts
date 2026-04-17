@@ -62,6 +62,7 @@ export interface ScrapeResult {
   records: NormalizedAd[];
   costCu: number;
   startUrl: string;
+  debug?: Record<string, unknown>;
 }
 
 export interface ScrapeOptions {

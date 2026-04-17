@@ -161,7 +161,7 @@ export async function POST(req: Request) {
       ok: true,
       job_id: job.id,
       records: result.records.length,
-      debug: { startUrl: result.startUrl },
+      debug: { startUrl: result.startUrl, ...result.debug },
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Scrape failed";

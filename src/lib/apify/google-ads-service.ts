@@ -109,13 +109,42 @@ function normalize(ad: RawGoogleAd): NormalizedAd {
 
 // ─── Single-country run (internal) ───
 
+export interface GoogleScrapeDebug {
+  actorId: string;
+  input: Record<string, unknown>;
+  runId: string;
+  datasetId: string;
+  pollCount: number;
+  finalStatus: string;
+  rawItemCount: number;
+  normalizedCount: number;
+  elapsedMs: number;
+  error?: string;
+}
+
 async function runForCountry(
   searchInput: Record<string, unknown>,
   countryCode: string | undefined,
   maxResults: number
-): Promise<{ runId: string; records: NormalizedAd[]; costCu: number }> {
+): Promise<{ runId: string; records: NormalizedAd[]; costCu: number; debug: GoogleScrapeDebug }> {
   const input: Record<string, unknown> = { ...searchInput, maxResults };
   if (countryCode) input.countryCode = countryCode;
+  const t0 = Date.now();
+
+  const debug: GoogleScrapeDebug = {
+    actorId: GOOGLE_ACTOR_ID,
+    input,
+    runId: "",
+    datasetId: "",
+    pollCount: 0,
+    finalStatus: "",
+    rawItemCount: 0,
+    normalizedCount: 0,
+    elapsedMs: 0,
+  };
+
+  console.log(`[Google Ads] Starting run: actor=${GOOGLE_ACTOR_ID} country=${countryCode ?? "ALL"} max=${maxResults}`);
+  console.log(`[Google Ads] Input:`, JSON.stringify(input));
 
   const actorPath = `/acts/${encodeURIComponent(GOOGLE_ACTOR_ID)}/runs`;
   const run = await apifyFetch(actorPath, {
@@ -126,28 +155,42 @@ async function runForCountry(
   const runId: string = run.data?.id ?? run.id ?? "";
   const datasetId: string =
     run.data?.defaultDatasetId ?? run.defaultDatasetId ?? "";
+  debug.runId = runId;
+  debug.datasetId = datasetId;
+
+  console.log(`[Google Ads] Run created: runId=${runId} datasetId=${datasetId}`);
 
   if (!datasetId) {
+    debug.error = "No datasetId returned";
+    debug.elapsedMs = Date.now() - t0;
     throw new Error("Apify run started but no datasetId returned.");
   }
 
-  // Poll until the run finishes (max ~5 min)
+  // Poll until the run finishes (max ~3 min)
   let status = run.data?.status ?? run.status ?? "RUNNING";
-  const startTime = Date.now();
-  const maxWait = 5 * 60 * 1000;
+  const maxWait = 3 * 60 * 1000;
 
   while (
     (status === "RUNNING" || status === "READY") &&
-    Date.now() - startTime < maxWait
+    Date.now() - t0 < maxWait
   ) {
-    await new Promise((r) => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 4000));
+    debug.pollCount++;
     const runInfo = await apifyFetch(`/actor-runs/${runId}`);
     status = runInfo.data?.status ?? runInfo.status ?? status;
+    console.log(`[Google Ads] Poll #${debug.pollCount}: status=${status} elapsed=${Math.round((Date.now() - t0) / 1000)}s`);
   }
 
+  debug.finalStatus = status;
+
   if (status !== "SUCCEEDED") {
+    debug.error = `Run ended with status: ${status}`;
+    debug.elapsedMs = Date.now() - t0;
+    console.error(`[Google Ads] FAILED: status=${status} after ${debug.pollCount} polls, ${Math.round(debug.elapsedMs / 1000)}s`);
     throw new Error(`Apify run ended with status: ${status}`);
   }
+
+  console.log(`[Google Ads] Run succeeded, fetching dataset...`);
 
   const dataset = await apifyFetch(
     `/datasets/${datasetId}/items?format=json&limit=1000`
@@ -155,10 +198,15 @@ async function runForCountry(
   const items: RawGoogleAd[] = Array.isArray(dataset)
     ? dataset
     : dataset.items ?? [];
+  debug.rawItemCount = items.length;
 
   const records = items
     .map(normalize)
     .filter((a): a is NormalizedAd => !!a.ad_archive_id);
+  debug.normalizedCount = records.length;
+  debug.elapsedMs = Date.now() - t0;
+
+  console.log(`[Google Ads] Done: ${items.length} raw → ${records.length} normalized in ${Math.round(debug.elapsedMs / 1000)}s`);
 
   let costCu = 0;
   try {
@@ -168,7 +216,7 @@ async function runForCountry(
     /* ignore */
   }
 
-  return { runId, records, costCu };
+  return { runId, records, costCu, debug };
 }
 
 // ─── Main scrape function ───
@@ -200,6 +248,7 @@ export async function scrapeGoogleAds(
   const run = await runForCountry(searchInput, opts.countryCode, maxResults);
 
   let records = run.records;
+  const beforeFilter = records.length;
 
   // Client-side date filter (Google Transparency actor doesn't support date range)
   if (opts.dateFrom || opts.dateTo) {
@@ -209,8 +258,15 @@ export async function scrapeGoogleAds(
       const start = r.start_date ? new Date(r.start_date).getTime() : 0;
       return start >= from && start <= to;
     });
+    console.log(`[Google Ads] Date filter: ${beforeFilter} → ${records.length} (${opts.dateFrom} to ${opts.dateTo})`);
   }
 
   const startUrl = `https://adstransparency.google.com/?domain=${opts.advertiserDomain ?? opts.advertiserName ?? opts.advertiserId}`;
-  return { runId: run.runId, records, costCu: run.costCu, startUrl };
+  return {
+    runId: run.runId,
+    records,
+    costCu: run.costCu,
+    startUrl,
+    debug: run.debug as unknown as Record<string, unknown>,
+  };
 }
