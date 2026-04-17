@@ -76,6 +76,8 @@ export async function scrapeInstagramPosts(
     resultsLimit: maxPosts,
   };
 
+  console.log(`[Instagram] Starting: actor=${ACTOR_ID} user=${opts.username} max=${maxPosts}`);
+
   const actorPath = `/acts/${encodeURIComponent(ACTOR_ID)}/runs?maxItems=${maxPosts}`;
   const run = await apifyFetch(actorPath, {
     method: "POST",
@@ -86,6 +88,8 @@ export async function scrapeInstagramPosts(
   const datasetId: string =
     run.data?.defaultDatasetId ?? run.defaultDatasetId ?? "";
 
+  console.log(`[Instagram] Run created: runId=${runId} datasetId=${datasetId}`);
+
   if (!datasetId) {
     throw new Error("Apify run started but no datasetId returned.");
   }
@@ -94,19 +98,33 @@ export async function scrapeInstagramPosts(
   let status = run.data?.status ?? run.status ?? "RUNNING";
   const startTime = Date.now();
   const maxWait = 5 * 60 * 1000;
+  let pollCount = 0;
 
   while (
     (status === "RUNNING" || status === "READY") &&
     Date.now() - startTime < maxWait
   ) {
     await new Promise((r) => setTimeout(r, 5000));
+    pollCount++;
     const runInfo = await apifyFetch(`/actor-runs/${runId}`);
     status = runInfo.data?.status ?? runInfo.status ?? status;
+    console.log(`[Instagram] Poll #${pollCount}: status=${status} elapsed=${Math.round((Date.now() - startTime) / 1000)}s`);
   }
 
   if (status !== "SUCCEEDED") {
-    throw new Error(`Apify run ended with status: ${status}`);
+    // Fetch detailed error info
+    let errorDetail = "";
+    try {
+      const runInfo = await apifyFetch(`/actor-runs/${runId}`);
+      const stats = runInfo.data?.stats ?? runInfo.stats ?? {};
+      errorDetail = ` | stats: ${JSON.stringify(stats)}`;
+    } catch { /* ignore */ }
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.error(`[Instagram] FAILED: status=${status} after ${pollCount} polls, ${elapsed}s${errorDetail}`);
+    throw new Error(`Instagram actor ${status} after ${elapsed}s (user: ${opts.username})`);
   }
+
+  console.log(`[Instagram] Run succeeded, fetching dataset...`);
 
   const dataset = await apifyFetch(
     `/datasets/${datasetId}/items?format=json&limit=1000`
