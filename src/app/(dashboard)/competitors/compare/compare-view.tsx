@@ -445,6 +445,21 @@ export function CompareView({
     }
   }
 
+  // Check country mismatch between selected brands
+  const countryMismatch = (() => {
+    if (selectedComps.length < 2) return null;
+    const countrySets = selectedComps.map((c) => {
+      const raw = c.country?.split(",").map((s) => s.trim()).filter(Boolean).sort().join(", ");
+      return raw || null;
+    });
+    const allSame = countrySets.every((cs) => cs === countrySets[0]);
+    if (allSame) return null;
+    return selectedComps.map((c) => ({
+      name: c.page_name,
+      countries: c.country?.split(",").map((s) => s.trim()).filter(Boolean).sort().join(", ") || null,
+    }));
+  })();
+
   const hasResults = selected.size >= 2 && channel !== null;
 
   return (
@@ -527,6 +542,20 @@ export function CompareView({
                         {t("compare", "goToEdit")}
                       </Button>
                     </a>
+                  </div>
+                ))}
+              </div>
+            )}
+            {countryMismatch && (
+              <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3 space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <Info className="size-3.5 text-blue-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-400">{t("compare", "countryMismatch")}</p>
+                </div>
+                {countryMismatch.map((b, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs ml-5.5">
+                    <span className="text-foreground font-medium">{b.name}</span>
+                    <span className="text-muted-foreground">— {t("compare", "countryMismatchDetail")} {b.countries ?? t("compare", "noCountrySet")}</span>
                   </div>
                 ))}
               </div>

@@ -451,6 +451,18 @@ const translations = {
       it: "Seleziona un canale per avviare il confronto.",
       en: "Select a channel to start the comparison.",
     },
+    countryMismatch: {
+      it: "I brand selezionati hanno paesi target diversi. Questo potrebbe rendere il confronto meno significativo.",
+      en: "The selected brands have different target countries. This may make the comparison less meaningful.",
+    },
+    countryMismatchDetail: {
+      it: "Paesi:",
+      en: "Countries:",
+    },
+    noCountrySet: {
+      it: "nessun paese impostato",
+      en: "no country set",
+    },
   },
 
   // ─── Library ───────────────────────────────────────────────
