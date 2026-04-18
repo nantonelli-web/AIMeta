@@ -37,10 +37,21 @@ export default async function EditCompetitorPage({
   return (
     <div className="max-w-3xl space-y-6">
       <Link
-        href={from === "compare" ? "/competitors/compare" : `/competitors/${id}`}
+        href={
+          from === "compare" ? "/competitors/compare"
+          : from === "report" ? "/report"
+          : from === "brands" ? "/competitors"
+          : from === "brand" ? `/competitors/${id}`
+          : `/competitors/${id}`
+        }
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" /> {from === "compare" ? t("editCompetitor", "backToCompare") : t("competitors", "allCompetitors")}
+        <ArrowLeft className="size-4" />{" "}
+        {from === "compare" ? t("editCompetitor", "backToCompare")
+          : from === "report" ? t("editCompetitor", "backToReport")
+          : from === "brands" ? t("editCompetitor", "backToBrands")
+          : from === "brand" ? t("editCompetitor", "backToBrand")
+          : t("editCompetitor", "backToBrands")}
       </Link>
 
       <div>

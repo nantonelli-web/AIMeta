@@ -560,7 +560,7 @@ export function ReportBuilder({
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="text-foreground font-medium">{d.brand}</span>
                       <span className="text-muted-foreground">— {d.ch}: {d.reason}</span>
-                      <a href={`/competitors/${d.id}/edit`} className="ml-auto shrink-0">
+                      <a href={`/competitors/${d.id}/edit?from=report`} className="ml-auto shrink-0">
                         <Button variant="outline" size="sm" className="text-xs h-6 px-2 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold">{t("report", "goToEdit")}</Button>
                       </a>
                     </div>

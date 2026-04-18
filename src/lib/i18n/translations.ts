@@ -214,6 +214,9 @@ const translations = {
     deleteError: { it: "Errore nell'eliminazione.", en: "Error deleting." },
     cancel: { it: "Annulla", en: "Cancel" },
     backToCompare: { it: "Torna al confronto", en: "Back to comparison" },
+    backToReport: { it: "Torna al report", en: "Back to report" },
+    backToBrands: { it: "Torna ai brand", en: "Back to brands" },
+    backToBrand: { it: "Torna al brand", en: "Back to brand" },
   },
 
   // ─── Scan Button ───────────────────────────────────────────

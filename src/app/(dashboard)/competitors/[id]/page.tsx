@@ -110,7 +110,7 @@ export default async function CompetitorDetailPage({
             <div className="flex items-center gap-2">
               <h1 className="text-3xl font-serif tracking-tight">{c.page_name}</h1>
               <Link
-                href={`/competitors/${c.id}/edit`}
+                href={`/competitors/${c.id}/edit?from=brand`}
                 className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 title="Edit"
               >

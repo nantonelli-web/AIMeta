@@ -162,7 +162,7 @@ function BrandCard({
             {t("competitors", "lastScan")} {formatDate(c.last_scraped_at)}
           </p>
           <Link
-            href={`/competitors/${c.id}/edit`}
+            href={`/competitors/${c.id}/edit?from=brands`}
             className="size-7 rounded-md border border-border hover:bg-muted hover:border-gold/40 grid place-items-center text-muted-foreground hover:text-gold transition-colors pointer-events-auto"
             title={t("editCompetitor", "title")}
           >
