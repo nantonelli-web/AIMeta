@@ -487,6 +487,22 @@ export function CompareView({
     fetchingRef.current = "";
   }
 
+  // Check which brands are missing scan coverage for selected countries
+  const countryGaps = (() => {
+    if (selectedCountries.size === 0 || selectedComps.length < 2) return [];
+    const gaps: { brand: string; id: string; missingCountries: string[] }[] = [];
+    for (const c of selectedComps) {
+      const brandCountries = new Set(
+        c.country?.split(",").map((s) => s.trim()).filter(Boolean) ?? []
+      );
+      const missing = [...selectedCountries].filter((code) => !brandCountries.has(code));
+      if (missing.length > 0) {
+        gaps.push({ brand: c.page_name, id: c.id, missingCountries: missing });
+      }
+    }
+    return gaps;
+  })();
+
   const hasResults = selected.size >= 2 && channel !== null;
 
   return (
@@ -553,6 +569,31 @@ export function CompareView({
             {selectedCountries.size === 0 && (
               <p className="text-xs text-muted-foreground">{t("compare", "selectCountriesHint")}</p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Country scan gaps warning */}
+      {countryGaps.length > 0 && (
+        <Card className="border-amber-500/30">
+          <CardContent className="py-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="size-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t("compare", "countryScanNeeded")}</p>
+                {countryGaps.map((g) => (
+                  <div key={g.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-foreground font-medium">{g.brand}</span>
+                    <span className="text-muted-foreground">— {g.missingCountries.join(", ")}</span>
+                    <a href={`/competitors/${g.id}/edit?from=compare`} className="ml-auto shrink-0">
+                      <Button variant="outline" size="sm" className="text-xs h-6 px-2 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold">
+                        {t("compare", "goToEdit")}
+                      </Button>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
