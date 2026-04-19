@@ -14,8 +14,8 @@ const translations = {
     heroTitle2: { it: "Analizza le strategie.", en: "Analyse strategies." },
     heroTitle3: { it: "Vinci il mercato.", en: "Win the market." },
     heroSubtitle: {
-      it: "MAIT scansiona le ads dei tuoi competitor su Meta, Google e Instagram, le analizza con l'intelligenza artificiale e genera report pronti per i tuoi clienti.",
-      en: "MAIT scans your competitors' ads on Meta, Google and Instagram, analyses them with artificial intelligence and generates reports ready for your clients.",
+      it: "AISCAN scansiona le ads dei tuoi competitor su Meta, Google e Instagram, le analizza con l'intelligenza artificiale e genera report pronti per i tuoi clienti.",
+      en: "AISCAN scans your competitors' ads on Meta, Google and Instagram, analyses them with artificial intelligence and generates reports ready for your clients.",
     },
     heroCta: { it: "Inizia gratis", en: "Start free" },
     heroCtaSecondary: { it: "Scopri come funziona", en: "See how it works" },
@@ -34,8 +34,8 @@ const translations = {
     },
     howStep2Title: { it: "Scansiona", en: "Scan" },
     howStep2Body: {
-      it: "Lancia la scansione su Meta, Google o Instagram. MAIT raccoglie automaticamente tutte le ads attive e i post organici.",
-      en: "Launch a scan on Meta, Google or Instagram. MAIT automatically collects all active ads and organic posts.",
+      it: "Lancia la scansione su Meta, Google o Instagram. AISCAN raccoglie automaticamente tutte le ads attive e i post organici.",
+      en: "Launch a scan on Meta, Google or Instagram. AISCAN automatically collects all active ads and organic posts.",
     },
     howStep3Title: { it: "Analizza con AI", en: "Analyse with AI" },
     howStep3Body: {
@@ -221,7 +221,7 @@ const translations = {
   dashboard: {
     greeting: { it: "Buongiorno", en: "Good morning" },
     subtitle: {
-      it: "Panoramica del tuo workspace MAIT.",
+      it: "Panoramica del tuo workspace AISCAN.",
       en: "Overview of your MAIT workspace.",
     },
     totalAds: { it: "Ads totali", en: "Total ads" },
@@ -683,8 +683,8 @@ const translations = {
     selectBrand: { it: "Seleziona brand", en: "Select brand" },
     selectBrands: { it: "Seleziona brand", en: "Select brands" },
     template: { it: "Template", en: "Template" },
-    noTemplate: { it: "Nessun template (stile MAIT default)", en: "No template (MAIT default style)" },
-    defaultStyle: { it: "Stile MAIT default", en: "MAIT default style" },
+    noTemplate: { it: "Nessun template (stile AISCAN default)", en: "No template (AISCAN default style)" },
+    defaultStyle: { it: "Stile MAIT default", en: "AISCAN default style" },
     uploadTemplate: { it: "Carica template", en: "Upload template" },
     templateName: { it: "Nome template", en: "Template name" },
     uploadBtn: { it: "Carica", en: "Upload" },

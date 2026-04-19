@@ -72,8 +72,9 @@ export default async function LandingPage() {
       {/* ─── NAV ────────────────────────────────────────── */}
       <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="text-xs uppercase tracking-[0.2em] text-gold font-medium">
-            MAIT
+          <Link href="/" className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.webp" alt="AISCAN" className="h-7" />
           </Link>
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">
@@ -331,11 +332,10 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
             <div>
-              <span className="text-xs uppercase tracking-[0.2em] text-gold font-medium">
-                MAIT
-              </span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.webp" alt="AISCAN" className="h-6" />
               <p className="mt-2 text-xs text-muted-foreground max-w-xs">
-                Meta Ads Intelligence Tool
+                Ads Analysis Tool
                 <br />
                 NIMA Digital
               </p>
@@ -354,7 +354,7 @@ export default async function LandingPage() {
             </div>
           </div>
           <div className="mt-8 pt-6 border-t border-border text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} MAIT &middot; NIMA Digital. {t("landing", "footerRights")}
+            &copy; {new Date().getFullYear()} AISCAN &middot; NIMA Digital. {t("landing", "footerRights")}
           </div>
         </div>
       </footer>

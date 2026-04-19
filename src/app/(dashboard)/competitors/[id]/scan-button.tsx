@@ -38,7 +38,7 @@ export function ScanButton({ competitorId }: { competitorId: string }) {
       if (!res.ok) {
         toast.error(json.error ?? "Scrape failed", { id: toastId });
       } else {
-        if (json.debug) console.log("[MAIT scan debug]", json.debug);
+        if (json.debug) console.log("[AISCAN scan debug]", json.debug);
         toast.success(`${json.records} ${t("scan", "adsSynced")}`, {
           id: toastId,
         });

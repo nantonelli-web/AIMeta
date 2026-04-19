@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// MAIT -- Pricing & Credit Configuration
+// AISCAN -- Pricing & Credit Configuration
 // ---------------------------------------------------------------------------
 
 export type SubscriptionTier = 'scout' | 'analyst' | 'strategist' | 'agency';

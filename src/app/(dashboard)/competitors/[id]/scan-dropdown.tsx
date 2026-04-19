@@ -146,7 +146,7 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
       if (!res.ok) {
         toast.error(json.error ?? "Scrape failed", { id: toastId });
       } else {
-        if (json.debug) console.log("[MAIT scan debug]", json.debug);
+        if (json.debug) console.log("[AISCAN scan debug]", json.debug);
         toast.success(`${json.records} Meta Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
         router.refresh();
       }
@@ -183,9 +183,9 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? "Google Ads scrape failed", { id: toastId });
-        if (json.debug) console.error("[MAIT Google scan error]", json);
+        if (json.debug) console.error("[AISCAN Google scan error]", json);
       } else {
-        if (json.debug) console.log("[MAIT Google scan debug]", json.debug);
+        if (json.debug) console.log("[AISCAN Google scan debug]", json.debug);
         toast.success(`${json.records} Google Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
         router.refresh();
       }

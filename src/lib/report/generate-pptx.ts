@@ -219,7 +219,7 @@ function singleCover(
     );
   }
 
-  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+  slide.addText("Powered by AISCAN", {
     x: PAD,
     y: SH - 0.5,
     w: SW - 2 * PAD,
@@ -784,7 +784,7 @@ function compCover(
     transparency: 40,
   });
 
-  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+  slide.addText("Powered by AISCAN", {
     x: PAD,
     y: SH - 0.5,
     w: SW - 2 * PAD,
@@ -1352,7 +1352,7 @@ function closingSlide(
     align: "center",
   });
 
-  slide.addText("Powered by MAIT \u00B7 NIMA Digital", {
+  slide.addText("Powered by AISCAN", {
     x: PAD,
     y: 4.0,
     w: SW - 2 * PAD,
@@ -1380,7 +1380,7 @@ export async function generateSinglePptx(
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: "CUSTOM", width: SW, height: SH });
   pptx.layout = "CUSTOM";
-  pptx.author = "MAIT \u00B7 NIMA Digital";
+  pptx.author = "AISCAN";
   pptx.title = `${brand.name} \u2014 Report`;
 
   const hasTechnical = sections.includes("technical");
@@ -1447,7 +1447,7 @@ export async function generateComparisonPptx(
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: "CUSTOM", width: SW, height: SH });
   pptx.layout = "CUSTOM";
-  pptx.author = "MAIT \u00B7 NIMA Digital";
+  pptx.author = "AISCAN";
   pptx.title = `${brands.map((b) => b.name).join(" vs ")} \u2014 Comparison Report`;
 
   const hasTechnical = sections.includes("technical");

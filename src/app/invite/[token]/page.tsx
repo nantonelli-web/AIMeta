@@ -69,7 +69,7 @@ export default async function InvitePage({
       <div className="max-w-md w-full space-y-6">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-gold mb-2">
-            ◆ MAIT · NIMA Digital
+            AISCAN · Ads Analysis Tool
           </p>
         </div>
         <Card>

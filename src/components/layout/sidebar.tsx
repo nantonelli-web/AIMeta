@@ -55,13 +55,9 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col border-r border-border bg-card">
       <div className="h-16 flex items-center px-6 border-b border-border">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="size-7 rounded-md bg-gold/15 border border-gold/30 grid place-items-center text-gold text-xs font-bold">
-            M
-          </span>
-          <span className="font-serif text-lg tracking-tight">
-            MAIT
-          </span>
+        <Link href="/dashboard" className="flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.webp" alt="AISCAN" className="h-6" />
         </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">

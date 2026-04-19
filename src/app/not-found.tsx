@@ -10,7 +10,7 @@ export default async function NotFound() {
     <div className="flex-1 grid place-items-center px-6 py-20">
       <div className="text-center max-w-md space-y-4">
         <p className="text-xs uppercase tracking-[0.2em] text-gold">
-          ◆ MAIT · 404
+          ◆ AISCAN · 404
         </p>
         <h1 className="text-4xl font-serif tracking-tight">
           {t("notFound", "title")}

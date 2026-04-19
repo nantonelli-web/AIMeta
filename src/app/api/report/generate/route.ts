@@ -465,12 +465,12 @@ export async function POST(req: Request) {
       if (format === "pptx") {
         const buf = await generateSinglePptx(brand, themeConfig, locale, sections, copyAnalysis, visualAnalysis, channel);
         fileBytes = new Uint8Array(buf);
-        fileName = `MAIT_Report_${safeName}.pptx`;
+        fileName = `AISCAN_Report_${safeName}.pptx`;
         contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
       } else {
         const buf = await generateSinglePdf(brand, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
-        fileName = `MAIT_Report_${safeName}.pdf`;
+        fileName = `AISCAN_Report_${safeName}.pdf`;
         contentType = "application/pdf";
       }
     } else {
@@ -479,12 +479,12 @@ export async function POST(req: Request) {
       if (format === "pptx") {
         const buf = await generateComparisonPptx(brands, themeConfig, locale, sections, copyAnalysis, visualAnalysis, channel);
         fileBytes = new Uint8Array(buf);
-        fileName = `MAIT_Comparison_${brandNames}.pptx`;
+        fileName = `AISCAN_Comparison_${brandNames}.pptx`;
         contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
       } else {
         const buf = await generateComparisonPdf(brands, themeConfig, locale, sections, copyAnalysis, visualAnalysis);
         fileBytes = new Uint8Array(buf);
-        fileName = `MAIT_Comparison_${brandNames}.pdf`;
+        fileName = `AISCAN_Comparison_${brandNames}.pdf`;
         contentType = "application/pdf";
       }
     }

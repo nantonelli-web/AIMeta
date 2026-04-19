@@ -170,7 +170,7 @@ function addPdfCoverPage(
 
   doc.setFontSize(8);
   doc.setTextColor(pr, pg, pb);
-  doc.text("Powered by MAIT \u00B7 NIMA Digital", MARGIN, PH - 10);
+  doc.text("Powered by AISCAN", MARGIN, PH - 10);
 }
 
 function addPdfDashboardPage(
@@ -548,7 +548,7 @@ function addPdfClosingPage(
 
   doc.setFontSize(9);
   doc.setTextColor(tr, tg, tb);
-  doc.text("Powered by MAIT \u00B7 NIMA Digital", PW / 2, 110, {
+  doc.text("Powered by AISCAN", PW / 2, 110, {
     align: "center",
   });
 }
@@ -603,7 +603,7 @@ function addPdfComparisonCover(
 
   doc.setFontSize(8);
   doc.setTextColor(pr, pg, pb);
-  doc.text("Powered by MAIT \u00B7 NIMA Digital", MARGIN, PH - 10);
+  doc.text("Powered by AISCAN", MARGIN, PH - 10);
 }
 
 function addPdfComparisonDashboard(

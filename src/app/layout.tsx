@@ -14,30 +14,38 @@ const SITE_URL = "https://aiscan.biz";
 
 export const metadata: Metadata = {
   title: {
-    default: "MAIT — Ads Intelligence Tool | aiscan.biz",
-    template: "%s | MAIT",
+    default: "AISCAN — Ads Analysis Tool | aiscan.biz",
+    template: "%s | AISCAN",
   },
   description:
     "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis, brand comparison and professional reports.",
   metadataBase: new URL(SITE_URL),
   openGraph: {
-    title: "MAIT — Ads Intelligence Tool",
+    title: "AISCAN — Ads Analysis Tool",
     description:
       "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis, brand comparison and professional reports.",
     url: SITE_URL,
-    siteName: "MAIT",
+    siteName: "AISCAN",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "MAIT — Ads Intelligence Tool",
+    title: "AISCAN — Ads Analysis Tool",
     description:
       "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis and professional reports.",
   },
   robots: {
     index: true,
     follow: true,
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "48x48", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
 };
 

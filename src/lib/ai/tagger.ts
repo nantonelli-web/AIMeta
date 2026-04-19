@@ -59,7 +59,7 @@ Return ONLY the JSON object, no markdown, no explanation.`;
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
         "http-referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-        "x-title": "MAIT - Meta Ads Intelligence Tool",
+        "x-title": "AISCAN - Ads Analysis Tool",
       },
       body: JSON.stringify({
         model: MODEL,
@@ -123,7 +123,7 @@ Return ONLY the JSON object, no markdown, no explanation.`;
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
         "http-referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-        "x-title": "MAIT - Meta Ads Intelligence Tool",
+        "x-title": "AISCAN - Ads Analysis Tool",
       },
       body: JSON.stringify({
         model: MODEL,

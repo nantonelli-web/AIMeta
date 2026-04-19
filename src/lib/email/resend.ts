@@ -9,7 +9,7 @@ export function getResend(): Resend | null {
 }
 
 const FROM =
-  process.env.EMAIL_FROM ?? "MAIT <noreply@nimadigital.ae>";
+  process.env.EMAIL_FROM ?? "AISCAN <noreply@nimadigital.ae>";
 
 export interface NewAdsEmailData {
   competitorName: string;
@@ -39,7 +39,7 @@ export async function sendNewAdsNotification(
 <body style="margin:0;padding:0;background:#0a0a0a;color:#f5f5f5;font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
     <div style="text-align:center;margin-bottom:24px;">
-      <span style="color:#d4a843;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">◆ MAIT · NIMA Digital</span>
+      <span style="color:#d4a843;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">AISCAN · Ads Analysis Tool</span>
     </div>
 
     <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:24px;margin-bottom:24px;">
@@ -87,7 +87,7 @@ export async function sendNewAdsNotification(
   await resend.emails.send({
     from: FROM,
     to,
-    subject: `${data.competitorName}: ${data.adsCount} nuove ads rilevate — MAIT`,
+    subject: `${data.competitorName}: ${data.adsCount} nuove ads rilevate — AISCAN`,
     html,
   });
 }
@@ -124,7 +124,7 @@ export async function sendWeeklyDigest(
 <body style="margin:0;padding:0;background:#0a0a0a;color:#f5f5f5;font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
     <div style="text-align:center;margin-bottom:24px;">
-      <span style="color:#d4a843;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">◆ MAIT · Weekly Digest</span>
+      <span style="color:#d4a843;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">AISCAN · Weekly Digest</span>
     </div>
 
     <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:24px;margin-bottom:24px;">
