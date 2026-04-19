@@ -260,7 +260,8 @@ export function ReportBuilder({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Generation failed");
+        console.error("[AISCAN report] Error:", res.status, data);
+        throw new Error(data.error ?? `Generation failed (${res.status})`);
       }
 
       // Download the file
