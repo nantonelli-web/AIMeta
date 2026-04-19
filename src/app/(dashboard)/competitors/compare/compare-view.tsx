@@ -448,10 +448,10 @@ export function CompareView({
     }
   }
 
-  // Compute union of all countries from selected brands
+  // Compute union of all countries from ALL brands in workspace
   const allCountries = (() => {
     const set = new Set<string>();
-    for (const c of selectedComps) {
+    for (const c of competitors) {
       if (c.country) {
         c.country.split(",").map((s) => s.trim()).filter(Boolean).forEach((code) => set.add(code));
       }
