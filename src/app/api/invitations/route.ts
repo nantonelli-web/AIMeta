@@ -77,6 +77,33 @@ export async function POST(req: Request) {
     );
   }
 
+  // Check plan member limit
+  // Find workspace owner (the admin who created the workspace or has subscription)
+  const { data: owner } = await admin
+    .from("mait_users")
+    .select("subscription_tier")
+    .eq("workspace_id", profile.workspace_id)
+    .not("subscription_tier", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  const tier = (owner?.subscription_tier as string) ?? "scout";
+  const maxMembers: Record<string, number> = { scout: 1, analyst: 1, strategist: 3, agency: 10 };
+  const limit = maxMembers[tier] ?? 1;
+
+  const { count: currentMembers } = await admin
+    .from("mait_users")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", profile.workspace_id);
+
+  if ((currentMembers ?? 0) >= limit) {
+    return NextResponse.json(
+      { error: `Il tuo piano ${tier} consente massimo ${limit} ${limit === 1 ? "membro" : "membri"}. Aggiorna il piano per invitare altri utenti.` },
+      { status: 403 }
+    );
+  }
+
   // Check for existing pending invitation
   const { data: existingInv } = await admin
     .from("mait_invitations")

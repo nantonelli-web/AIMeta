@@ -23,7 +23,7 @@ interface Invitation {
 export function InviteSection({ invitations: initial }: { invitations: Invitation[] }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("analyst");
+  const [role, setRole] = useState("admin");
   const [sending, setSending] = useState(false);
   const [lastUrl, setLastUrl] = useState<string | null>(null);
   const [invitations, setInvitations] = useState(initial);

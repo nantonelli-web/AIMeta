@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getLocale, serverT } from "@/lib/i18n/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Coins, CreditCard, CalendarClock, TrendingUp } from "lucide-react";
@@ -9,26 +10,30 @@ export const dynamic = "force-dynamic";
 export default async function CreditsPage() {
   const { profile } = await getSessionUser();
   const supabase = await createClient();
+  const admin = createAdminClient();
   const locale = await getLocale();
   const t = serverT(locale);
 
-  // Fetch user credit data
-  const { data: userData } = await supabase
+  // Resolve workspace owner (oldest member = creator) for shared credits
+  const { data: owner } = await admin
     .from("mait_users")
-    .select("credits_balance, subscription_tier, monthly_credits, current_period_end")
-    .eq("id", profile.id)
+    .select("id, credits_balance, subscription_tier, monthly_credits, current_period_end")
+    .eq("workspace_id", profile.workspace_id)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
-  const balance = userData?.credits_balance ?? 0;
-  const tier = (userData?.subscription_tier as string) ?? "scout";
-  const monthlyCredits = userData?.monthly_credits ?? 10;
-  const periodEnd = userData?.current_period_end;
+  const ownerId = owner?.id ?? profile.id;
+  const balance = owner?.credits_balance ?? 0;
+  const tier = (owner?.subscription_tier as string) ?? "scout";
+  const monthlyCredits = owner?.monthly_credits ?? 10;
+  const periodEnd = owner?.current_period_end;
 
-  // Fetch credit history
-  const { data: history } = await supabase
+  // Fetch credit history for workspace owner
+  const { data: history } = await admin
     .from("mait_credits_history")
     .select("id, amount, reason, created_at")
-    .eq("user_id", profile.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(50);
 
