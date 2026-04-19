@@ -53,11 +53,12 @@ const MAX_RANGE_DAYS = 90;
 interface Props {
   competitorId: string;
   hasGoogleConfig: boolean;
+  hasInstagramConfig: boolean;
 }
 
 type ScanTarget = "meta" | "google" | "instagram";
 
-export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
+export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig }: Props) {
   const router = useRouter();
   const { t } = useT();
   const [loading, setLoading] = useState<ScanTarget | null>(null);
@@ -339,13 +340,16 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
         </div>
 
         {/* Google Ads */}
-        {hasGoogleConfig && (
+        <div className="relative group">
           <Button
-            onClick={scanGoogle}
-            disabled={isLoading || rangeExceeded}
+            onClick={hasGoogleConfig ? scanGoogle : undefined}
+            disabled={!hasGoogleConfig || isLoading || rangeExceeded}
             variant="outline"
             size="lg"
-            className="gap-2.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold"
+            className={hasGoogleConfig
+              ? "gap-2.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold"
+              : "gap-2.5 opacity-40 cursor-not-allowed"
+            }
           >
             {loading === "google" ? (
               <RefreshCw className="size-5 animate-spin" />
@@ -354,23 +358,40 @@ export function ScanDropdown({ competitorId, hasGoogleConfig }: Props) {
             )}
             {loading === "google" ? t("scan", "scanningGoogle") : "Google Ads"}
           </Button>
-        )}
+          {!hasGoogleConfig && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-max max-w-[220px] rounded-md border border-border bg-card px-3 py-2 text-[11px] text-muted-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
+              {t("scan", "googleNotConfigured")}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-border" />
+            </div>
+          )}
+        </div>
 
         {/* Instagram */}
-        <Button
-          onClick={scanInstagram}
-          disabled={isLoading}
-          variant="outline"
-          size="lg"
-          className="gap-2.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold"
-        >
-          {loading === "instagram" ? (
-            <RefreshCw className="size-5 animate-spin" />
-          ) : (
-            <InstagramIcon className="size-5" />
+        <div className="relative group">
+          <Button
+            onClick={hasInstagramConfig ? scanInstagram : undefined}
+            disabled={!hasInstagramConfig || isLoading}
+            variant="outline"
+            size="lg"
+            className={hasInstagramConfig
+              ? "gap-2.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold"
+              : "gap-2.5 opacity-40 cursor-not-allowed"
+            }
+          >
+            {loading === "instagram" ? (
+              <RefreshCw className="size-5 animate-spin" />
+            ) : (
+              <InstagramIcon className="size-5" />
+            )}
+            {loading === "instagram" ? t("organic", "scanning") : "Instagram"}
+          </Button>
+          {!hasInstagramConfig && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-max max-w-[220px] rounded-md border border-border bg-card px-3 py-2 text-[11px] text-muted-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
+              {t("scan", "instagramNotConfigured")}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-border" />
+            </div>
           )}
-          {loading === "instagram" ? t("organic", "scanning") : "Instagram"}
-        </Button>
+        </div>
       </div>
     </div>
   );

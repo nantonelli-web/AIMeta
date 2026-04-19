@@ -153,6 +153,7 @@ export default async function CompetitorDetailPage({
       <ScanDropdown
         competitorId={c.id}
         hasGoogleConfig={!!(c.google_advertiser_id || c.google_domain)}
+        hasInstagramConfig={!!c.instagram_username}
       />
 
       {/* ─── Scan history (collapsible) ──────────────────────── */}

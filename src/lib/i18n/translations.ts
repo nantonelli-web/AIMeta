@@ -252,6 +252,14 @@ const translations = {
       it: "Scraping Google Ads\u2026 (pu\u00F2 richiedere 20-60s)",
       en: "Scraping Google Ads\u2026 (may take 20-60s)",
     },
+    googleNotConfigured: {
+      it: "Configura il dominio o l'Advertiser ID Google nelle impostazioni del brand per abilitare la scansione.",
+      en: "Configure the Google domain or Advertiser ID in brand settings to enable scanning.",
+    },
+    instagramNotConfigured: {
+      it: "Configura lo username Instagram nelle impostazioni del brand per abilitare la scansione.",
+      en: "Configure the Instagram username in brand settings to enable scanning.",
+    },
   },
 
   // ─── Frequency Selector ────────────────────────────────────
