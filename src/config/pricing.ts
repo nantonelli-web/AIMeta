@@ -1,0 +1,139 @@
+// ---------------------------------------------------------------------------
+// MAIT -- Pricing & Credit Configuration
+// ---------------------------------------------------------------------------
+
+export type SubscriptionTier = 'scout' | 'analyst' | 'strategist' | 'agency';
+
+export type CreditAction =
+  | 'scan_meta'
+  | 'scan_google'
+  | 'scan_instagram'
+  | 'ai_tagging'
+  | 'ai_analysis'
+  | 'report_single'
+  | 'report_comparison';
+
+// ---------------------------------------------------------------------------
+// Plan definitions
+// ---------------------------------------------------------------------------
+
+export interface Plan {
+  tier: SubscriptionTier;
+  name: string;
+  credits: number;        // credits per month
+  priceMonthly: number;   // USD / month
+  priceYearly: number;    // USD / year
+  maxBrands: number;      // -1 = unlimited
+  maxTeamMembers: number;
+  features: string[];
+}
+
+export const plans: Plan[] = [
+  {
+    tier: 'scout',
+    name: 'Scout',
+    credits: 10,
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxBrands: 2,
+    maxTeamMembers: 1,
+    features: [
+      '10 credits/month',
+      'Up to 2 brands',
+      'Meta Ads scanning',
+      'Basic reports',
+    ],
+  },
+  {
+    tier: 'analyst',
+    name: 'Analyst',
+    credits: 80,
+    priceMonthly: 29,
+    priceYearly: 299,
+    maxBrands: 10,
+    maxTeamMembers: 1,
+    features: [
+      '80 credits/month',
+      'Up to 10 brands',
+      'All channels (Meta, Google, Instagram)',
+      'AI-powered analysis',
+      'Full reports',
+    ],
+  },
+  {
+    tier: 'strategist',
+    name: 'Strategist',
+    credits: 250,
+    priceMonthly: 89,
+    priceYearly: 899,
+    maxBrands: 25,
+    maxTeamMembers: 3,
+    features: [
+      '250 credits/month',
+      'Up to 25 brands',
+      'All channels',
+      'AI analysis + tagging',
+      'Brand comparison',
+      'Priority support',
+      'Up to 3 team members',
+    ],
+  },
+  {
+    tier: 'agency',
+    name: 'Agency',
+    credits: 650,
+    priceMonthly: 239,
+    priceYearly: 2399,
+    maxBrands: -1,
+    maxTeamMembers: 10,
+    features: [
+      '650 credits/month',
+      'Unlimited brands',
+      'All channels',
+      'Full AI suite',
+      'Advanced comparisons',
+      'Custom reports',
+      'Up to 10 team members',
+      'Dedicated support',
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Credit costs per action
+// ---------------------------------------------------------------------------
+
+export const creditCosts: Record<CreditAction, number> = {
+  scan_meta: 5,
+  scan_google: 2,
+  scan_instagram: 2,
+  ai_tagging: 1,
+  ai_analysis: 3,
+  report_single: 2,
+  report_comparison: 3,
+};
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Approximate yearly discount percentage (displayed on pricing page). */
+export const yearlyDiscount = 14;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Return the credit cost for a given action. */
+export function getCreditCost(action: CreditAction): number {
+  return creditCosts[action];
+}
+
+/** Return the plan definition for a given tier. */
+export function getPlan(tier: SubscriptionTier): Plan {
+  const plan = plans.find((p) => p.tier === tier);
+  if (!plan) {
+    throw new Error(`Unknown subscription tier: ${tier}`);
+  }
+  return plan;
+}

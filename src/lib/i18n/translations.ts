@@ -5,38 +5,146 @@ export const defaultLocale: Locale = "it";
 const translations = {
   // ─── Landing page ──────────────────────────────────────────
   landing: {
-    tagline: {
-      it: "NIMA Digital \u00B7 Internal SaaS",
-      en: "NIMA Digital \u00B7 Internal SaaS",
-    },
-    heading: {
-      it: "Meta Ads Intelligence Tool.",
-      en: "Meta Ads Intelligence Tool.",
-    },
-    subtitle: {
-      it: "Competitive intelligence, performance analytics e creative library per il team NIMA Digital. Monitora i brand, analizza creativit\u00E0, presenta insight ai clienti.",
-      en: "Competitive intelligence, performance analytics and creative library for the NIMA Digital team. Monitor brands, analyse creatives, present insights to clients.",
-    },
+    // Nav
     loginBtn: { it: "Accedi", en: "Sign in" },
-    registerBtn: { it: "Crea account", en: "Create account" },
-    featureMonitorTitle: { it: "Brand Monitor", en: "Brand Monitor" },
-    featureMonitorBody: {
-      it: "Scraping automatico delle ads attive dei brand via Apify + Meta Ad Library.",
-      en: "Automatic scraping of brand active ads via Apify + Meta Ad Library.",
+    registerBtn: { it: "Inizia gratis", en: "Start free" },
+    // Hero
+    heroTag: { it: "Competitive Intelligence per Advertising", en: "Competitive Intelligence for Advertising" },
+    heroTitle1: { it: "Monitora i competitor.", en: "Monitor competitors." },
+    heroTitle2: { it: "Analizza le strategie.", en: "Analyse strategies." },
+    heroTitle3: { it: "Vinci il mercato.", en: "Win the market." },
+    heroSubtitle: {
+      it: "MAIT scansiona le ads dei tuoi competitor su Meta, Google e Instagram, le analizza con l'intelligenza artificiale e genera report pronti per i tuoi clienti.",
+      en: "MAIT scans your competitors' ads on Meta, Google and Instagram, analyses them with artificial intelligence and generates reports ready for your clients.",
     },
-    featureLibraryTitle: { it: "Creative Library", en: "Creative Library" },
-    featureLibraryBody: {
-      it: "Archivio searchable di tutte le creativit\u00E0 raccolte, con filtri e tag.",
-      en: "Searchable archive of all collected creatives, with filters and tags.",
+    heroCta: { it: "Inizia gratis", en: "Start free" },
+    heroCtaSecondary: { it: "Scopri come funziona", en: "See how it works" },
+    // Platforms
+    platformsLabel: { it: "Scansiona ads su", en: "Scan ads on" },
+    // How it works
+    howTitle: { it: "Come funziona", en: "How it works" },
+    howSubtitle: {
+      it: "4 step per trasformare le ads dei competitor in insight strategici",
+      en: "4 steps to turn competitor ads into strategic insights",
     },
-    featureAnalyticsTitle: {
-      it: "Performance Analytics",
-      en: "Performance Analytics",
+    howStep1Title: { it: "Aggiungi brand", en: "Add brands" },
+    howStep1Body: {
+      it: "Inserisci i competitor da monitorare con URL Facebook, dominio Google o username Instagram.",
+      en: "Add the competitors you want to monitor with Facebook URL, Google domain or Instagram username.",
     },
-    featureAnalyticsBody: {
-      it: "KPI delle campagne gestite via Meta Marketing API, breakdown e benchmarking.",
-      en: "Campaign KPIs via Meta Marketing API, breakdowns and benchmarking.",
+    howStep2Title: { it: "Scansiona", en: "Scan" },
+    howStep2Body: {
+      it: "Lancia la scansione su Meta, Google o Instagram. MAIT raccoglie automaticamente tutte le ads attive e i post organici.",
+      en: "Launch a scan on Meta, Google or Instagram. MAIT automatically collects all active ads and organic posts.",
     },
+    howStep3Title: { it: "Analizza con AI", en: "Analyse with AI" },
+    howStep3Body: {
+      it: "L'intelligenza artificiale analizza copy, creativita, obiettivi e strategie. Confronta i brand side-by-side.",
+      en: "AI analyses copy, creatives, objectives and strategies. Compare brands side-by-side.",
+    },
+    howStep4Title: { it: "Genera report", en: "Generate reports" },
+    howStep4Body: {
+      it: "Esporta report professionali in PowerPoint o PDF, pronti da presentare ai tuoi clienti.",
+      en: "Export professional reports in PowerPoint or PDF, ready to present to your clients.",
+    },
+    // Features
+    featuresTitle: { it: "Tutto quello che ti serve", en: "Everything you need" },
+    featuresSubtitle: {
+      it: "Una piattaforma completa per l'intelligence competitiva sulle ads",
+      en: "A complete platform for competitive ad intelligence",
+    },
+    feat1Title: { it: "Multi-canale", en: "Multi-channel" },
+    feat1Body: {
+      it: "Monitora ads su Meta, Google Ads e Instagram da un'unica dashboard. Confronta le strategie cross-platform.",
+      en: "Monitor ads on Meta, Google Ads and Instagram from a single dashboard. Compare cross-platform strategies.",
+    },
+    feat2Title: { it: "Analisi AI", en: "AI Analysis" },
+    feat2Body: {
+      it: "Copy analysis, visual analysis e tagging automatico. L'AI identifica tono, obiettivi, formati e trend.",
+      en: "Copy analysis, visual analysis and automatic tagging. AI identifies tone, objectives, formats and trends.",
+    },
+    feat3Title: { it: "Report professionali", en: "Professional reports" },
+    feat3Body: {
+      it: "Genera report in PowerPoint e PDF con template personalizzati, logo del cliente e analisi dettagliate.",
+      en: "Generate PowerPoint and PDF reports with custom templates, client logos and detailed analysis.",
+    },
+    feat4Title: { it: "Confronto brand", en: "Brand comparison" },
+    feat4Body: {
+      it: "Confronta fino a 3 brand side-by-side con benchmark tecnici, copy analysis e visual analysis.",
+      en: "Compare up to 3 brands side-by-side with technical benchmarks, copy analysis and visual analysis.",
+    },
+    feat5Title: { it: "Creative Library", en: "Creative Library" },
+    feat5Body: {
+      it: "Archivio ricercabile di tutte le ads raccolte con filtri, tag, collezioni e esportazione CSV.",
+      en: "Searchable archive of all collected ads with filters, tags, collections and CSV export.",
+    },
+    feat6Title: { it: "Scan programmati", en: "Scheduled scans" },
+    feat6Body: {
+      it: "Programma scansioni giornaliere o settimanali. Ricevi notifiche email quando vengono rilevate nuove ads.",
+      en: "Schedule daily or weekly scans. Get email notifications when new ads are detected.",
+    },
+    // Metrics
+    metricsChannels: { it: "canali monitorati", en: "channels monitored" },
+    metricsAI: { it: "modelli AI integrati", en: "AI models integrated" },
+    metricsReport: { it: "report in 1 click", en: "reports in 1 click" },
+    metricsFormats: { it: "formati export", en: "export formats" },
+    // Pricing
+    pricingTitle: { it: "Piani e prezzi", en: "Plans and pricing" },
+    pricingSubtitle: {
+      it: "Inizia gratis, scala quando vuoi. Piu crediti acquisti, meno li paghi.",
+      en: "Start free, scale when you want. The more credits you buy, the less you pay.",
+    },
+    pricingMonthly: { it: "Mensile", en: "Monthly" },
+    pricingYearly: { it: "Annuale", en: "Yearly" },
+    pricingYearlySave: { it: "Risparmi ~15%", en: "Save ~15%" },
+    pricingMonth: { it: "/mese", en: "/month" },
+    pricingYear: { it: "/anno", en: "/year" },
+    pricingCredits: { it: "crediti/mese", en: "credits/month" },
+    pricingCta: { it: "Inizia gratis", en: "Start free" },
+    pricingCtaPaid: { it: "Scegli questo piano", en: "Choose this plan" },
+    pricingPopular: { it: "Piu scelto", en: "Most popular" },
+    pricingFeatScout: {
+      it: "10 crediti/mese|Fino a 2 brand|Scansione Meta Ads|Report base",
+      en: "10 credits/month|Up to 2 brands|Meta Ads scanning|Basic reports",
+    },
+    pricingFeatAnalyst: {
+      it: "80 crediti/mese|Fino a 10 brand|Tutti i canali (Meta, Google, Instagram)|Analisi AI|Report completi",
+      en: "80 credits/month|Up to 10 brands|All channels (Meta, Google, Instagram)|AI analysis|Full reports",
+    },
+    pricingFeatStrategist: {
+      it: "250 crediti/mese|Fino a 25 brand|Tutti i canali|Analisi + tagging AI|Confronto brand|Supporto prioritario|Fino a 3 membri team",
+      en: "250 credits/month|Up to 25 brands|All channels|AI analysis + tagging|Brand comparison|Priority support|Up to 3 team members",
+    },
+    pricingFeatAgency: {
+      it: "650 crediti/mese|Brand illimitati|Tutti i canali|Suite AI completa|Confronti avanzati|Report personalizzati|Fino a 10 membri team|Supporto dedicato",
+      en: "650 credits/month|Unlimited brands|All channels|Full AI suite|Advanced comparisons|Custom reports|Up to 10 team members|Dedicated support",
+    },
+    // Credit costs
+    creditCostsTitle: { it: "Costo azioni in crediti", en: "Action costs in credits" },
+    creditAction_scan_meta: { it: "Scan Meta Ads", en: "Meta Ads scan" },
+    creditAction_scan_google: { it: "Scan Google Ads", en: "Google Ads scan" },
+    creditAction_scan_instagram: { it: "Scan Instagram", en: "Instagram scan" },
+    creditAction_ai_tagging: { it: "AI Tagging (batch)", en: "AI Tagging (batch)" },
+    creditAction_ai_analysis: { it: "Analisi AI (confronto)", en: "AI Analysis (comparison)" },
+    creditAction_report_single: { it: "Report singolo", en: "Single report" },
+    creditAction_report_comparison: { it: "Report confronto", en: "Comparison report" },
+    // Final CTA
+    ctaTitle: {
+      it: "Pronto a monitorare i tuoi competitor?",
+      en: "Ready to monitor your competitors?",
+    },
+    ctaSubtitle: {
+      it: "Crea un account gratuito e inizia a scansionare le ads dei tuoi competitor in pochi minuti.",
+      en: "Create a free account and start scanning your competitors' ads in minutes.",
+    },
+    ctaBtn: { it: "Crea account gratuito", en: "Create free account" },
+    // Footer
+    footerRights: { it: "Tutti i diritti riservati.", en: "All rights reserved." },
+    footerProduct: { it: "Prodotto", en: "Product" },
+    footerPricing: { it: "Prezzi", en: "Pricing" },
+    footerLogin: { it: "Accedi", en: "Sign in" },
+    footerRegister: { it: "Registrati", en: "Register" },
+    footerCompany: { it: "Azienda", en: "Company" },
   },
 
   // ─── 404 ───────────────────────────────────────────────────
