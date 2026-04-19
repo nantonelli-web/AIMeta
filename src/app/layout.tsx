@@ -10,10 +10,35 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://aiscan.biz";
+
 export const metadata: Metadata = {
-  title: "MAIT — Meta Ads Intelligence Tool",
+  title: {
+    default: "MAIT — Ads Intelligence Tool | aiscan.biz",
+    template: "%s | MAIT",
+  },
   description:
-    "NIMA Digital · Competitive intelligence and analytics for Meta Ads.",
+    "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis, brand comparison and professional reports.",
+  metadataBase: new URL(SITE_URL),
+  openGraph: {
+    title: "MAIT — Ads Intelligence Tool",
+    description:
+      "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis, brand comparison and professional reports.",
+    url: SITE_URL,
+    siteName: "MAIT",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MAIT — Ads Intelligence Tool",
+    description:
+      "Monitor competitor ads on Meta, Google and Instagram. AI-powered analysis and professional reports.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default async function RootLayout({
