@@ -74,70 +74,119 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
 
   return (
     <div className="space-y-6">
-      {/* ─── Channel filter tabs ─── */}
-      <div className="flex items-center gap-1 border-b border-border">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setChannel(tab.key)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-2 text-sm transition-colors border-b-2 -mb-px",
-              "cursor-pointer",
-              channel === tab.key
-                ? "border-gold text-gold font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {tab.icon}
-            {tab.label}
-            <span className={cn(
-              "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
-              channel === tab.key
-                ? "bg-gold/20 text-gold"
-                : "bg-muted text-muted-foreground"
-            )}>
-              {tab.count}
-            </span>
-          </button>
-        ))}
+      {/* ─── Channel filter ─── */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground shrink-0">{t("competitors", "filterBy")}</span>
+        <div className="flex items-center gap-1">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setChannel(tab.key)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors cursor-pointer",
+                channel === tab.key
+                  ? "bg-gold/15 text-gold border border-gold/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+              <span className={cn(
+                "text-[9px] rounded-full px-1 py-0.5 min-w-[16px] text-center",
+                channel === tab.key
+                  ? "bg-gold/20 text-gold"
+                  : "bg-muted text-muted-foreground"
+              )}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ─── Ads section (Meta + Google) ─── */}
-      {(showMeta || showGoogle) && visibleAds.length > 0 && (
-        <div className="space-y-4">
-          {/* Header with count + AI Tag + Export */}
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {visibleAds.length} ads
-            </p>
-            <div className="flex items-center gap-3">
-              <TagButton competitorId={competitorId} />
-              <a
-                href={`/api/export/ads.csv?competitor_id=${competitorId}`}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Download className="size-3" />
-                {t("competitors", "exportCsv")}
-              </a>
+      {/* ─── Ads section ─── */}
+      {channel === "all" ? (
+        <>
+          {/* All: grouped by channel */}
+          {metaAds.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <MetaIcon className="size-4 text-gold" />
+                  <p className="text-sm font-medium">Meta Ads</p>
+                  <span className="text-xs text-muted-foreground">({metaAds.length})</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <TagButton competitorId={competitorId} />
+                  <a
+                    href={`/api/export/ads.csv?competitor_id=${competitorId}`}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Download className="size-3" />
+                    {t("competitors", "exportCsv")}
+                  </a>
+                </div>
+              </div>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {metaAds.map((ad) => (
+                  <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Grid */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleAds.map((ad) => (
-              <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
-            ))}
-          </div>
-        </div>
-      )}
+          {googleAds.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <GoogleIcon className="size-4 text-gold" />
+                <p className="text-sm font-medium">Google Ads</p>
+                <span className="text-xs text-muted-foreground">({googleAds.length})</span>
+              </div>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {googleAds.map((ad) => (
+                  <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Filtered: single channel */}
+          {(channel === "meta" || channel === "google") && visibleAds.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {visibleAds.length} ads
+                </p>
+                <div className="flex items-center gap-3">
+                  <TagButton competitorId={competitorId} />
+                  <a
+                    href={`/api/export/ads.csv?competitor_id=${competitorId}`}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Download className="size-3" />
+                    {t("competitors", "exportCsv")}
+                  </a>
+                </div>
+              </div>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {visibleAds.map((ad) => (
+                  <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
+                ))}
+              </div>
+            </div>
+          )}
 
-      {/* Empty state for ads tabs */}
-      {(channel === "meta" || channel === "google") && visibleAds.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground text-sm">
-            {channel === "meta" ? t("competitors", "noMetaAds") : t("competitors", "noGoogleAds")}
-          </CardContent>
-        </Card>
+          {/* Empty state for single channel */}
+          {(channel === "meta" || channel === "google") && visibleAds.length === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground text-sm">
+                {channel === "meta" ? t("competitors", "noMetaAds") : t("competitors", "noGoogleAds")}
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* ─── Instagram section ─── */}

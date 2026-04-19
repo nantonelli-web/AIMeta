@@ -275,6 +275,7 @@ const translations = {
     pageCategories: { it: "Categorie pagina", en: "Page categories" },
     selectedCountries: { it: "Paesi selezionati:", en: "Selected countries:" },
     channelAll: { it: "Tutti", en: "All" },
+    filterBy: { it: "Filtra per:", en: "Filter by:" },
     noMetaAds: { it: "Nessuna Meta Ad raccolta.", en: "No Meta Ads collected." },
     noGoogleAds: { it: "Nessuna Google Ad raccolta.", en: "No Google Ads collected." },
   },
