@@ -84,8 +84,10 @@ export function ReportBuilder({
   // State
   const [reportType, setReportType] = useState<ReportType>("single");
   const [channel, setChannel] = useState<ReportChannel>("all");
-  const [usingSavedComparison, setUsingSavedComparison] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
+  // Comparison mode: main brand + selected saved comparisons
+  const [mainBrandId, setMainBrandId] = useState<string | null>(null);
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [reportLocale, setReportLocale] = useState<ReportLocale>(locale as ReportLocale);
   const [contentSections, setContentSections] = useState<Set<'technical' | 'copy' | 'visual'>>(new Set(['technical']));
@@ -107,18 +109,30 @@ export function ReportBuilder({
 
   // Derived values
   const selectedArray = [...selectedBrands];
-  const maxBrands = reportType === "comparison" ? 3 : 1;
-  // Step numbering: channel is step 2, saved comparisons adds another step
-  const hasCompStep = reportType === "comparison" && savedComparisons.length > 0;
-  // +1 for channel step, +1 for saved comparisons (if visible)
-  const stepOffset = 1 + (hasCompStep ? 1 : 0);
+
+  // For comparison mode: filter saved comparisons that include the main brand
+  const filteredComparisons = mainBrandId
+    ? savedComparisons.filter((sc) => sc.competitor_ids.includes(mainBrandId))
+    : [];
+
+  // Collect all brand IDs from selected comparisons (for report generation)
+  const comparisonBrandIds = (() => {
+    const ids = new Set<string>();
+    for (const scId of selectedComparisonIds) {
+      const sc = savedComparisons.find((s) => s.id === scId);
+      if (sc) sc.competitor_ids.forEach((id) => ids.add(id));
+    }
+    return ids;
+  })();
 
   // Get client_id for the first selected brand (for template filtering)
-  const firstBrand = competitors.find((c) => selectedBrands.has(c.id));
+  const firstBrand = reportType === "comparison"
+    ? competitors.find((c) => c.id === mainBrandId)
+    : competitors.find((c) => selectedBrands.has(c.id));
   const selectedClientId = firstBrand?.client_id ?? null;
   const filteredTemplates = selectedClientId
     ? templates.filter((t) => t.client_id === selectedClientId)
-    : templates; // Show all templates if no client selected
+    : templates;
 
   const selectedTemplate = templateId
     ? templates.find((t) => t.id === templateId)
@@ -137,9 +151,9 @@ export function ReportBuilder({
 
   // Can generate?
   const canGenerate =
-    (reportType === "single"
-      ? selectedBrands.size === 1
-      : selectedBrands.size >= 2) && (usingSavedComparison || !channelDisabled[channel]);
+    reportType === "single"
+      ? selectedBrands.size === 1 && !channelDisabled[channel]
+      : selectedComparisonIds.size > 0;
 
   // ─── Handlers ────────────────────────────────────────────────
 
@@ -149,27 +163,22 @@ export function ReportBuilder({
       if (next.has(id)) {
         next.delete(id);
       } else {
-        if (reportType === "single") {
-          // Single: only one selection
-          next.clear();
-          next.add(id);
-        } else if (next.size < maxBrands) {
-          next.add(id);
-        }
+        // Single mode: only one selection
+        next.clear();
+        next.add(id);
       }
       return next;
     });
-    // Reset template and saved comparison flag when brand changes manually
     setTemplateId(null);
-    setUsingSavedComparison(false);
   }
 
   function switchType(type: ReportType) {
     setReportType(type);
     setSelectedBrands(new Set());
+    setMainBrandId(null);
+    setSelectedComparisonIds(new Set());
     setTemplateId(null);
     setChannel("all");
-    setUsingSavedComparison(false);
   }
 
   async function handleScanMissing() {
@@ -243,13 +252,22 @@ export function ReportBuilder({
     setError(null);
 
     try {
+      // For comparison mode, use brand IDs from first selected comparison
+      const idsForReport = reportType === "comparison"
+        ? (() => {
+            const firstScId = [...selectedComparisonIds][0];
+            const sc = savedComparisons.find((s) => s.id === firstScId);
+            return sc?.competitor_ids ?? [];
+          })()
+        : selectedArray;
+
       const res = await fetch("/api/report/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           type: reportType,
-          channel,
-          competitor_ids: selectedArray,
+          channel: reportType === "comparison" ? "meta" : channel,
+          competitor_ids: idsForReport,
           template_id: templateId ?? undefined,
           format,
           locale: reportLocale,
@@ -396,6 +414,7 @@ export function ReportBuilder({
               variant={reportType === "comparison" ? "default" : "outline"}
               size="sm"
               onClick={() => switchType("comparison")}
+              className={reportType !== "comparison" ? "hover:bg-gold/25 hover:text-gold hover:border-gold" : ""}
             >
               {t("report", "typeComparison")}
             </Button>
@@ -403,6 +422,7 @@ export function ReportBuilder({
               variant={reportType === "single" ? "default" : "outline"}
               size="sm"
               onClick={() => switchType("single")}
+              className={reportType !== "single" ? "hover:bg-gold/25 hover:text-gold hover:border-gold" : ""}
             >
               {t("report", "typeSingle")}
             </Button>
@@ -410,113 +430,38 @@ export function ReportBuilder({
         </CardContent>
       </Card>
 
-      {/* Step 2: Saved comparisons (only for comparison mode) */}
-      {reportType === "comparison" && savedComparisons.length > 0 && (
+      {/* ─── SINGLE MODE: Select Brand → Channel ─── */}
+      {reportType === "single" && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">2. {t("report", "selectBrand")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {competitors.map((c) => {
+                  const isSelected = selectedBrands.has(c.id);
+                  return (
+                    <Button
+                      key={c.id}
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleBrand(c.id)}
+                    >
+                      {c.page_name}
+                    </Button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Channel — only for single mode */}
+          {selectedBrands.size === 1 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">
-              2. {t("report", "savedComparisons")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-xs text-muted-foreground mb-3">
-              {t("report", "savedComparisonsHint")}
-            </p>
-            <div className="grid gap-2">
-              {savedComparisons.map((sc) => {
-                const brandNames = sc.competitor_ids
-                  .map((id) => competitors.find((c) => c.id === id)?.page_name)
-                  .filter(Boolean);
-                if (brandNames.length !== sc.competitor_ids.length) return null;
-                const isActive =
-                  sc.competitor_ids.length === selectedBrands.size &&
-                  sc.competitor_ids.every((id) => selectedBrands.has(id));
-                return (
-                  <button
-                    key={sc.id}
-                    onClick={() => {
-                      setSelectedBrands(new Set(sc.competitor_ids));
-                      setTemplateId(null);
-                      setUsingSavedComparison(true);
-                      setChannel("meta"); // saved comparisons default to meta
-                    }}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors w-full",
-                      isActive
-                        ? "bg-gold/15 border-gold/40 text-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-gold/30"
-                    )}
-                  >
-                    <GitCompareArrows className={cn("size-4 shrink-0", isActive ? "text-gold" : "text-muted-foreground")} />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium truncate block">{brandNames.join(" vs ")}</span>
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                        <span className="text-gold/70">Meta Ads</span>
-                        <span>·</span>
-                        {new Date(sc.updated_at).toLocaleDateString(locale === "it" ? "it-IT" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
-                        {sc.stale && (
-                          <span className="inline-flex items-center gap-0.5 text-amber-400">
-                            <AlertTriangle className="size-2.5" /> {t("report", "stale")}
-                          </span>
-                        )}
-                        <span className="text-muted-foreground/50">
-                          {["Tech", sc.hasCopy ? "Copy" : null, sc.hasVisual ? "Visual" : null].filter(Boolean).join(" + ")}
-                        </span>
-                      </span>
-                    </div>
-                    {isActive && <Check className="size-3.5 text-gold shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step {N}: Select Brand(s) — BEFORE channel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">
-            {reportType === "comparison" && savedComparisons.length > 0 ? "3" : "2"}.{" "}
-            {reportType === "single"
-              ? t("report", "selectBrand")
-              : t("report", "selectBrands")}
-            {reportType === "comparison" && ` (${selectedBrands.size}/${maxBrands})`}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {competitors.map((c) => {
-              const isSelected = selectedBrands.has(c.id);
-              return (
-                <Button
-                  key={c.id}
-                  variant={isSelected ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleBrand(c.id)}
-                  disabled={
-                    !isSelected && selectedBrands.size >= maxBrands
-                  }
-                >
-                  {c.page_name}
-                </Button>
-              );
-            })}
-          </div>
-          {competitors.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {t("compare", "noCompetitorsInWorkspace")}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Step {N}: Channel — after brand selection, hidden for saved comparisons */}
-      {selectedBrands.size > 0 && !usingSavedComparison && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              {(reportType === "comparison" && savedComparisons.length > 0 ? 4 : 3)}. {t("report", "channel")}
+              3. {t("report", "channel")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -592,13 +537,119 @@ export function ReportBuilder({
             })()}
           </CardContent>
         </Card>
+          )}
+        </>
+      )}
+
+      {/* ─── COMPARISON MODE: Select Main Brand → Select Saved Comparisons ─── */}
+      {reportType === "comparison" && (
+        <>
+          {/* Step 2: Select main brand */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">2. {t("report", "selectMainBrand")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {competitors.map((c) => (
+                  <Button
+                    key={c.id}
+                    variant={mainBrandId === c.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setMainBrandId(mainBrandId === c.id ? null : c.id);
+                      setSelectedComparisonIds(new Set());
+                      setTemplateId(null);
+                    }}
+                  >
+                    {c.page_name}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 3: Select saved comparisons */}
+          {mainBrandId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">3. {t("report", "selectComparisons")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {filteredComparisons.length === 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {t("report", "noSavedComparisons")}
+                    </p>
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold">
+                      <a href="/competitors/compare">{t("report", "goToCompare")}</a>
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {t("report", "selectComparisonsHint")}
+                    </p>
+                    <div className="grid gap-2">
+                      {filteredComparisons.map((sc) => {
+                        const otherBrands = sc.competitor_ids
+                          .filter((id) => id !== mainBrandId)
+                          .map((id) => competitors.find((c) => c.id === id)?.page_name)
+                          .filter(Boolean);
+                        const isSelected = selectedComparisonIds.has(sc.id);
+                        return (
+                          <button
+                            key={sc.id}
+                            onClick={() => {
+                              setSelectedComparisonIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(sc.id)) next.delete(sc.id);
+                                else next.add(sc.id);
+                                return next;
+                              });
+                            }}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors w-full cursor-pointer",
+                              isSelected
+                                ? "bg-gold/15 border-gold/40 text-foreground"
+                                : "border-border text-muted-foreground hover:text-foreground hover:border-gold/30"
+                            )}
+                          >
+                            <GitCompareArrows className={cn("size-4 shrink-0", isSelected ? "text-gold" : "text-muted-foreground")} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium truncate block">
+                                vs {otherBrands.join(", ")}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                {new Date(sc.updated_at).toLocaleDateString(locale === "it" ? "it-IT" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
+                                {sc.stale && (
+                                  <span className="inline-flex items-center gap-0.5 text-amber-400">
+                                    <AlertTriangle className="size-2.5" /> {t("report", "stale")}
+                                  </span>
+                                )}
+                                <span className="text-muted-foreground/50">
+                                  {["Tech", sc.hasCopy ? "Copy" : null, sc.hasVisual ? "Visual" : null].filter(Boolean).join(" + ")}
+                                </span>
+                              </span>
+                            </div>
+                            {isSelected && <Check className="size-3.5 text-gold shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Step {N}: Content Sections */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {4 + stepOffset}. {t("report", "contentSelection")}
+            4. {t("report", "contentSelection")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -641,7 +692,7 @@ export function ReportBuilder({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {5 + stepOffset}. {t("report", "template")}
+            5. {t("report", "template")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -796,7 +847,7 @@ export function ReportBuilder({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {6 + stepOffset}. {t("report", "language")}
+            6. {t("report", "language")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -823,7 +874,7 @@ export function ReportBuilder({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {7 + stepOffset}. {t("report", "font")}
+            7. {t("report", "font")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -855,7 +906,7 @@ export function ReportBuilder({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {8 + stepOffset}. {t("report", "format")}
+            8. {t("report", "format")}
           </CardTitle>
         </CardHeader>
         <CardContent>

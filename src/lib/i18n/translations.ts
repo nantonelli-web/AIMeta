@@ -770,6 +770,17 @@ const translations = {
       en: "Instagram username not configured",
     },
     goToEdit: { it: "Configura", en: "Configure" },
+    selectMainBrand: { it: "Seleziona il brand principale", en: "Select the main brand" },
+    selectComparisons: { it: "Seleziona confronti", en: "Select comparisons" },
+    selectComparisonsHint: {
+      it: "Seleziona uno o piu confronti salvati che includono il brand scelto.",
+      en: "Select one or more saved comparisons that include the chosen brand.",
+    },
+    noSavedComparisons: {
+      it: "Nessun confronto salvato per questo brand. Vai nella sezione Confronto per crearne uno.",
+      en: "No saved comparisons for this brand. Go to the Compare section to create one.",
+    },
+    goToCompare: { it: "Vai al confronto", en: "Go to Compare" },
   },
 
   // ─── Alerts ────────────────────────────────────────────────
