@@ -342,18 +342,18 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Fetch theme config + images from template if provided
-  let themeConfig: ThemeConfig | null = null;
-  if (template_id) {
-    const { data: tmpl } = await admin
-      .from("mait_client_templates")
-      .select("theme_config, storage_path")
-      .eq("id", template_id)
-      .single();
-    if (tmpl?.theme_config) {
-      themeConfig = tmpl.theme_config as unknown as ThemeConfig;
-
-      // Download the original PPTX from storage to extract images
+  // Fetch template + brand data IN PARALLEL (saves 0.5-2s)
+  const [templateResult, brands] = await Promise.all([
+    // Template fetch
+    (async (): Promise<ThemeConfig | null> => {
+      if (!template_id) return null;
+      const { data: tmpl } = await admin
+        .from("mait_client_templates")
+        .select("theme_config, storage_path")
+        .eq("id", template_id)
+        .single();
+      if (!tmpl?.theme_config) return null;
+      let cfg = tmpl.theme_config as unknown as ThemeConfig;
       if (tmpl.storage_path) {
         try {
           const { data: fileData } = await admin.storage
@@ -362,31 +362,25 @@ export async function POST(req: Request) {
           if (fileData) {
             const buffer = await fileData.arrayBuffer();
             const images = await extractImagesFromTemplate(buffer);
-            themeConfig = {
-              ...themeConfig,
-              ...images,
-            };
+            cfg = { ...cfg, ...images };
           }
         } catch (err) {
           console.warn("[report/generate] Failed to extract images from template:", err);
         }
       }
-    }
-  }
-
-  // Fetch brand data — for Instagram, fetch organic posts instead of ads
-  const brands: BrandData[] = await Promise.all(
-    competitor_ids.map(async (id) => {
-      if (channel === "instagram") {
-        return fetchInstagramBrandData(admin, id);
-      }
-      return fetchBrandData(
-        admin,
-        id,
-        channel === "all" ? undefined : channel
-      );
-    })
-  );
+      return cfg;
+    })(),
+    // Brand data fetch
+    Promise.all(
+      competitor_ids.map(async (id) => {
+        if (channel === "instagram") {
+          return fetchInstagramBrandData(admin, id);
+        }
+        return fetchBrandData(admin, id, channel === "all" ? undefined : channel);
+      })
+    ),
+  ]);
+  let themeConfig = templateResult;
 
   // Fetch AI analysis if needed — check comparison cache first
   let copyAnalysis: CreativeAnalysisResult["copywriterReport"] | null = null;
@@ -434,6 +428,24 @@ export async function POST(req: Request) {
 
       copyAnalysis = copyResult ?? cachedCopy;
       visualAnalysis = visualResult ?? cachedVisual;
+
+      // Save freshly generated analysis to cache for future reuse (fire-and-forget)
+      if (wsId && (copyResult || visualResult)) {
+        void admin
+          .from("mait_comparisons")
+          .upsert(
+            {
+              workspace_id: wsId,
+              competitor_ids: sortedIds,
+              locale,
+              ...(copyResult ? { copy_analysis: copyResult } : {}),
+              ...(visualResult ? { visual_analysis: visualResult } : {}),
+              stale: false,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "workspace_id,competitor_ids,locale" }
+          );
+      }
     } else {
       copyAnalysis = cachedCopy;
       visualAnalysis = cachedVisual;

@@ -192,7 +192,7 @@ export async function analyzeVisuals(
     return null;
   }
 
-  // Collect image URLs: max 3 per brand, max 9 total
+  // Collect image URLs: max 2 per brand, max 6 total (reduced to avoid Gemini timeout)
   const imageEntries: { brandName: string; url: string }[] = [];
   for (const brand of brands) {
     const brandImages = brand.ads
@@ -202,9 +202,9 @@ export async function analyzeVisuals(
           !ad.image_url.includes("/render_ad/") &&
           ad.image_url.startsWith("http")
       )
-      .slice(0, 3);
+      .slice(0, 2);
     for (const ad of brandImages) {
-      if (imageEntries.length >= 9) break;
+      if (imageEntries.length >= 6) break;
       imageEntries.push({ brandName: brand.brandName, url: ad.image_url! });
     }
   }
