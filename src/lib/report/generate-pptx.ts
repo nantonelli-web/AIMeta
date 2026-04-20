@@ -36,6 +36,8 @@ export interface BrandData {
     cta?: string | null;
     adText?: string | null;
     platforms?: string[] | null;
+    status?: string | null;
+    startDate?: string | null;
     imageBase64?: string | null;
     imageMimeType?: string | null;
   }[];
@@ -314,10 +316,191 @@ function addAdCard(
   return cardH;
 }
 
-/** Truncate text to max characters */
-function trunc(text: string | null | undefined, max: number): string {
-  if (!text) return "\u2014";
-  return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+/** Format a date according to locale (dd mmm yyyy) */
+function formatAdDate(iso: string, locale: Locale): string {
+  try {
+    return new Date(iso).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT", {
+      day: "2-digit", month: "short", year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Render a detailed ad card (larger, more info) — mimics the dashboard detail view.
+ * Shows: big image, ACTIVE badge, headline, ad body, CTA pill, platforms, start date.
+ */
+function addDetailedAdCard(
+  slide: PptxGenJS.Slide,
+  pptx: PptxGenJS,
+  ad: BrandData["latestAds"][0],
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  // Card background
+  slide.addShape(pptx.ShapeType.rect, {
+    x, y, w, h,
+    fill: { color: "1C1C1C" },
+    line: { type: "none" }, rectRadius: 0.04,
+  });
+
+  // Image container (portrait-ish, slightly taller than wide)
+  const imgPad = 0.05;
+  const containerW = w - imgPad * 2;
+  const containerH = containerW * 1.05;
+  const imgX = x + imgPad;
+  const imgY = y + imgPad;
+
+  // Dark image backing
+  slide.addShape(pptx.ShapeType.rect, {
+    x: imgX, y: imgY, w: containerW, h: containerH,
+    fill: { color: "0A0A0A" }, line: { type: "none" },
+  });
+
+  // Image — fit to real dimensions, preserve aspect
+  if (ad.imageBase64 && ad.imageMimeType) {
+    const dims = getImageDimensions(ad.imageBase64);
+    if (dims) {
+      const fit = fitImage(dims.w, dims.h, containerW, containerH);
+      slide.addImage({
+        data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
+        x: imgX + fit.x, y: imgY + fit.y, w: fit.w, h: fit.h,
+      });
+    } else {
+      slide.addImage({
+        data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
+        x: imgX, y: imgY, w: containerW, h: containerH,
+      });
+    }
+  }
+
+  // ACTIVE badge (top-right overlay)
+  if (ad.status === "ACTIVE") {
+    const badgeW = 0.5;
+    const badgeH = 0.18;
+    slide.addShape(pptx.ShapeType.rect, {
+      x: x + w - badgeW - 0.08, y: y + 0.08, w: badgeW, h: badgeH,
+      fill: { color: "10B981" }, line: { type: "none" }, rectRadius: 0.02,
+    });
+    slide.addText("ACTIVE", {
+      x: x + w - badgeW - 0.08, y: y + 0.08, w: badgeW, h: badgeH,
+      fontSize: 6, fontFace: theme.fonts.body, color: "FFFFFF",
+      bold: true, align: "center", valign: "middle",
+    });
+  }
+
+  // Text area
+  const textX = x + 0.1;
+  const textW = w - 0.2;
+  let ty = imgY + containerH + 0.08;
+
+  // Headline
+  if (ad.headline) {
+    slide.addText(ad.headline.slice(0, 90), {
+      x: textX, y: ty, w: textW, h: 0.32,
+      fontSize: 8.5, fontFace: theme.fonts.body, color: "F5F5F5",
+      bold: true, valign: "top",
+    });
+    ty += 0.34;
+  }
+
+  // Ad body text
+  if (ad.adText) {
+    const body = ad.adText.length > 180 ? ad.adText.slice(0, 177) + "\u2026" : ad.adText;
+    slide.addText(body, {
+      x: textX, y: ty, w: textW, h: 0.5,
+      fontSize: 6.5, fontFace: theme.fonts.body, color: "B5B5B5",
+      valign: "top",
+    });
+    ty += 0.52;
+  }
+
+  // CTA pill
+  if (ad.cta) {
+    const ctaW = Math.min(ad.cta.length * 0.07 + 0.16, textW);
+    slide.addShape(pptx.ShapeType.rect, {
+      x: textX, y: ty, w: ctaW, h: 0.22,
+      fill: { color: "D4A843" }, line: { type: "none" }, rectRadius: 0.03,
+    });
+    slide.addText(ad.cta, {
+      x: textX, y: ty, w: ctaW, h: 0.22,
+      fontSize: 7, fontFace: theme.fonts.body, color: "1C1C1C",
+      bold: true, align: "center", valign: "middle",
+    });
+    ty += 0.27;
+  }
+
+  // Platforms
+  if (ad.platforms && ad.platforms.length > 0) {
+    slide.addText(ad.platforms.slice(0, 4).join(" \u00B7 "), {
+      x: textX, y: ty, w: textW, h: 0.15,
+      fontSize: 5.5, fontFace: theme.fonts.body, color: "888888",
+    });
+    ty += 0.16;
+  }
+
+  // Start date
+  if (ad.startDate) {
+    const dateStr = formatAdDate(ad.startDate, locale);
+    if (dateStr) {
+      slide.addText(`${label(locale, "Attiva dal", "Active since")} ${dateStr}`, {
+        x: textX, y: ty, w: textW, h: 0.15,
+        fontSize: 5.5, fontFace: theme.fonts.body, color: "777777",
+      });
+    }
+  }
+}
+
+/**
+ * Render a dedicated "Latest Ads" slide for a single brand.
+ * Three large detailed cards that mirror the dashboard ad detail view.
+ */
+function latestAdsSlideForBrand(
+  pptx: PptxGenJS,
+  brand: BrandData,
+  theme: ThemeConfig,
+  locale: Locale
+) {
+  const slide = pptx.addSlide();
+  addLogo(slide, theme);
+  slide.background = { color: hex(contentBg(theme)) };
+
+  slide.addText(`${label(locale, "Ultime Ads", "Latest Ads")} \u2014 ${brand.name}`, {
+    x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.4,
+    fontSize: 14, fontFace: theme.fonts.heading,
+    color: hex(theme.colors.primary), bold: true,
+  });
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: PAD, y: 0.55, w: SW - 2 * PAD, h: 0.03,
+    fill: { color: hex(theme.colors.primary) }, line: { type: "none" },
+  });
+
+  const ads = brand.latestAds.slice(0, 3);
+  if (ads.length === 0) {
+    slide.addText(label(locale, "Nessuna ad recente", "No recent ads"), {
+      x: PAD, y: 2.5, w: SW - 2 * PAD, h: 0.4,
+      fontSize: 11, fontFace: theme.fonts.body,
+      color: hex(theme.colors.text), transparency: 40,
+    });
+    return;
+  }
+
+  const startY = 0.68;
+  const cardGap = 0.2;
+  const cols = 3;
+  const cardW = (SW - 2 * PAD - cardGap * (cols - 1)) / cols;
+  const cardH = SH - startY - 0.15;
+
+  ads.forEach((ad, i) => {
+    const x = PAD + i * (cardW + cardGap);
+    addDetailedAdCard(slide, pptx, ad, x, startY, cardW, cardH, theme, locale);
+  });
 }
 
 // ─── Card background helper ─────────────────────────────────────
@@ -703,90 +886,6 @@ function singleObjectiveAndFormat(
       hex(theme.colors.secondary),
       hex(theme.colors.accent),
     ],
-  });
-}
-
-function singleLatestAds(
-  pptx: PptxGenJS,
-  brand: BrandData,
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  addLogo(slide, theme);
-  slide.background = { color: hex(contentBg(theme)) };
-
-  slide.addText(label(locale, "Ultime Ads", "Latest Ads"), {
-    x: PAD,
-    y: 0.15,
-    w: SW - 2 * PAD,
-    h: 0.4,
-    fontSize: 14,
-    fontFace: theme.fonts.heading,
-    color: hex(theme.colors.primary),
-    bold: true,
-  });
-
-  const ads = brand.latestAds.slice(0, 6);
-  if (ads.length === 0) {
-    slide.addText(label(locale, "Nessuna ad recente", "No recent ads"), {
-      x: PAD,
-      y: 2.5,
-      w: SW - 2 * PAD,
-      h: 0.4,
-      fontSize: 11,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.text),
-      transparency: 40,
-    });
-    return;
-  }
-
-  const cols = 3;
-  const cardW = (SW - 2 * PAD - 0.2 * (cols - 1)) / cols;
-  const cardH = 1.8;
-  const cardBg = lighten(contentBg(theme), 0.12);
-
-  ads.forEach((ad, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = PAD + col * (cardW + 0.2);
-    const y = 0.7 + row * (cardH + 0.15);
-
-    addCardBg(slide, pptx, x, y, cardW, cardH, cardBg);
-
-    // Border line at top
-    slide.addShape(pptx.ShapeType.rect, {
-      x,
-      y,
-      w: cardW,
-      h: 0.03,
-      fill: { color: hex(theme.colors.primary) },
-      line: { type: "none" },
-    });
-
-    const headline = trunc(ad.headline, 80) || `Ad #${ad.ad_archive_id.slice(0, 10)}`;
-    slide.addText(headline, {
-      x: x + 0.1,
-      y: y + 0.12,
-      w: cardW - 0.2,
-      h: 0.6,
-      fontSize: 9,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.text),
-      valign: "top",
-    });
-
-    slide.addText(`ID: ${ad.ad_archive_id.slice(0, 16)}\u2026`, {
-      x: x + 0.1,
-      y: y + cardH - 0.35,
-      w: cardW - 0.2,
-      h: 0.25,
-      fontSize: 6,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.text),
-      transparency: 50,
-    });
   });
 }
 
@@ -1689,54 +1788,6 @@ function compCtaAndPlatforms(
   }
 }
 
-function compLatestAds(
-  pptx: PptxGenJS,
-  brands: BrandData[],
-  theme: ThemeConfig,
-  locale: Locale
-) {
-  const slide = pptx.addSlide();
-  addLogo(slide, theme);
-  slide.background = { color: hex(contentBg(theme)) };
-
-  slide.addText(label(locale, "Ultime Ads", "Latest Ads"), {
-    x: PAD,
-    y: 0.15,
-    w: SW - 2 * PAD,
-    h: 0.35,
-    fontSize: 14,
-    fontFace: theme.fonts.heading,
-    color: hex(theme.colors.primary),
-    bold: true,
-  });
-
-  // 3 cards per brand, all in one row per brand
-  const colW = (SW - 2 * PAD - 0.2) / brands.length;
-  const cardsPerBrand = 3;
-  const cardGap = 0.08;
-  const cardW = (colW - cardGap * (cardsPerBrand - 1)) / cardsPerBrand;
-
-  brands.forEach((b, bi) => {
-    const bx = PAD + bi * (colW + 0.2);
-
-    // Brand header
-    slide.addShape(pptx.ShapeType.rect, {
-      x: bx, y: 0.6, w: colW, h: 0.22,
-      fill: { color: hex(theme.colors.primary) }, line: { type: "none" },
-    });
-    slide.addText(b.name, {
-      x: bx + 0.06, y: 0.6, w: colW - 0.12, h: 0.22,
-      fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.background), bold: true,
-    });
-
-    const ads = b.latestAds.slice(0, cardsPerBrand);
-    ads.forEach((ad, j) => {
-      const cx = bx + j * (cardW + cardGap);
-      addAdCard(slide, pptx, ad, cx, 0.9, cardW, theme);
-    });
-  });
-}
-
 // ─── Closing slide (shared) ─────────────────────────────────────
 
 function closingSlide(
@@ -1985,9 +2036,9 @@ export async function generateSinglePptx(
     singleObjectiveAndFormat(pptx, brand, t, locale);
   }
 
-  // Slide 4: Latest Ads (technical)
+  // Slide 4: Latest Ads (technical) — dedicated per-brand slide with detailed cards
   if (hasTechnical) {
-    singleLatestAds(pptx, brand, t, locale);
+    latestAdsSlideForBrand(pptx, brand, t, locale);
   }
 
   // Benchmark slide
@@ -2064,9 +2115,11 @@ export async function generateComparisonPptx(
     compCtaAndPlatforms(pptx, brands, t, locale);
   }
 
-  // Slide 5: Latest Ads
+  // Slide 5: Latest Ads — one dedicated slide per brand with detailed cards
   if (hasTechnical) {
-    compLatestAds(pptx, brands, t, locale);
+    for (const b of brands) {
+      latestAdsSlideForBrand(pptx, b, t, locale);
+    }
   }
 
   // Benchmark slide

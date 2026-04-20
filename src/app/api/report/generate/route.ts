@@ -177,6 +177,8 @@ async function fetchBrandData(
         cta: a.cta,
         adText: a.ad_text,
         platforms: a.platforms,
+        status: a.status,
+        startDate: a.start_date,
         imageBase64,
         imageMimeType,
       };
