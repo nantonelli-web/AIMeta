@@ -174,6 +174,68 @@ function generateCtaComment(brands: BrandData[], locale: Locale): string {
     : `Dominant CTA — ${parts.join(" vs ")}. ${brands[0].topCtas[0]?.name === brands[1].topCtas[0]?.name ? "Both brands favor the same CTA." : "Different CTA strategies indicate different campaign objectives."}`;
 }
 
+/** Parse image dimensions from a base64-encoded JPEG or PNG buffer */
+function getImageDimensions(base64: string): { w: number; h: number } | null {
+  try {
+    const buf = Buffer.from(base64, "base64");
+    // PNG: bytes 16-23 contain width (4 bytes) and height (4 bytes) in IHDR
+    if (buf[0] === 0x89 && buf[1] === 0x50) {
+      const w = buf.readUInt32BE(16);
+      const h = buf.readUInt32BE(20);
+      if (w > 0 && h > 0) return { w, h };
+    }
+    // JPEG: scan for SOF0/SOF2 marker (0xFF 0xC0 or 0xFF 0xC2)
+    if (buf[0] === 0xff && buf[1] === 0xd8) {
+      let i = 2;
+      while (i < buf.length - 8) {
+        if (buf[i] !== 0xff) { i++; continue; }
+        const marker = buf[i + 1];
+        if (marker === 0xc0 || marker === 0xc2) {
+          const h = buf.readUInt16BE(i + 5);
+          const w = buf.readUInt16BE(i + 7);
+          if (w > 0 && h > 0) return { w, h };
+        }
+        const len = buf.readUInt16BE(i + 2);
+        i += 2 + len;
+      }
+    }
+    // WebP: RIFF header, VP8 chunk
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[8] === 0x57 && buf[9] === 0x45) {
+      // VP8 (lossy): width at offset 26, height at 28
+      if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x20) {
+        const w = buf.readUInt16LE(26) & 0x3fff;
+        const h = buf.readUInt16LE(28) & 0x3fff;
+        if (w > 0 && h > 0) return { w, h };
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** Calculate image dimensions to fit within a container while maintaining aspect ratio */
+function fitImage(
+  imgW: number, imgH: number,
+  containerW: number, containerH: number
+): { x: number; y: number; w: number; h: number } {
+  const imgRatio = imgW / imgH;
+  const containerRatio = containerW / containerH;
+  let w: number, h: number, x: number, y: number;
+  if (imgRatio > containerRatio) {
+    // Image is wider — fit to width
+    w = containerW;
+    h = containerW / imgRatio;
+    x = 0;
+    y = (containerH - h) / 2;
+  } else {
+    // Image is taller — fit to height
+    h = containerH;
+    w = containerH * imgRatio;
+    x = (containerW - w) / 2;
+    y = 0;
+  }
+  return { x, y, w, h };
+}
+
 /** Render an ad card: dark image box + headline + CTA badge */
 function addAdCard(
   slide: PptxGenJS.Slide,
@@ -184,33 +246,45 @@ function addAdCard(
   w: number,
   theme: ThemeConfig
 ) {
-  const imgSize = w - 0.08; // square image area
-  const cardH = imgSize + 0.65;
+  const containerW = w - 0.08;
+  const containerH = containerW * 1.2; // default 5:6 portrait ratio for container
+  const cardH = containerH + 0.65;
 
-  // Card border
+  // Card background
   slide.addShape(pptx.ShapeType.rect, {
     x, y, w, h: cardH,
     fill: { color: "1C1C1C" },
     line: { type: "none" }, rectRadius: 0.04,
   });
 
-  // Image — square, no sizing (natural fill, avoids PptxGenJS sizing bugs)
+  // Dark image area
+  slide.addShape(pptx.ShapeType.rect, {
+    x: x + 0.04, y: y + 0.04, w: containerW, h: containerH,
+    fill: { color: "111111" }, line: { type: "none" },
+  });
+
+  // Image — calculate real fit from actual dimensions
   if (ad.imageBase64 && ad.imageMimeType) {
-    slide.addImage({
-      data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
-      x: x + 0.04, y: y + 0.04, w: imgSize, h: imgSize,
-    });
-  } else {
-    slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.04, y: y + 0.04, w: imgSize, h: imgSize,
-      fill: { color: "2A2A2A" }, line: { type: "none" },
-    });
+    const dims = getImageDimensions(ad.imageBase64);
+    if (dims) {
+      const fit = fitImage(dims.w, dims.h, containerW, containerH);
+      slide.addImage({
+        data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
+        x: x + 0.04 + fit.x, y: y + 0.04 + fit.y, w: fit.w, h: fit.h,
+      });
+    } else {
+      // Fallback: fill container (unknown dimensions)
+      slide.addImage({
+        data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
+        x: x + 0.04, y: y + 0.04, w: containerW, h: containerH,
+      });
+    }
   }
 
   // Headline (white on dark card)
   const headline = ad.headline?.slice(0, 45) || "Ad";
   slide.addText(headline, {
-    x: x + 0.06, y: y + imgSize + 0.08, w: w - 0.12, h: 0.22,
+    x: x + 0.06, y: y + containerH + 0.08, w: w - 0.12, h: 0.22,
     fontSize: 6, fontFace: theme.fonts.body, color: "F5F5F5",
     valign: "top",
   });
@@ -219,11 +293,11 @@ function addAdCard(
   if (ad.cta) {
     const ctaW = Math.min(ad.cta.length * 0.05 + 0.1, w * 0.7);
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.06, y: y + imgSize + 0.32, w: ctaW, h: 0.14,
+      x: x + 0.06, y: y + containerH + 0.32, w: ctaW, h: 0.14,
       fill: { color: "D4A843" }, line: { type: "none" }, rectRadius: 0.02,
     });
     slide.addText(ad.cta, {
-      x: x + 0.06, y: y + imgSize + 0.32, w: ctaW, h: 0.14,
+      x: x + 0.06, y: y + containerH + 0.32, w: ctaW, h: 0.14,
       fontSize: 5, fontFace: theme.fonts.body, color: "1C1C1C",
       bold: true, align: "center",
     });
@@ -231,8 +305,8 @@ function addAdCard(
 
   // Platforms
   if (ad.platforms && ad.platforms.length > 0) {
-    slide.addText(ad.platforms.slice(0, 3).join(" · "), {
-      x: x + 0.06, y: y + imgSize + 0.48, w: w - 0.12, h: 0.12,
+    slide.addText(ad.platforms.slice(0, 3).join(" \u00B7 "), {
+      x: x + 0.06, y: y + containerH + 0.48, w: w - 0.12, h: 0.12,
       fontSize: 4, fontFace: theme.fonts.body, color: "999999",
     });
   }
