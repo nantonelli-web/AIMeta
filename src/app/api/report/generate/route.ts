@@ -161,13 +161,23 @@ async function fetchBrandData(
     ? Math.round((variantCounts.reduce((a, b) => a + b, 0) / variantCounts.length) * 10) / 10
     : 0;
 
-  // Latest ads — download images as base64 for PPTX embedding
+  // Latest ads — download images as base64 for PPTX embedding.
+  // Dedupe by image_url (and fall back to headline+ad_text) so the report
+  // doesn't show the same creative twice just because the brand has many
+  // ad_archive_ids sharing one image.
+  const seenKeys = new Set<string>();
   const sortedAds = adsList
     .sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
-    .slice(0, 6);
+    .filter((a) => {
+      const key = a.image_url ?? `${a.headline ?? ""}|${a.ad_text ?? ""}`;
+      if (!key || seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    })
+    .slice(0, 8); // a bit more than we display (6) to give analysis slides headroom
 
   const latestAds = await Promise.all(
     sortedAds.map(async (a) => {
