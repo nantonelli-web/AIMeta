@@ -637,6 +637,10 @@ const translations = {
     platformLabel: { it: "Piattaforma", en: "Platform" },
     ctaLabel: { it: "Call to Action", en: "Call to Action" },
     statusLabel: { it: "Stato", en: "Status" },
+    filterChannel: { it: "Canale", en: "Channel" },
+    filterBrand: { it: "Brand", en: "Brand" },
+    allBrands: { it: "Tutti i brand", en: "All brands" },
+    allChannels: { it: "Tutti", en: "All" },
   },
 
   // ─── Benchmarks ────────────────────────────────────────────
@@ -697,6 +701,57 @@ const translations = {
     avgVariantsChart: { it: "Media varianti per ad", en: "Avg. variants per ad" },
     variantsLabel: { it: "Varianti", en: "Variants" },
     topTargetedCountries: { it: "Top paesi target", en: "Top targeted countries" },
+    descVolume: {
+      it: "Numero di ads attive e inattive per ciascun brand monitorato.",
+      en: "Number of active and inactive ads for each monitored brand.",
+    },
+    descFormatPie: {
+      it: "Distribuzione dei formati creativi utilizzati (immagine, video, carosello).",
+      en: "Distribution of creative formats used (image, video, carousel).",
+    },
+    descFormatStacked: {
+      it: "Breakdown dei formati per brand. Permette di confrontare le strategie creative.",
+      en: "Format breakdown by brand. Allows comparing creative strategies.",
+    },
+    descTopCta: {
+      it: "Le call-to-action piu utilizzate nelle ads monitorate.",
+      en: "The most used call-to-actions in monitored ads.",
+    },
+    descPlatform: {
+      it: "Distribuzione delle ads per piattaforma di pubblicazione.",
+      en: "Distribution of ads by publishing platform.",
+    },
+    descDuration: {
+      it: "Durata media delle campagne in giorni per ciascun brand.",
+      en: "Average campaign duration in days for each brand.",
+    },
+    descCopyLength: {
+      it: "Lunghezza media del testo delle ads in caratteri per brand.",
+      en: "Average ad copy length in characters per brand.",
+    },
+    descRefreshRate: {
+      it: "Frequenza di pubblicazione di nuove ads per settimana negli ultimi 90 giorni.",
+      en: "Frequency of new ads published per week in the last 90 days.",
+    },
+    descAiGenerated: {
+      it: "Percentuale di ads create con strumenti di intelligenza artificiale.",
+      en: "Percentage of ads created with artificial intelligence tools.",
+    },
+    descAdvantagePlus: {
+      it: "Percentuale di ads che utilizzano l'ottimizzazione automatica Advantage+ di Meta.",
+      en: "Percentage of ads using Meta's Advantage+ automatic optimization.",
+    },
+    descAvgVariants: {
+      it: "Numero medio di varianti (test A/B) per ciascuna ad per brand.",
+      en: "Average number of variants (A/B tests) per ad for each brand.",
+    },
+    descTopCountries: {
+      it: "I paesi piu targetizzati nelle campagne monitorate.",
+      en: "The most targeted countries in monitored campaigns.",
+    },
+    daysAxisLabel: { it: "giorni", en: "days" },
+    charsAxisLabel: { it: "caratteri", en: "chars" },
+    adsPerWeekAxisLabel: { it: "ads/sett.", en: "ads/wk" },
   },
 
   // ─── Report ────────────────────────────────────────────────

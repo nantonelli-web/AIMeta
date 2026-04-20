@@ -66,21 +66,26 @@ export interface BenchmarkData {
 
 export async function computeBenchmarks(
   supabase: SupabaseClient,
-  workspaceId: string
+  workspaceId: string,
+  source?: "meta" | "google"
 ): Promise<BenchmarkData> {
+  let adsQuery = supabase
+    .from("mait_ads_external")
+    .select(
+      "id, competitor_id, cta, platforms, image_url, video_url, status, start_date, end_date, ad_text, created_at, raw_data"
+    )
+    .eq("workspace_id", workspaceId)
+    .limit(5000);
+
+  if (source) adsQuery = adsQuery.eq("source", source);
+
   const [{ data: competitors }, { data: rawAds }] = await Promise.all([
     supabase
       .from("mait_competitors")
       .select("id, page_name")
       .eq("workspace_id", workspaceId)
       .order("page_name"),
-    supabase
-      .from("mait_ads_external")
-      .select(
-        "id, competitor_id, cta, platforms, image_url, video_url, status, start_date, end_date, ad_text, created_at, raw_data"
-      )
-      .eq("workspace_id", workspaceId)
-      .limit(5000),
+    adsQuery,
   ]);
 
   const comps = (competitors ?? []) as CompetitorRef[];
@@ -178,7 +183,7 @@ export async function computeBenchmarks(
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ name, count }));
 
-  // ---- Campaign duration ----
+  // ---- Campaign duration (skip ads with duration < 1 day) ----
   const durationByComp = new Map<string, number[]>();
   for (const ad of ads) {
     if (!ad.start_date) continue;
@@ -186,7 +191,8 @@ export async function computeBenchmarks(
     const end = ad.end_date
       ? new Date(ad.end_date).getTime()
       : Date.now();
-    const days = Math.max(1, Math.round((end - start) / 86_400_000));
+    const days = Math.round((end - start) / 86_400_000);
+    if (days < 1) continue;
     const key = ad.competitor_id ?? "unknown";
     const arr = durationByComp.get(key) ?? [];
     arr.push(days);

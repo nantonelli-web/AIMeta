@@ -14,6 +14,8 @@ interface SearchParams {
   cta?: string;
   status?: string;
   format?: string;
+  channel?: string;
+  brand?: string;
 }
 
 export default async function LibraryPage({
@@ -40,6 +42,9 @@ export default async function LibraryPage({
       `ad_text.ilike.${term},headline.ilike.${term},description.ilike.${term}`
     );
   }
+  if (sp.channel === "meta") query = query.eq("source", "meta");
+  if (sp.channel === "google") query = query.eq("source", "google");
+  if (sp.brand) query = query.eq("competitor_id", sp.brand);
   if (sp.platform) query = query.contains("platforms", [sp.platform]);
   if (sp.cta) query = query.eq("cta", sp.cta);
   if (sp.status) query = query.eq("status", sp.status);
@@ -56,6 +61,13 @@ export default async function LibraryPage({
     .select("cta, platforms, status")
     .eq("workspace_id", profile.workspace_id!)
     .limit(2000);
+
+  // Fetch competitors for brand filter dropdown
+  const { data: competitors } = await supabase
+    .from("competitors")
+    .select("id, page_name")
+    .eq("workspace_id", profile.workspace_id!)
+    .order("page_name");
 
   const ctas = new Set<string>();
   const platforms = new Set<string>();
@@ -84,6 +96,7 @@ export default async function LibraryPage({
         ctas={[...ctas].sort()}
         platforms={[...platforms].sort()}
         statuses={[...statuses].sort()}
+        competitors={(competitors ?? []) as { id: string; page_name: string }[]}
       />
 
       {ads.length === 0 ? (
