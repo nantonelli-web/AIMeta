@@ -39,7 +39,7 @@ export default async function CompetitorDetailPage({
   const [{ data: ads }, { data: jobs }, { data: organicPosts }] = await Promise.all([
     supabase
       .from("mait_ads_external")
-      .select("*")
+      .select("id, workspace_id, competitor_id, ad_archive_id, headline, ad_text, description, cta, image_url, video_url, landing_url, platforms, status, start_date, end_date, created_at, raw_data, source")
       .eq("competitor_id", id)
       .order("start_date", { ascending: false, nullsFirst: false })
       .limit(120),

@@ -87,12 +87,12 @@ export default async function LibraryPage({
     ads = (data ?? []) as MaitAdExternal[];
   }
 
-  // Aggregate filter options (only for ads channels)
+  // Aggregate filter options — lightweight query with small limit
   const { data: facets } = await supabase
     .from("mait_ads_external")
     .select("cta, platforms, status")
     .eq("workspace_id", profile.workspace_id!)
-    .limit(2000);
+    .limit(500);
 
   const ctas = new Set<string>();
   const platforms = new Set<string>();

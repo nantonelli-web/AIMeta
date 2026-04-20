@@ -17,19 +17,14 @@ export default async function CollectionsPage() {
 
   const { data } = await admin
     .from("mait_collections")
-    .select("id, name, description, created_at")
+    .select("id, name, description, created_at, mait_collection_ads(count)")
     .eq("workspace_id", profile.workspace_id!)
     .order("created_at", { ascending: false });
 
-  const collections = await Promise.all(
-    (data ?? []).map(async (c) => {
-      const { count } = await admin
-        .from("mait_collection_ads")
-        .select("ad_id", { count: "exact", head: true })
-        .eq("collection_id", c.id);
-      return { ...c, adCount: count ?? 0 };
-    })
-  );
+  const collections = (data ?? []).map((c) => ({
+    ...c,
+    adCount: (c.mait_collection_ads as unknown as { count: number }[])?.[0]?.count ?? 0,
+  }));
 
   return (
     <div className="space-y-6">

@@ -23,12 +23,12 @@ export default async function CompetitorsPage() {
   const [{ data: competitors }, { data: clientsData }] = await Promise.all([
     supabase
       .from("mait_competitors")
-      .select("*")
+      .select("id, workspace_id, client_id, page_name, page_id, page_url, category, country, instagram_username, google_advertiser_id, google_domain, profile_picture_url, monitor_config, last_scraped_at, created_at")
       .eq("workspace_id", profile.workspace_id!)
       .order("page_name"),
     admin
       .from("mait_clients")
-      .select("*")
+      .select("id, name, workspace_id")
       .eq("workspace_id", profile.workspace_id!)
       .order("name"),
   ]);
