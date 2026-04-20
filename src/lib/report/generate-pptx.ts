@@ -174,7 +174,7 @@ function generateCtaComment(brands: BrandData[], locale: Locale): string {
     : `Dominant CTA — ${parts.join(" vs ")}. ${brands[0].topCtas[0]?.name === brands[1].topCtas[0]?.name ? "Both brands favor the same CTA." : "Different CTA strategies indicate different campaign objectives."}`;
 }
 
-/** Render an ad card similar to the frontend UI: image (contained) + headline + CTA */
+/** Render an ad card: dark image box + headline + CTA badge */
 function addAdCard(
   slide: PptxGenJS.Slide,
   pptx: PptxGenJS,
@@ -184,46 +184,47 @@ function addAdCard(
   w: number,
   theme: ThemeConfig
 ) {
-  const cardH = 1.85;
-  const imgH = 1.1;
-  const bg = lighten(contentBg(theme), 0.1);
+  const imgSize = w - 0.08; // square image area
+  const cardH = imgSize + 0.65;
 
-  // Card background
-  addCardBg(slide, pptx, x, y, w, cardH, bg);
-
-  // Image area with dark background (always dark for contrast)
+  // Card border
   slide.addShape(pptx.ShapeType.rect, {
-    x: x + 0.04, y: y + 0.04, w: w - 0.08, h: imgH,
-    fill: { color: "1a1a1a" },
-    line: { type: "none" }, rectRadius: 0.03,
+    x, y, w, h: cardH,
+    fill: { color: "1C1C1C" },
+    line: { type: "none" }, rectRadius: 0.04,
   });
 
+  // Image — square, no sizing (natural fill, avoids PptxGenJS sizing bugs)
   if (ad.imageBase64 && ad.imageMimeType) {
     slide.addImage({
       data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
-      x: x + 0.04, y: y + 0.04, w: w - 0.08, h: imgH,
-      sizing: { type: "contain", w: w - 0.08, h: imgH },
+      x: x + 0.04, y: y + 0.04, w: imgSize, h: imgSize,
+    });
+  } else {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: x + 0.04, y: y + 0.04, w: imgSize, h: imgSize,
+      fill: { color: "2A2A2A" }, line: { type: "none" },
     });
   }
 
-  // Headline
-  const headline = ad.headline?.slice(0, 50) || "Ad";
+  // Headline (white on dark card)
+  const headline = ad.headline?.slice(0, 45) || "Ad";
   slide.addText(headline, {
-    x: x + 0.08, y: y + imgH + 0.08, w: w - 0.16, h: 0.25,
-    fontSize: 6.5, fontFace: theme.fonts.body, color: hex(theme.colors.text),
+    x: x + 0.06, y: y + imgSize + 0.08, w: w - 0.12, h: 0.22,
+    fontSize: 6, fontFace: theme.fonts.body, color: "F5F5F5",
     valign: "top",
   });
 
-  // CTA badge — always dark bg with white text for visibility
+  // CTA badge
   if (ad.cta) {
-    const ctaW = Math.min(ad.cta.length * 0.055 + 0.12, w - 0.16);
+    const ctaW = Math.min(ad.cta.length * 0.05 + 0.1, w * 0.7);
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.08, y: y + imgH + 0.37, w: ctaW, h: 0.16,
-      fill: { color: "333333" }, line: { type: "none" }, rectRadius: 0.03,
+      x: x + 0.06, y: y + imgSize + 0.32, w: ctaW, h: 0.14,
+      fill: { color: "D4A843" }, line: { type: "none" }, rectRadius: 0.02,
     });
     slide.addText(ad.cta, {
-      x: x + 0.08, y: y + imgH + 0.37, w: ctaW, h: 0.16,
-      fontSize: 5, fontFace: theme.fonts.body, color: "FFFFFF",
+      x: x + 0.06, y: y + imgSize + 0.32, w: ctaW, h: 0.14,
+      fontSize: 5, fontFace: theme.fonts.body, color: "1C1C1C",
       bold: true, align: "center",
     });
   }
@@ -231,8 +232,8 @@ function addAdCard(
   // Platforms
   if (ad.platforms && ad.platforms.length > 0) {
     slide.addText(ad.platforms.slice(0, 3).join(" · "), {
-      x: x + 0.08, y: y + imgH + 0.55, w: w - 0.16, h: 0.14,
-      fontSize: 4.5, fontFace: theme.fonts.body, color: hex(theme.colors.text), transparency: 50,
+      x: x + 0.06, y: y + imgSize + 0.48, w: w - 0.12, h: 0.12,
+      fontSize: 4, fontFace: theme.fonts.body, color: "999999",
     });
   }
 
@@ -1212,7 +1213,7 @@ function compOverviewDashboard(
     w: SW - 2 * PAD,
     colW: colWidths,
     rowH: 0.33,
-    border: { type: "solid", pt: 0.5, color: lighten(contentBg(theme), 0.2) },
+    border: { type: "solid", pt: 0.5, color: "D0D0D0" },
   });
 
   // Dynamic commentary
@@ -1635,9 +1636,11 @@ function compLatestAds(
     bold: true,
   });
 
-  // 2 columns (one per brand), 2 ad cards per column
+  // 3 cards per brand, all in one row per brand
   const colW = (SW - 2 * PAD - 0.2) / brands.length;
-  const cardW = (colW - 0.1) / 2; // 2 cards side by side within each brand column
+  const cardsPerBrand = 3;
+  const cardGap = 0.08;
+  const cardW = (colW - cardGap * (cardsPerBrand - 1)) / cardsPerBrand;
 
   brands.forEach((b, bi) => {
     const bx = PAD + bi * (colW + 0.2);
@@ -1652,14 +1655,10 @@ function compLatestAds(
       fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.background), bold: true,
     });
 
-    // 2x2 grid: 2 columns, 2 rows
-    const ads = b.latestAds.slice(0, 4);
+    const ads = b.latestAds.slice(0, cardsPerBrand);
     ads.forEach((ad, j) => {
-      const col = j % 2;
-      const row = Math.floor(j / 2);
-      const cx = bx + col * (cardW + 0.1);
-      const cy = 0.9 + row * 2.0;
-      addAdCard(slide, pptx, ad, cx, cy, cardW, theme);
+      const cx = bx + j * (cardW + cardGap);
+      addAdCard(slide, pptx, ad, cx, 0.9, cardW, theme);
     });
   });
 }
