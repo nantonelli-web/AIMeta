@@ -47,20 +47,16 @@ export function LibraryFilters({
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [q, setQ] = useState(initial.q ?? "");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { t } = useT();
 
-  useEffect(() => {
-    setQ(initial.q ?? "");
-  }, [initial.q]);
+  useEffect(() => { setQ(initial.q ?? ""); }, [initial.q]);
 
   function update(key: string, value: string | null) {
     const next = new URLSearchParams(params.toString());
     if (value && value.length > 0) next.set(key, value);
     else next.delete(key);
-    startTransition(() => {
-      router.push(`/library?${next.toString()}`);
-    });
+    startTransition(() => { router.push(`/library?${next.toString()}`); });
   }
 
   function onSearch(e: React.FormEvent) {
@@ -75,193 +71,168 @@ export function LibraryFilters({
 
   const hasFilters =
     initial.q || initial.platform || initial.cta || initial.status || initial.format || initial.channel || initial.brand;
+  const advancedCount = [initial.format, initial.platform, initial.cta, initial.status].filter(Boolean).length;
 
-  // Count active secondary filters
-  const activeFilterCount = [initial.platform, initial.cta, initial.status, initial.format].filter(Boolean).length;
-
-  // Auto-open filters panel if any secondary filter is active
-  useEffect(() => {
-    if (activeFilterCount > 0) setShowFilters(true);
-  }, [activeFilterCount]);
+  useEffect(() => { if (advancedCount > 0) setShowAdvanced(true); }, [advancedCount]);
 
   return (
-    <div className="space-y-3">
-      {/* ─── Row 1: Search + Channel + Brand ─── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <form onSubmit={onSearch} className="flex gap-2 flex-1 min-w-[200px] max-w-md">
-          <div className="relative flex-1">
-            <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t("library", "searchPlaceholder")}
-              className="pl-9 h-9"
-            />
+    <div className="space-y-4">
+      {/* ─── Row 1: Search ─── */}
+      <form onSubmit={onSearch} className="flex gap-2 max-w-xl">
+        <div className="relative flex-1">
+          <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("library", "searchPlaceholder")}
+            className="pl-9 h-9"
+          />
+        </div>
+        <Button type="submit" size="sm" disabled={pending}>
+          {t("library", "searchBtn")}
+        </Button>
+      </form>
+
+      {/* ─── Row 2: Primary filters ─── */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-center gap-6">
+          {/* Channel */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{t("library", "filterChannel")}</span>
+            <div className="flex items-center gap-1">
+              <Pill active={(initial.channel ?? "") === ""} onClick={() => update("channel", null)}>{t("library", "allChannels")}</Pill>
+              <Pill active={initial.channel === "meta"} onClick={() => update("channel", "meta")}>
+                <MetaIcon className="size-3" /> Meta
+              </Pill>
+              <Pill active={initial.channel === "google"} onClick={() => update("channel", "google")}>
+                <GoogleIcon className="size-3" /> Google
+              </Pill>
+            </div>
           </div>
-          <Button type="submit" size="sm" disabled={pending}>
-            {t("library", "searchBtn")}
-          </Button>
-        </form>
 
-        {/* Divider */}
-        <div className="h-6 w-px bg-border hidden sm:block" />
+          <div className="h-5 w-px bg-border" />
 
-        {/* Channel pills */}
-        <div className="flex items-center gap-1">
-          {([
-            { value: "", label: t("library", "allChannels"), icon: null as React.ReactNode },
-            { value: "meta", label: "Meta", icon: <MetaIcon className="size-3" /> },
-            { value: "google", label: "Google", icon: <GoogleIcon className="size-3" /> },
-          ]).map((o) => {
-            const active = (initial.channel ?? "") === o.value;
-            return (
-              <button
-                key={o.value}
-                onClick={() => update("channel", o.value || null)}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors cursor-pointer",
-                  active
-                    ? "bg-gold/15 text-gold border border-gold/30 font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-              >
-                {o.icon}
-                {o.label}
+          {/* Brand */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Brand</span>
+            <select
+              value={initial.brand ?? ""}
+              onChange={(e) => update("brand", e.target.value || null)}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-gold/40 bg-transparent",
+                initial.brand
+                  ? "border-gold/40 text-gold"
+                  : "border-border text-muted-foreground"
+              )}
+            >
+              <option value="">{t("library", "allBrands")}</option>
+              {competitors.map((c) => (
+                <option key={c.id} value={c.id}>{c.page_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-5 w-px bg-border" />
+
+          {/* Advanced toggle */}
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <SlidersHorizontal className="size-3" />
+            {t("library", "moreFilters")}
+            {advancedCount > 0 && (
+              <span className="bg-gold/20 text-gold text-[9px] rounded-full px-1.5 min-w-[16px] text-center">{advancedCount}</span>
+            )}
+            <ChevronDown className={cn("size-3 transition-transform", showAdvanced && "rotate-180")} />
+          </button>
+
+          {/* Reset */}
+          {hasFilters && (
+            <>
+              <div className="h-5 w-px bg-border" />
+              <button onClick={clearAll} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-400 transition-colors cursor-pointer">
+                <X className="size-3" /> Reset
               </button>
-            );
-          })}
+            </>
+          )}
         </div>
 
-        {/* Divider */}
-        <div className="h-6 w-px bg-border hidden sm:block" />
-
-        {/* Brand dropdown */}
-        <select
-          value={initial.brand ?? ""}
-          onChange={(e) => update("brand", e.target.value || null)}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground cursor-pointer hover:border-gold/30 focus:outline-none focus:ring-1 focus:ring-gold/40 max-w-[180px]"
-        >
-          <option value="">{t("library", "allBrands")}</option>
-          {competitors.map((c) => (
-            <option key={c.id} value={c.id}>{c.page_name}</option>
-          ))}
-        </select>
-
-        {/* Divider */}
-        <div className="h-6 w-px bg-border hidden sm:block" />
-
-        {/* More filters toggle */}
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors cursor-pointer",
-            showFilters || activeFilterCount > 0
-              ? "text-gold"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <SlidersHorizontal className="size-3" />
-          {t("library", "moreFilters")}
-          {activeFilterCount > 0 && (
-            <span className="bg-gold/20 text-gold text-[9px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
-              {activeFilterCount}
-            </span>
-          )}
-          <ChevronDown className={cn("size-3 transition-transform", showFilters && "rotate-180")} />
-        </button>
-
-        {/* Reset */}
-        {hasFilters && (
-          <button
-            onClick={clearAll}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-400 transition-colors cursor-pointer"
-          >
-            <X className="size-3" />
-            Reset
-          </button>
+        {/* ─── Advanced filters (expandable) ─── */}
+        {showAdvanced && (
+          <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-6">
+            <FilterSelect
+              label={t("library", "formatLabel")}
+              options={[
+                { value: "image", label: t("library", "formatImage") },
+                { value: "video", label: t("library", "formatVideo") },
+              ]}
+              value={initial.format}
+              onChange={(v) => update("format", v)}
+            />
+            {platforms.length > 0 && (
+              <FilterSelect
+                label={t("library", "platformLabel")}
+                options={platforms.map((p) => ({ value: p, label: p }))}
+                value={initial.platform}
+                onChange={(v) => update("platform", v)}
+              />
+            )}
+            {ctas.length > 0 && (
+              <FilterSelect
+                label={t("library", "ctaLabel")}
+                options={ctas.slice(0, 12).map((c) => ({ value: c, label: c }))}
+                value={initial.cta}
+                onChange={(v) => update("cta", v)}
+              />
+            )}
+            {statuses.length > 0 && (
+              <FilterSelect
+                label={t("library", "statusLabel")}
+                options={statuses.map((s) => ({ value: s, label: s }))}
+                value={initial.status}
+                onChange={(v) => update("status", v)}
+              />
+            )}
+          </div>
         )}
       </div>
 
-      {/* ─── Row 2: Expanded filters (collapsible) ─── */}
-      {showFilters && (
-        <div className="rounded-lg border border-border bg-card/50 p-3 flex flex-wrap gap-x-6 gap-y-3">
-          {/* Format */}
-          <FilterDropdown
-            label={t("library", "formatLabel")}
-            options={[
-              { value: "image", label: t("library", "formatImage") },
-              { value: "video", label: t("library", "formatVideo") },
-            ]}
-            value={initial.format}
-            onChange={(v) => update("format", v)}
-          />
-
-          {/* Platform */}
-          {platforms.length > 0 && (
-            <FilterDropdown
-              label={t("library", "platformLabel")}
-              options={platforms.map((p) => ({ value: p, label: p }))}
-              value={initial.platform}
-              onChange={(v) => update("platform", v)}
-            />
-          )}
-
-          {/* CTA */}
-          {ctas.length > 0 && (
-            <FilterDropdown
-              label={t("library", "ctaLabel")}
-              options={ctas.slice(0, 12).map((c) => ({ value: c, label: c }))}
-              value={initial.cta}
-              onChange={(v) => update("cta", v)}
-            />
-          )}
-
-          {/* Status */}
-          {statuses.length > 0 && (
-            <FilterDropdown
-              label={t("library", "statusLabel")}
-              options={statuses.map((s) => ({ value: s, label: s }))}
-              value={initial.status}
-              onChange={(v) => update("status", v)}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ─── Active filters tags ─── */}
+      {/* ─── Active filter tags ─── */}
       {hasFilters && (
         <div className="flex flex-wrap gap-1.5">
-          {initial.channel && (
-            <FilterTag label={`${t("library", "filterChannel")}: ${initial.channel === "meta" ? "Meta Ads" : "Google Ads"}`} onRemove={() => update("channel", null)} />
-          )}
-          {initial.brand && (
-            <FilterTag label={`Brand: ${competitors.find((c) => c.id === initial.brand)?.page_name ?? initial.brand}`} onRemove={() => update("brand", null)} />
-          )}
-          {initial.format && (
-            <FilterTag label={`${t("library", "formatLabel")}: ${initial.format}`} onRemove={() => update("format", null)} />
-          )}
-          {initial.platform && (
-            <FilterTag label={`${t("library", "platformLabel")}: ${initial.platform}`} onRemove={() => update("platform", null)} />
-          )}
-          {initial.cta && (
-            <FilterTag label={`CTA: ${initial.cta}`} onRemove={() => update("cta", null)} />
-          )}
-          {initial.status && (
-            <FilterTag label={`Status: ${initial.status}`} onRemove={() => update("status", null)} />
-          )}
-          {initial.q && (
-            <FilterTag label={`"${initial.q}"`} onRemove={() => { setQ(""); update("q", null); }} />
-          )}
+          {initial.q && <Tag label={`"${initial.q}"`} onRemove={() => { setQ(""); update("q", null); }} />}
+          {initial.channel && <Tag label={initial.channel === "meta" ? "Meta Ads" : "Google Ads"} onRemove={() => update("channel", null)} />}
+          {initial.brand && <Tag label={competitors.find((c) => c.id === initial.brand)?.page_name ?? "Brand"} onRemove={() => update("brand", null)} />}
+          {initial.format && <Tag label={initial.format} onRemove={() => update("format", null)} />}
+          {initial.platform && <Tag label={initial.platform} onRemove={() => update("platform", null)} />}
+          {initial.cta && <Tag label={initial.cta} onRemove={() => update("cta", null)} />}
+          {initial.status && <Tag label={initial.status} onRemove={() => update("status", null)} />}
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Filter dropdown (compact select) ─── */
+/* ─── Pill button ─── */
+function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer",
+        active
+          ? "bg-gold text-gold-foreground font-medium"
+          : "text-muted-foreground hover:bg-gold hover:text-gold-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
-function FilterDropdown({
+/* ─── Filter select ─── */
+function FilterSelect({
   label,
   options,
   value,
@@ -274,15 +245,13 @@ function FilterDropdown({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">{label}</span>
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
         className={cn(
-          "rounded-md border px-2 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-gold/40 bg-transparent max-w-[160px]",
-          value
-            ? "border-gold/40 text-gold"
-            : "border-border text-muted-foreground hover:border-gold/30"
+          "rounded-md border px-2.5 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-gold/40 bg-transparent",
+          value ? "border-gold/40 text-gold" : "border-border text-muted-foreground"
         )}
       >
         <option value="">—</option>
@@ -294,15 +263,12 @@ function FilterDropdown({
   );
 }
 
-/* ─── Active filter tag ─── */
-
-function FilterTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+/* ─── Removable tag ─── */
+function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-gold/10 border border-gold/20 px-2.5 py-0.5 text-[10px] text-gold">
       {label}
-      <button onClick={onRemove} className="hover:text-foreground transition-colors cursor-pointer">
-        <X className="size-2.5" />
-      </button>
+      <button onClick={onRemove} className="hover:text-foreground transition-colors cursor-pointer"><X className="size-2.5" /></button>
     </span>
   );
 }

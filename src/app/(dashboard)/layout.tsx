@@ -8,7 +8,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { profile, workspaceName } = await getSessionUser();
+  const { profile } = await getSessionUser();
 
   if (!profile.workspace_id) {
     redirect("/login?error=no_workspace");
@@ -16,9 +16,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex flex-1 min-h-screen">
-      <Sidebar />
+      <Sidebar userName={profile.name || profile.email} userEmail={profile.email} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header profile={profile} workspaceName={workspaceName} />
+        <Header />
         <main className="flex-1 p-6 md:p-8 overflow-auto">{children}</main>
       </div>
     </div>

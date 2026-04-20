@@ -13,6 +13,7 @@ import {
   GitCompareArrows,
   FolderHeart,
   FileText,
+  LogOut,
   Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ function CreditBadge() {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ userName, userEmail }: { userName: string; userEmail: string }) {
   const pathname = usePathname();
   const { t } = useT();
 
@@ -87,9 +88,27 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-border pt-3">
+      <div className="border-t border-border pt-3 space-y-2">
+        {/* User profile + logout */}
+        <div className="mx-3 flex items-center gap-2">
+          <div className="size-7 rounded-full bg-gold/15 border border-gold/30 grid place-items-center text-gold text-[10px] font-semibold shrink-0">
+            {userName.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{userName}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{userEmail}</p>
+          </div>
+          <form action="/api/auth/signout" method="post">
+            <button
+              type="submit"
+              className="size-7 rounded-md border border-border hover:bg-muted grid place-items-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <LogOut className="size-3" />
+            </button>
+          </form>
+        </div>
         <CreditBadge />
-        <div className="px-4 pb-4 text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="px-4 pb-3 text-[10px] uppercase tracking-widest text-muted-foreground">
           {t("sidebar", "footer")}
         </div>
       </div>
