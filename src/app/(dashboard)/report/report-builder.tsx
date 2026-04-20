@@ -1,7 +1,7 @@
 "use client";
 
-/* eslint-disable @next/next/no-page-custom-font */
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,15 +115,6 @@ export function ReportBuilder({
     ? savedComparisons.filter((sc) => sc.competitor_ids.includes(mainBrandId))
     : [];
 
-  // Collect all brand IDs from selected comparisons (for report generation)
-  const comparisonBrandIds = (() => {
-    const ids = new Set<string>();
-    for (const scId of selectedComparisonIds) {
-      const sc = savedComparisons.find((s) => s.id === scId);
-      if (sc) sc.competitor_ids.forEach((id) => ids.add(id));
-    }
-    return ids;
-  })();
 
   // Get client_id for the first selected brand (for template filtering)
   const firstBrand = reportType === "comparison"
@@ -582,7 +573,7 @@ export function ReportBuilder({
                       {t("report", "noSavedComparisons")}
                     </p>
                     <Button asChild variant="outline" size="sm" className="gap-1.5 cursor-pointer hover:bg-gold/25 hover:text-gold hover:border-gold">
-                      <a href="/competitors/compare">{t("report", "goToCompare")}</a>
+                      <Link href="/competitors/compare">{t("report", "goToCompare")}</Link>
                     </Button>
                   </div>
                 ) : (
