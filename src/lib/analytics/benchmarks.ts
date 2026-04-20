@@ -183,14 +183,16 @@ export async function computeBenchmarks(
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ name, count }));
 
-  // ---- Campaign duration (skip ads with duration < 1 day) ----
+  // ---- Campaign duration ----
+  // For ACTIVE ads, ignore end_date (Meta Ad Library sets it to snapshot date,
+  // not actual campaign end). Use Date.now() instead.
   const durationByComp = new Map<string, number[]>();
   for (const ad of ads) {
     if (!ad.start_date) continue;
     const start = new Date(ad.start_date).getTime();
-    const end = ad.end_date
-      ? new Date(ad.end_date).getTime()
-      : Date.now();
+    const end = ad.status === "ACTIVE" || !ad.end_date
+      ? Date.now()
+      : new Date(ad.end_date).getTime();
     const days = Math.round((end - start) / 86_400_000);
     if (days < 1) continue;
     const key = ad.competitor_id ?? "unknown";

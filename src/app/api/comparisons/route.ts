@@ -129,10 +129,12 @@ async function computeTechnicalStats(
       for (const a of adsList) {
         if (!a.start_date) continue;
         const start = new Date(a.start_date).getTime();
-        const end = a.end_date
-          ? new Date(a.end_date).getTime()
-          : Date.now();
-        durations.push(Math.max(1, Math.round((end - start) / 86_400_000)));
+        const end = a.status === "ACTIVE" || !a.end_date
+          ? Date.now()
+          : new Date(a.end_date).getTime();
+        const days = Math.round((end - start) / 86_400_000);
+        if (days < 1) continue;
+        durations.push(days);
       }
       const avgDuration =
         durations.length > 0
