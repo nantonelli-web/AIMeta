@@ -878,8 +878,10 @@ function addCopyAnalysisSlide(
         x: bx, y: 0.65, w: adCardW, h: 0.2,
         fontSize: 6, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true, align: "center",
       });
-      const ad = b.latestAds.find((a) => a.imageBase64) ?? b.latestAds[0];
-      if (ad) addAdCard(slide, pptx, ad, bx, 0.88, adCardW, theme);
+      const ads = b.latestAds.filter((a) => a.imageBase64).slice(0, 2);
+      ads.forEach((ad, j) => {
+        addAdCard(slide, pptx, ad, bx, 0.88 + j * 2.0, adCardW, theme);
+      });
     });
 
     // Right: comparison text
@@ -945,29 +947,22 @@ function addVisualAnalysisSlide(
     });
 
     if (brands && brands.length >= 2) {
-      // Side-by-side: ad images left, comparison text right
+      // Left: one ad card per brand, Right: comparison text
       const imgColW = (SW - 2 * PAD) * 0.35;
       const textColW = (SW - 2 * PAD) * 0.6;
       const textX = PAD + imgColW + (SW - 2 * PAD) * 0.05;
+      const adCardW = (imgColW - 0.1) / brands.length;
 
-      // Ad images column — 2 per brand, stacked
-      const imgW = (imgColW - 0.15) / 2;
       brands.forEach((b, bi) => {
-        const bx = PAD + bi * (imgW + 0.15);
+        const bx = PAD + bi * (adCardW + 0.1);
         slide.addText(b.name, {
-          x: bx, y: 0.65, w: imgW, h: 0.2,
-          fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true, align: "center",
+          x: bx, y: 0.65, w: adCardW, h: 0.2,
+          fontSize: 6, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true, align: "center",
         });
-        const imgs = b.latestAds.filter((a) => a.imageBase64).slice(0, 2);
-        imgs.forEach((ad, j) => {
-          const iy = 0.9 + j * 1.15;
-          if (ad.imageBase64 && ad.imageMimeType) {
-            slide.addImage({
-              data: `data:${ad.imageMimeType};base64,${ad.imageBase64}`,
-              x: bx, y: iy, w: imgW, h: 1.0,
-              sizing: { type: "contain", w: imgW, h: 1.0 },
-            });
-          }
+        // Show 2 ad cards per brand, stacked vertically
+        const ads = b.latestAds.filter((a) => a.imageBase64).slice(0, 2);
+        ads.forEach((ad, j) => {
+          addAdCard(slide, pptx, ad, bx, 0.9 + j * 2.0, adCardW, theme);
         });
       });
 
@@ -1193,7 +1188,7 @@ function compOverviewDashboard(
         fontFace: theme.fonts.body,
         color: hex(theme.colors.text),
         fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
-        border: rowBorder,
+        border: { type: "none" as const },
         bold: true,
         margin: [2, 6, 2, 6] as [number, number, number, number],
       },
@@ -1206,7 +1201,7 @@ function compOverviewDashboard(
         color: hex(theme.colors.primary),
         fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
         align: "center" as const,
-        border: rowBorder,
+        border: { type: "none" as const },
         bold: true,
         margin: [2, 6, 2, 6] as [number, number, number, number],
       },
@@ -1223,6 +1218,7 @@ function compOverviewDashboard(
     w: SW - 2 * PAD,
     colW: colWidths,
     rowH: 0.33,
+    border: { type: "solid", pt: 0.5, color: lighten(contentBg(theme), 0.2) },
   });
 
   // Dynamic commentary
@@ -1322,57 +1318,57 @@ function compObjectivesAndFormat(
       bold: true,
     });
 
-    // "STIMA" badge with background
+    // "STIMA" badge — prominent
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + colW - 0.6,
-      y: y + 0.33,
-      w: 0.45,
-      h: 0.18,
-      fill: { color: lighten(hex(theme.colors.primary), 0.85) },
+      x: x + colW - 0.7,
+      y: y + 0.32,
+      w: 0.55,
+      h: 0.22,
+      fill: { color: hex(theme.colors.primary) },
       line: { type: "none" },
-      rectRadius: 0.03,
+      rectRadius: 0.04,
     });
     slide.addText(label(locale, "STIMA", "EST."), {
-      x: x + colW - 0.6,
-      y: y + 0.33,
-      w: 0.45,
-      h: 0.18,
-      fontSize: 6,
-      fontFace: theme.fonts.body,
-      color: hex(theme.colors.primary),
+      x: x + colW - 0.7,
+      y: y + 0.32,
+      w: 0.55,
+      h: 0.22,
+      fontSize: 8,
+      fontFace: theme.fonts.heading,
+      color: hex(theme.colors.background),
       bold: true,
       align: "center",
     });
 
-    // Confidence bar + percentage
-    const barW = colW - 0.55;
-    slide.addShape(pptx.ShapeType.rect, {
+    // Confidence: large percentage + bar
+    slide.addText(`${obj.confidence}%`, {
       x: x + 0.08,
-      y: y + 0.62,
+      y: y + 0.6,
+      w: 0.5,
+      h: 0.25,
+      fontSize: 14,
+      fontFace: theme.fonts.heading,
+      color: hex(theme.colors.primary),
+      bold: true,
+    });
+    const barW = colW - 0.75;
+    slide.addShape(pptx.ShapeType.rect, {
+      x: x + 0.55,
+      y: y + 0.66,
       w: barW,
-      h: 0.14,
+      h: 0.12,
       fill: { color: "333333" },
       line: { type: "none" },
       rectRadius: 0.02,
     });
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.08,
-      y: y + 0.62,
+      x: x + 0.55,
+      y: y + 0.66,
       w: Math.max(barW * (obj.confidence / 100), 0.02),
-      h: 0.14,
+      h: 0.12,
       fill: { color: hex(theme.colors.primary) },
       line: { type: "none" },
       rectRadius: 0.02,
-    });
-    slide.addText(`${obj.confidence}%`, {
-      x: x + 0.08 + barW + 0.04,
-      y: y + 0.58,
-      w: 0.4,
-      h: 0.22,
-      fontSize: 9,
-      fontFace: theme.fonts.heading,
-      color: hex(theme.colors.primary),
-      bold: true,
     });
 
     // "Segnali" title above signals
@@ -1645,38 +1641,32 @@ function compLatestAds(
     bold: true,
   });
 
-  // Card width: fit 3 ads per brand side by side
-  const totalAdsPerBrand = 3;
-  const totalCards = brands.length * totalAdsPerBrand;
-  const gap = 0.1;
-  const cardW = (SW - 2 * PAD - gap * (totalCards - 1)) / totalCards;
+  // 2 columns (one per brand), 2 ad cards per column
+  const colW = (SW - 2 * PAD - 0.2) / brands.length;
+  const cardW = (colW - 0.1) / 2; // 2 cards side by side within each brand column
 
-  let cardIdx = 0;
   brands.forEach((b, bi) => {
-    const ads = b.latestAds.slice(0, totalAdsPerBrand);
+    const bx = PAD + bi * (colW + 0.2);
 
-    // Brand header spanning the brand's cards
-    const brandX = PAD + cardIdx * (cardW + gap);
-    const brandW = ads.length * cardW + (ads.length - 1) * gap;
+    // Brand header
     slide.addShape(pptx.ShapeType.rect, {
-      x: brandX, y: 0.6, w: brandW, h: 0.22,
+      x: bx, y: 0.6, w: colW, h: 0.22,
       fill: { color: hex(theme.colors.primary) }, line: { type: "none" },
     });
     slide.addText(b.name, {
-      x: brandX + 0.06, y: 0.6, w: brandW - 0.12, h: 0.22,
+      x: bx + 0.06, y: 0.6, w: colW - 0.12, h: 0.22,
       fontSize: 7, fontFace: theme.fonts.heading, color: hex(theme.colors.background), bold: true,
     });
 
-    ads.forEach((ad) => {
-      const cx = PAD + cardIdx * (cardW + gap);
-      addAdCard(slide, pptx, ad, cx, 0.9, cardW, theme);
-      cardIdx++;
+    // 2x2 grid: 2 columns, 2 rows
+    const ads = b.latestAds.slice(0, 4);
+    ads.forEach((ad, j) => {
+      const col = j % 2;
+      const row = Math.floor(j / 2);
+      const cx = bx + col * (cardW + 0.1);
+      const cy = 0.9 + row * 2.0;
+      addAdCard(slide, pptx, ad, cx, cy, cardW, theme);
     });
-
-    // Fill remaining slots with empty space
-    for (let k = ads.length; k < totalAdsPerBrand; k++) {
-      cardIdx++;
-    }
   });
 }
 
