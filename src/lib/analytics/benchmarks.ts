@@ -38,8 +38,12 @@ export interface BenchmarkData {
   topCtas: { name: string; count: number }[];
   /** CTA usage per competitor (top 5 CTAs) */
   ctaByCompetitor: { name: string; [cta: string]: string | number }[];
+  /** Format mix per competitor (for individual pie charts) */
+  formatMixByCompetitor: { competitor: string; data: { name: string; value: number }[] }[];
   /** Platform distribution */
   platformDistribution: { name: string; count: number }[];
+  /** Platform distribution per competitor */
+  platformByCompetitor: { competitor: string; data: { name: string; count: number }[] }[];
   /** Average campaign duration (days) per competitor */
   avgDurationByCompetitor: { name: string; days: number }[];
   /** Average copy length per competitor */
@@ -149,6 +153,23 @@ export async function computeBenchmarks(
     .map(([id, v]) => ({ name: compMap.get(id) ?? "N/A", ...v }))
     .sort((a, b) => b.image + b.video + b.carousel - (a.image + a.video + a.carousel));
 
+  // Format mix per competitor (individual pie charts)
+  const formatMixByCompetitor = [...formatByComp.entries()]
+    .map(([id, v]) => ({
+      competitor: compMap.get(id) ?? "N/A",
+      data: [
+        { name: "Image", value: v.image },
+        { name: "Video", value: v.video },
+        { name: "Carousel", value: v.carousel },
+        ...(v.unknown > 0 ? [{ name: "Other", value: v.unknown }] : []),
+      ].filter((f) => f.value > 0),
+    }))
+    .sort((a, b) => {
+      const ta = a.data.reduce((s, d) => s + d.value, 0);
+      const tb = b.data.reduce((s, d) => s + d.value, 0);
+      return tb - ta;
+    });
+
   // ---- Top CTAs ----
   const ctaCount = new Map<string, number>();
   for (const ad of ads) {
@@ -177,15 +198,33 @@ export async function computeBenchmarks(
 
   // ---- Platform distribution ----
   const platCount = new Map<string, number>();
+  const platByComp = new Map<string, Map<string, number>>();
   for (const ad of ads) {
     if (!Array.isArray(ad.platforms)) continue;
+    const key = ad.competitor_id ?? "unknown";
+    const compPlat = platByComp.get(key) ?? new Map<string, number>();
     for (const p of ad.platforms) {
       platCount.set(p, (platCount.get(p) ?? 0) + 1);
+      compPlat.set(p, (compPlat.get(p) ?? 0) + 1);
     }
+    platByComp.set(key, compPlat);
   }
   const platformDistribution = [...platCount.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ name, count }));
+
+  const platformByCompetitor = [...platByComp.entries()]
+    .map(([id, platMap]) => ({
+      competitor: compMap.get(id) ?? "N/A",
+      data: [...platMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+    }))
+    .sort((a, b) => {
+      const ta = a.data.reduce((s, d) => s + d.count, 0);
+      const tb = b.data.reduce((s, d) => s + d.count, 0);
+      return tb - ta;
+    });
 
   // ---- Campaign duration ----
   // For ACTIVE ads, ignore end_date (Meta Ad Library sets it to snapshot date,
@@ -341,9 +380,11 @@ export async function computeBenchmarks(
     volumeByCompetitor,
     formatMix,
     formatByCompetitor,
+    formatMixByCompetitor,
     topCtas,
     ctaByCompetitor,
     platformDistribution,
+    platformByCompetitor,
     avgDurationByCompetitor,
     avgCopyLengthByCompetitor,
     refreshRate,

@@ -133,27 +133,33 @@ export default async function BenchmarksPage({
       </div>
 
       {/* Volume per competitor */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("benchmarks", "volumePerCompetitor")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descVolume")}</p>
-            <VolumeChart data={data.volumeByCompetitor} />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "volumePerCompetitor")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descVolume")}</p>
+          <VolumeChart data={data.volumeByCompetitor} />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("benchmarks", "globalFormatMix")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descFormatPie")}</p>
-            <FormatPieChart data={data.formatMix} />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Format mix per brand */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "globalFormatMix")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descFormatPie")}</p>
+          <div className={`grid gap-6 ${data.formatMixByCompetitor.length <= 2 ? "grid-cols-2" : data.formatMixByCompetitor.length <= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}`}>
+            {data.formatMixByCompetitor.map((entry) => (
+              <div key={entry.competitor} className="text-center">
+                <p className="text-xs font-medium text-gold mb-2">{entry.competitor}</p>
+                <FormatPieChart data={entry.data} />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Format per competitor */}
       <Card>
@@ -166,32 +172,38 @@ export default async function BenchmarksPage({
         </CardContent>
       </Card>
 
-      {/* CTA + Platform */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("benchmarks", "topCta")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descTopCta")}</p>
-            <HorizontalBarChart
-              data={data.topCtas}
-              dataKey="count"
-              label={t("benchmarks", "adsLabel")}
-            />
-          </CardContent>
-        </Card>
+      {/* CTA */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "topCta")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descTopCta")}</p>
+          <HorizontalBarChart
+            data={data.topCtas}
+            dataKey="count"
+            label={t("benchmarks", "adsLabel")}
+          />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("benchmarks", "platformDistribution")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descPlatform")}</p>
-            <PlatformChart data={data.platformDistribution} />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Platform distribution per brand */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "platformDistribution")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descPlatform")}</p>
+          <div className={`grid gap-6 ${data.platformByCompetitor.length <= 2 ? "grid-cols-2" : data.platformByCompetitor.length <= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}`}>
+            {data.platformByCompetitor.map((entry) => (
+              <div key={entry.competitor} className="text-center">
+                <p className="text-xs font-medium text-gold mb-2">{entry.competitor}</p>
+                <PlatformChart data={entry.data} />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Duration + Copy length + Refresh rate */}
       <div className="grid gap-6 lg:grid-cols-3">
