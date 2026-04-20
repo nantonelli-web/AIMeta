@@ -551,6 +551,9 @@ export function CompareView({
   }
 
   const hasResults = selected.size >= 2 && channel !== null;
+  // Any selection at all means the user is mid-flow — show the reset affordance
+  const hasAnySelection =
+    selected.size > 0 || selectedCountries.size > 0 || channel !== null;
 
   // Clear every piece of comparison state and scroll to the top so the user
   // lands back on the brand selector — the "home" of this page.
@@ -574,6 +577,19 @@ export function CompareView({
 
   return (
     <div className="space-y-6">
+      {/* Always-visible breadcrumb-style back action — lets the user exit the
+          comparison at any stage (mid-selection, while loading, or after results). */}
+      {hasAnySelection && (
+        <button
+          type="button"
+          onClick={resetToSelection}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="size-4" />
+          {t("compare", "backToSelection")}
+        </button>
+      )}
+
       {/* Selector */}
       <Card>
         <CardHeader>
@@ -925,15 +941,6 @@ export function CompareView({
               </Button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Top "back" action — lets the user exit the comparison and return to the selector */}
-      {hasResults && (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={resetToSelection} className="gap-1.5">
-            <ArrowLeft className="size-3.5" /> {t("compare", "newComparison")}
-          </Button>
         </div>
       )}
 
