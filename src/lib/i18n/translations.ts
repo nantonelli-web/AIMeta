@@ -641,6 +641,7 @@ const translations = {
     filterBrand: { it: "Brand", en: "Brand" },
     allBrands: { it: "Tutti i brand", en: "All brands" },
     allChannels: { it: "Tutti", en: "All" },
+    moreFilters: { it: "Filtri", en: "Filters" },
   },
 
   // ─── Benchmarks ────────────────────────────────────────────
