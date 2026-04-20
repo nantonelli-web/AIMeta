@@ -191,10 +191,10 @@ function addAdCard(
   // Card background
   addCardBg(slide, pptx, x, y, w, cardH, bg);
 
-  // Image area with dark background
+  // Image area with dark background (always dark for contrast)
   slide.addShape(pptx.ShapeType.rect, {
     x: x + 0.04, y: y + 0.04, w: w - 0.08, h: imgH,
-    fill: { color: darken(contentBg(theme), 0.3) },
+    fill: { color: "1a1a1a" },
     line: { type: "none" }, rectRadius: 0.03,
   });
 
@@ -214,15 +214,16 @@ function addAdCard(
     valign: "top",
   });
 
-  // CTA badge
+  // CTA badge — always dark bg with white text for visibility
   if (ad.cta) {
+    const ctaW = Math.min(ad.cta.length * 0.055 + 0.12, w - 0.16);
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.08, y: y + imgH + 0.37, w: Math.min(ad.cta.length * 0.06 + 0.15, w - 0.16), h: 0.16,
-      fill: { color: hex(theme.colors.primary) }, line: { type: "none" }, rectRadius: 0.03,
+      x: x + 0.08, y: y + imgH + 0.37, w: ctaW, h: 0.16,
+      fill: { color: "333333" }, line: { type: "none" }, rectRadius: 0.03,
     });
     slide.addText(ad.cta, {
-      x: x + 0.08, y: y + imgH + 0.37, w: Math.min(ad.cta.length * 0.06 + 0.15, w - 0.16), h: 0.16,
-      fontSize: 5, fontFace: theme.fonts.body, color: hex(theme.colors.background),
+      x: x + 0.08, y: y + imgH + 0.37, w: ctaW, h: 0.16,
+      fontSize: 5, fontFace: theme.fonts.body, color: "FFFFFF",
       bold: true, align: "center",
     });
   }
@@ -1139,7 +1140,6 @@ function compOverviewDashboard(
         color: hex(theme.colors.text),
         fill: { color: hex(theme.colors.primary) },
         bold: true,
-        border: { type: "none" as const },
       },
     },
     ...brands.map((b) => ({
@@ -1151,7 +1151,6 @@ function compOverviewDashboard(
         fill: { color: hex(theme.colors.primary) },
         bold: true,
         align: "center" as const,
-        border: { type: "none" as const },
       },
     })),
   ];
@@ -1177,9 +1176,6 @@ function compOverviewDashboard(
 
   const altBg = lighten(contentBg(theme), 0.08);
 
-  const rowBorder: PptxGenJS.BorderOptions = { type: "solid", pt: 0.75, color: lighten(contentBg(theme), 0.25) };
-  const noBorder: PptxGenJS.BorderOptions = { type: "none" };
-
   const dataRows: PptxGenJS.TableRow[] = metrics.map(([lbl, fn], idx) => [
     {
       text: lbl,
@@ -1188,7 +1184,6 @@ function compOverviewDashboard(
         fontFace: theme.fonts.body,
         color: hex(theme.colors.text),
         fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
-        border: { type: "none" as const },
         bold: true,
         margin: [2, 6, 2, 6] as [number, number, number, number],
       },
@@ -1201,7 +1196,6 @@ function compOverviewDashboard(
         color: hex(theme.colors.primary),
         fill: { color: idx % 2 === 0 ? hex(theme.colors.background) : altBg },
         align: "center" as const,
-        border: { type: "none" as const },
         bold: true,
         margin: [2, 6, 2, 6] as [number, number, number, number],
       },
@@ -1266,7 +1260,7 @@ function compObjectivesAndFormat(
   // TOP HALF: Objectives side by side — show ALL signals + disclaimer
   const maxSignals = Math.max(...brands.map((b) => b.objectiveInference.signals.length));
   const sigLineH = 0.18;
-  const topH = 1.02 + maxSignals * sigLineH + 0.2;
+  const topH = 1.15 + maxSignals * sigLineH + 0.2;
   const colW = (SW - 2 * PAD - 0.15 * (brands.length - 1)) / brands.length;
 
   brands.forEach((b, i) => {
@@ -1340,32 +1334,32 @@ function compObjectivesAndFormat(
       align: "center",
     });
 
-    // Confidence: large percentage + bar
-    slide.addText(`${obj.confidence}%`, {
+    // Confidence: percentage inline with bar
+    slide.addText(`${label(locale, "Confidenza", "Confidence")}: ${obj.confidence}%`, {
       x: x + 0.08,
       y: y + 0.6,
-      w: 0.5,
-      h: 0.25,
-      fontSize: 14,
+      w: colW - 0.16,
+      h: 0.2,
+      fontSize: 9,
       fontFace: theme.fonts.heading,
-      color: hex(theme.colors.primary),
+      color: hex(theme.colors.text),
       bold: true,
     });
-    const barW = colW - 0.75;
+    const barW = colW - 0.16;
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.55,
-      y: y + 0.66,
+      x: x + 0.08,
+      y: y + 0.8,
       w: barW,
-      h: 0.12,
-      fill: { color: "333333" },
+      h: 0.1,
+      fill: { color: "CCCCCC" },
       line: { type: "none" },
       rectRadius: 0.02,
     });
     slide.addShape(pptx.ShapeType.rect, {
-      x: x + 0.55,
-      y: y + 0.66,
+      x: x + 0.08,
+      y: y + 0.8,
       w: Math.max(barW * (obj.confidence / 100), 0.02),
-      h: 0.12,
+      h: 0.1,
       fill: { color: hex(theme.colors.primary) },
       line: { type: "none" },
       rectRadius: 0.02,
@@ -1374,7 +1368,7 @@ function compObjectivesAndFormat(
     // "Segnali" title above signals
     slide.addText(label(locale, "Segnali", "Signals"), {
       x: x + 0.08,
-      y: y + 0.82,
+      y: y + 0.95,
       w: colW - 0.16,
       h: 0.18,
       fontSize: 7,
@@ -1387,7 +1381,7 @@ function compObjectivesAndFormat(
     obj.signals.forEach((s, j) => {
       slide.addText(`\u2022 ${s}`, {
         x: x + 0.08,
-        y: y + 1.02 + j * sigLineH,
+        y: y + 1.15 + j * sigLineH,
         w: colW - 0.16,
         h: sigLineH,
         fontSize: 6,
