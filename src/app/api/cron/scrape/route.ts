@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeMetaAds } from "@/lib/apify/service";
 import { scrapeGoogleAds } from "@/lib/apify/google-ads-service";
-import { storeAdImages } from "@/lib/media/store-ad-images";
+import { storeAdImages, storeProfilePicture } from "@/lib/media/store-ad-images";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -98,6 +98,17 @@ export async function GET(req: Request) {
           competitor_id: c.id,
         }));
         await storeAdImages(admin, c.workspace_id, rows, "meta");
+
+        // Save profile picture permanently
+        const snap = (result.records[0]?.raw_data as Record<string, unknown>)?.snapshot as Record<string, unknown> | undefined;
+        const ppUrl = snap?.pageProfilePictureUrl as string | undefined;
+        if (ppUrl) {
+          const permUrl = await storeProfilePicture(admin, c.workspace_id, c.id, ppUrl);
+          if (permUrl) {
+            await admin.from("mait_competitors").update({ profile_picture_url: permUrl }).eq("id", c.id);
+          }
+        }
+
         await admin
           .from("mait_ads_external")
           .upsert(rows, { onConflict: "workspace_id,ad_archive_id,source" });

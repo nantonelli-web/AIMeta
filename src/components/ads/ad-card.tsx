@@ -54,14 +54,16 @@ export function AdCard({
     ? (raw?.advertiserName as string) ?? null
     : (raw?.pageName as string) ?? null;
 
-  // Image URL — skip JS-based Google preview URLs
+  // Image URL — prefer saved image_url (may be permanent Supabase URL),
+  // fall back to adSnapshotUrl only if image_url is missing.
+  // Skip JS-based Google preview URLs.
   const rawImageUrl = ad.image_url;
   const isJsPreview = rawImageUrl?.includes("/ads/preview/content.js");
   const snapshotUrl = isJsPreview
     ? null
     : isGoogle
       ? rawImageUrl
-      : (raw?.adSnapshotUrl as string) ?? rawImageUrl;
+      : rawImageUrl ?? (raw?.adSnapshotUrl as string) ?? null;
   const isSnapshotHtml = snapshotUrl?.includes("/render_ad/");
 
   const detailHref =

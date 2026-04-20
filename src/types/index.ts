@@ -41,6 +41,7 @@ export interface MaitCompetitor {
   instagram_username: string | null;
   google_advertiser_id: string | null;
   google_domain: string | null;
+  profile_picture_url: string | null;
   monitor_config: Record<string, unknown>;
   last_scraped_at: string | null;
   created_at: string;

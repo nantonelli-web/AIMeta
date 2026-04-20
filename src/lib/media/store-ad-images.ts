@@ -78,6 +78,22 @@ async function downloadAndStore(
 }
 
 /**
+ * Download and store a profile picture permanently.
+ * Returns the permanent URL or null on failure.
+ */
+export async function storeProfilePicture(
+  admin: SupabaseClient,
+  workspaceId: string,
+  competitorId: string,
+  profileUrl: string
+): Promise<string | null> {
+  if (!profileUrl) return null;
+  if (profileUrl.includes("supabase.co/storage")) return profileUrl;
+  await ensureBucket(admin);
+  return downloadAndStore(admin, workspaceId, `profile_${competitorId}`, profileUrl, "profiles");
+}
+
+/**
  * Process an array of ad rows: download images and replace image_url
  * with permanent Supabase Storage URLs. Mutates rows in-place.
  */

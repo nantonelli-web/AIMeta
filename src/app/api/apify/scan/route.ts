@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeMetaAds } from "@/lib/apify/service";
 import { resolvePageId } from "@/lib/meta/resolve-page-id";
 import { sendNewAdsNotification } from "@/lib/email/resend";
-import { storeAdImages } from "@/lib/media/store-ad-images";
+import { storeAdImages, storeProfilePicture } from "@/lib/media/store-ad-images";
 import { consumeCredits, refundCredits } from "@/lib/credits/consume";
 
 export const maxDuration = 300; // seconds (Vercel hobby allows 60; pro 300)
@@ -122,6 +122,21 @@ export async function POST(req: Request) {
       }));
 
       await storeAdImages(admin, competitor.workspace_id, rows, "meta");
+
+      // Save profile picture permanently
+      const firstSnapshot = (result.records[0]?.raw_data as Record<string, unknown>)?.snapshot as Record<string, unknown> | undefined;
+      const profilePicUrl = firstSnapshot?.pageProfilePictureUrl as string | undefined;
+      if (profilePicUrl) {
+        const permanentProfileUrl = await storeProfilePicture(
+          admin, competitor.workspace_id, competitor.id, profilePicUrl
+        );
+        if (permanentProfileUrl) {
+          await admin
+            .from("mait_competitors")
+            .update({ profile_picture_url: permanentProfileUrl })
+            .eq("id", competitor.id);
+        }
+      }
 
       const { error: upErr } = await admin
         .from("mait_ads_external")

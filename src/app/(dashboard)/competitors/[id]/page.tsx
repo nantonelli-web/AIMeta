@@ -73,10 +73,12 @@ export default async function CompetitorDetailPage({
   const frequency = ((c.monitor_config as { frequency?: string })?.frequency ??
     "manual") as "manual" | "daily" | "weekly";
 
-  // Extract page-level info from the most recent ad's raw_data
+  // Profile picture: prefer saved permanent URL, fall back to raw_data
   const latestRaw = adsList[0]?.raw_data as Record<string, unknown> | null;
   const latestSnapshot = latestRaw?.snapshot as Record<string, unknown> | null;
-  const pageProfilePicture = (latestSnapshot?.pageProfilePictureUrl as string) ?? null;
+  const pageProfilePicture = c.profile_picture_url
+    ?? (latestSnapshot?.pageProfilePictureUrl as string)
+    ?? null;
   const pageLikeCount = (latestSnapshot?.pageLikeCount as number) ?? null;
   const pageCategories = (latestSnapshot?.pageCategories as string[]) ?? [];
 
