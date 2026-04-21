@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { scrapeInstagramPosts, cleanInstagramUsername } from "@/lib/instagram/service";
+import {
+  scrapeInstagramPosts,
+  scrapeInstagramProfile,
+  cleanInstagramUsername,
+} from "@/lib/instagram/service";
 import { storeAdImages } from "@/lib/media/store-ad-images";
 import { consumeCredits, refundCredits } from "@/lib/credits/consume";
 
@@ -123,10 +127,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await scrapeInstagramPosts({
-      username: igUsername,
-      maxPosts: parsed.data.max_posts ?? 30,
-    });
+    // Fetch posts and profile in parallel — profile gives us
+    // followers/bio/etc to show alongside per-post stats.
+    const [result, profile] = await Promise.all([
+      scrapeInstagramPosts({
+        username: igUsername,
+        maxPosts: parsed.data.max_posts ?? 30,
+      }),
+      scrapeInstagramProfile(igUsername),
+    ]);
+
+    if (profile) {
+      await admin
+        .from("mait_competitors")
+        .update({ instagram_profile: profile })
+        .eq("id", competitor.id);
+    }
 
     // Download images to permanent storage, then upsert
     console.log(`[Instagram route] Scrape done: ${result.records.length} records, runId=${result.runId}`);

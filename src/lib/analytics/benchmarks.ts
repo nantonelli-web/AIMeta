@@ -395,3 +395,244 @@ export async function computeBenchmarks(
     totals,
   };
 }
+
+/* ═════════════════════════════════════════════════════════
+   Organic benchmarks (Instagram posts)
+   ═════════════════════════════════════════════════════════ */
+
+interface OrganicRow {
+  competitor_id: string | null;
+  post_type: string | null;
+  video_url: string | null;
+  caption: string | null;
+  likes_count: number | null;
+  comments_count: number | null;
+  video_views: number | null;
+  hashtags: string[] | null;
+  posted_at: string | null;
+  created_at: string;
+}
+
+export interface OrganicBenchmarkData {
+  competitors: CompetitorRef[];
+  postsByCompetitor: { name: string; posts: number }[];
+  formatMixByCompetitor: { competitor: string; data: { name: string; value: number }[] }[];
+  formatStackedByCompetitor: {
+    name: string;
+    image: number;
+    video: number;
+    reel: number;
+  }[];
+  topHashtags: { name: string; count: number }[];
+  hashtagByCompetitor: { name: string; [hashtag: string]: string | number }[];
+  avgLikesByCompetitor: { name: string; likes: number }[];
+  avgCommentsByCompetitor: { name: string; comments: number }[];
+  avgViewsByCompetitor: { name: string; views: number }[];
+  postsPerWeekByCompetitor: { name: string; postsPerWeek: number }[];
+  avgCaptionLengthByCompetitor: { name: string; chars: number }[];
+  totals: {
+    totalPosts: number;
+    avgLikes: number;
+    avgComments: number;
+    avgViews: number;
+    avgCaptionLength: number;
+  };
+}
+
+export async function computeOrganicBenchmarks(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  competitorIds?: string[]
+): Promise<OrganicBenchmarkData> {
+  let q = supabase
+    .from("mait_organic_posts")
+    .select(
+      "competitor_id, post_type, video_url, caption, likes_count, comments_count, video_views, hashtags, posted_at, created_at"
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("platform", "instagram")
+    .limit(3000);
+  if (competitorIds && competitorIds.length > 0) {
+    q = q.in("competitor_id", competitorIds);
+  }
+
+  const [{ data: competitors }, { data: rawPosts }] = await Promise.all([
+    supabase
+      .from("mait_competitors")
+      .select("id, page_name")
+      .eq("workspace_id", workspaceId)
+      .order("page_name"),
+    q,
+  ]);
+
+  const comps = (competitors ?? []) as CompetitorRef[];
+  const posts = (rawPosts ?? []) as OrganicRow[];
+  const compMap = new Map(comps.map((c) => [c.id, c.page_name]));
+
+  function classify(p: OrganicRow): "image" | "video" | "reel" {
+    const t = (p.post_type ?? "").toLowerCase();
+    if (t.includes("reel")) return "reel";
+    if (p.video_url || t.includes("video")) return "video";
+    return "image";
+  }
+
+  // Volume + format per competitor
+  const byComp = new Map<
+    string,
+    {
+      total: number;
+      image: number;
+      video: number;
+      reel: number;
+      likes: number[];
+      comments: number[];
+      views: number[];
+      captions: number[];
+      recent: number;
+    }
+  >();
+  const ninetyAgo = Date.now() - 90 * 86_400_000;
+
+  for (const p of posts) {
+    const key = p.competitor_id ?? "unknown";
+    const entry =
+      byComp.get(key) ?? {
+        total: 0,
+        image: 0,
+        video: 0,
+        reel: 0,
+        likes: [] as number[],
+        comments: [] as number[],
+        views: [] as number[],
+        captions: [] as number[],
+        recent: 0,
+      };
+    entry.total++;
+    const fmt = classify(p);
+    entry[fmt]++;
+    if ((p.likes_count ?? 0) > 0) entry.likes.push(p.likes_count ?? 0);
+    if ((p.comments_count ?? 0) > 0) entry.comments.push(p.comments_count ?? 0);
+    if ((p.video_views ?? 0) > 0) entry.views.push(p.video_views ?? 0);
+    const capLen = (p.caption ?? "").length;
+    if (capLen > 0) entry.captions.push(capLen);
+    const when = p.posted_at
+      ? new Date(p.posted_at).getTime()
+      : new Date(p.created_at).getTime();
+    if (when > ninetyAgo) entry.recent++;
+    byComp.set(key, entry);
+  }
+
+  const avg = (arr: number[]) =>
+    arr.length === 0 ? 0 : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+
+  const postsByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({ name: compMap.get(id) ?? "N/A", posts: v.total }))
+    .sort((a, b) => b.posts - a.posts);
+
+  const formatMixByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({
+      competitor: compMap.get(id) ?? "N/A",
+      data: [
+        { name: "Image", value: v.image },
+        { name: "Video", value: v.video },
+        { name: "Reel", value: v.reel },
+      ].filter((f) => f.value > 0),
+    }))
+    .sort((a, b) => {
+      const ta = a.data.reduce((s, d) => s + d.value, 0);
+      const tb = b.data.reduce((s, d) => s + d.value, 0);
+      return tb - ta;
+    });
+
+  const formatStackedByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({
+      name: compMap.get(id) ?? "N/A",
+      image: v.image,
+      video: v.video,
+      reel: v.reel,
+    }))
+    .sort((a, b) => b.image + b.video + b.reel - (a.image + a.video + a.reel));
+
+  // Hashtags
+  const tagCount = new Map<string, number>();
+  const tagByComp = new Map<string, Map<string, number>>();
+  for (const p of posts) {
+    if (!Array.isArray(p.hashtags)) continue;
+    const key = p.competitor_id ?? "unknown";
+    const compTags = tagByComp.get(key) ?? new Map<string, number>();
+    for (const raw of p.hashtags) {
+      const tag = raw.trim().toLowerCase();
+      if (!tag) continue;
+      tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
+      compTags.set(tag, (compTags.get(tag) ?? 0) + 1);
+    }
+    tagByComp.set(key, compTags);
+  }
+  const topHashtags = [...tagCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({ name: `#${name}`, count }));
+
+  const topTagNames = topHashtags.slice(0, 5).map((h) => h.name.replace(/^#/, ""));
+  const hashtagByCompetitor = [...tagByComp.entries()].map(([id, tags]) => {
+    const row: { name: string; [hashtag: string]: string | number } = {
+      name: compMap.get(id) ?? "N/A",
+    };
+    for (const t of topTagNames) {
+      row[`#${t}`] = tags.get(t) ?? 0;
+    }
+    return row;
+  });
+
+  const avgLikesByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({ name: compMap.get(id) ?? "N/A", likes: avg(v.likes) }))
+    .sort((a, b) => b.likes - a.likes);
+  const avgCommentsByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({
+      name: compMap.get(id) ?? "N/A",
+      comments: avg(v.comments),
+    }))
+    .sort((a, b) => b.comments - a.comments);
+  const avgViewsByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({ name: compMap.get(id) ?? "N/A", views: avg(v.views) }))
+    .filter((e) => e.views > 0)
+    .sort((a, b) => b.views - a.views);
+  const avgCaptionLengthByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({
+      name: compMap.get(id) ?? "N/A",
+      chars: avg(v.captions),
+    }))
+    .sort((a, b) => b.chars - a.chars);
+  const postsPerWeekByCompetitor = [...byComp.entries()]
+    .map(([id, v]) => ({
+      name: compMap.get(id) ?? "N/A",
+      postsPerWeek: Math.round((v.recent / (90 / 7)) * 10) / 10,
+    }))
+    .sort((a, b) => b.postsPerWeek - a.postsPerWeek);
+
+  const allLikes = [...byComp.values()].flatMap((v) => v.likes);
+  const allComments = [...byComp.values()].flatMap((v) => v.comments);
+  const allViews = [...byComp.values()].flatMap((v) => v.views);
+  const allCaptions = [...byComp.values()].flatMap((v) => v.captions);
+
+  return {
+    competitors: comps,
+    postsByCompetitor,
+    formatMixByCompetitor,
+    formatStackedByCompetitor,
+    topHashtags,
+    hashtagByCompetitor,
+    avgLikesByCompetitor,
+    avgCommentsByCompetitor,
+    avgViewsByCompetitor,
+    postsPerWeekByCompetitor,
+    avgCaptionLengthByCompetitor,
+    totals: {
+      totalPosts: posts.length,
+      avgLikes: avg(allLikes),
+      avgComments: avg(allComments),
+      avgViews: avg(allViews),
+      avgCaptionLength: avg(allCaptions),
+    },
+  };
+}

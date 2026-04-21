@@ -263,7 +263,7 @@ async function computeOrganicStats(
       const [{ data: comp }, { data: posts }] = await Promise.all([
         admin
           .from("mait_competitors")
-          .select("id, page_name")
+          .select("id, page_name, instagram_username, instagram_profile")
           .eq("id", id)
           .single(),
         admin
@@ -352,6 +352,17 @@ async function computeOrganicStats(
         id,
         name: comp?.page_name ?? "—",
         kind: "organic" as const,
+        instagramUsername: comp?.instagram_username ?? null,
+        profile: (comp?.instagram_profile ?? null) as {
+          fullName: string | null;
+          biography: string | null;
+          followersCount: number | null;
+          followsCount: number | null;
+          postsCount: number | null;
+          profilePicUrl: string | null;
+          verified: boolean;
+          businessCategoryName: string | null;
+        } | null,
         totalPosts: list.length,
         imageCount,
         videoCount,
@@ -572,10 +583,16 @@ export async function POST(req: Request) {
     await Promise.all(aiTasks);
   }
 
-  // If the channel changed since we last stored this comparison, any
-  // previously cached AI (copy/visual) refers to the old channel's content
-  // and must not leak into the new one. Drop it explicitly.
-  if (existing && existing.channel && existing.channel !== parsed.data.channel) {
+  // If the underlying content kind changed (ads ↔ organic) since we last
+  // stored this comparison, any previously cached AI (copy/visual) refers
+  // to the old content and must not leak. Compare by technical_data[0].kind
+  // so we also catch legacy rows that have no channel column value.
+  const existingKind: "ads" | "organic" = Array.isArray(existing?.technical_data)
+    && (existing!.technical_data as Array<{ kind?: string }>)[0]?.kind === "organic"
+    ? "organic"
+    : "ads";
+  const newKind: "ads" | "organic" = isOrganic ? "organic" : "ads";
+  if (existing && existingKind !== newKind) {
     if (!sections.includes("copy")) payload.copy_analysis = null;
     if (!sections.includes("visual")) payload.visual_analysis = null;
   }

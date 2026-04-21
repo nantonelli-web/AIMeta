@@ -29,7 +29,10 @@ import {
   HorizontalBarChart,
   PlatformChart,
 } from "@/components/dashboard/benchmark-charts";
-import type { BenchmarkData } from "@/lib/analytics/benchmarks";
+import type {
+  BenchmarkData,
+  OrganicBenchmarkData,
+} from "@/lib/analytics/benchmarks";
 import type { CreativeAnalysisResult } from "@/lib/ai/creative-analysis";
 import type { MaitCompetitor } from "@/types";
 import { COUNTRIES } from "@/config/countries";
@@ -66,6 +69,17 @@ interface OrganicCompStats {
   id: string;
   name: string;
   kind: "organic";
+  instagramUsername: string | null;
+  profile: {
+    fullName: string | null;
+    biography: string | null;
+    followersCount: number | null;
+    followsCount: number | null;
+    postsCount: number | null;
+    profilePicUrl: string | null;
+    verified: boolean;
+    businessCategoryName: string | null;
+  } | null;
   totalPosts: number;
   imageCount: number;
   videoCount: number;
@@ -177,8 +191,13 @@ export function CompareView({
   const [configOpen, setConfigOpen] = useState(false);
   const [savedList, setSavedList] = useState(savedComparisons);
 
-  // Benchmark tab state
-  const [benchmarkData, setBenchmarkData] = useState<BenchmarkData | null>(null);
+  // Benchmark tab state — may be ads or organic depending on channel
+  type BenchmarkPayload =
+    | ({ kind: "ads" } & BenchmarkData)
+    | ({ kind: "organic" } & OrganicBenchmarkData);
+  const [benchmarkData, setBenchmarkData] = useState<BenchmarkPayload | null>(
+    null
+  );
   const [benchmarkLoading, setBenchmarkLoading] = useState(false);
 
   const fetchingRef = useRef<string>("");
@@ -416,11 +435,14 @@ export function CompareView({
   useEffect(() => {
     if (selected.size < 2 || channel === null) return;
     if (activeTab !== "benchmark") return;
-    if (channel === "instagram") return; // benchmarks are ads-only
     if (benchmarkData) return; // already fetched
 
     setBenchmarkLoading(true);
-    const source = channel === "meta" ? "meta" : channel === "google" ? "google" : undefined;
+    const source =
+      channel === "meta" ? "meta"
+      : channel === "google" ? "google"
+      : channel === "instagram" ? "instagram"
+      : undefined;
     const url = `/api/benchmarks?ids=${selectedIds.join(",")}${source ? `&source=${source}` : ""}`;
     fetch(url)
       .then(async (res) => {
@@ -1096,20 +1118,26 @@ export function CompareView({
               />
             ) : null)}
 
-          {/* Benchmark Tab — ads-only; organic shows a dedicated notice */}
+          {/* Benchmark Tab — branch on kind (ads vs organic) */}
           {activeTab === "benchmark" &&
-            (channel === "instagram" ? (
-              <div className="py-16 text-center text-muted-foreground text-sm">
-                {t("compare", "benchmarkOrganicUnavailable")}
-              </div>
-            ) : benchmarkLoading || regenerating ? (
+            (benchmarkLoading || regenerating ? (
               <LoadingState text={t("compare", "generating")} />
-            ) : benchmarkData && benchmarkData.totals.totalAds > 0 ? (
-              <BenchmarkCharts data={benchmarkData} t={t} />
-            ) : benchmarkData ? (
-              <div className="py-16 text-center text-muted-foreground text-sm">
-                {t("benchmarks", "noData")}
-              </div>
+            ) : benchmarkData?.kind === "organic" ? (
+              benchmarkData.totals.totalPosts > 0 ? (
+                <OrganicBenchmarkCharts data={benchmarkData} t={t} />
+              ) : (
+                <div className="py-16 text-center text-muted-foreground text-sm">
+                  {t("benchmarks", "noData")}
+                </div>
+              )
+            ) : benchmarkData?.kind === "ads" ? (
+              benchmarkData.totals.totalAds > 0 ? (
+                <BenchmarkCharts data={benchmarkData} t={t} />
+              ) : (
+                <div className="py-16 text-center text-muted-foreground text-sm">
+                  {t("benchmarks", "noData")}
+                </div>
+              )
             ) : null)}
 
           {/* Bottom "back" action — same affordance at the end of the scroll */}
@@ -1290,6 +1318,95 @@ function AdsTechnicalView({
   );
 }
 
+function OrganicProfileCard({
+  stat,
+  t,
+}: {
+  stat: OrganicCompStats;
+  t: (s: string, k: string) => string;
+}) {
+  const p = stat.profile;
+  const handle = stat.instagramUsername ?? p?.fullName ?? stat.name;
+  return (
+    <div className="rounded-lg border border-border p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        {p?.profilePicUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.profilePicUrl}
+            alt={stat.name}
+            className="size-12 rounded-full object-cover border border-border shrink-0"
+          />
+        ) : (
+          <div className="size-12 rounded-full bg-muted border border-border shrink-0 grid place-items-center text-muted-foreground font-semibold">
+            {stat.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gold truncate">{stat.name}</p>
+          {stat.instagramUsername && (
+            <a
+              href={`https://www.instagram.com/${stat.instagramUsername}/`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-muted-foreground hover:text-foreground truncate block"
+            >
+              @{handle}
+            </a>
+          )}
+          {p?.verified && (
+            <span className="text-[10px] text-blue-400">✓ {t("compare", "verified")}</span>
+          )}
+        </div>
+      </div>
+
+      {p ? (
+        <>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <ProfileStat
+              label={t("compare", "followers")}
+              value={p.followersCount != null ? formatNumber(p.followersCount) : "—"}
+            />
+            <ProfileStat
+              label={t("compare", "following")}
+              value={p.followsCount != null ? formatNumber(p.followsCount) : "—"}
+            />
+            <ProfileStat
+              label={t("compare", "postsTotal")}
+              value={p.postsCount != null ? formatNumber(p.postsCount) : "—"}
+            />
+          </div>
+          {p.businessCategoryName && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              {p.businessCategoryName}
+            </p>
+          )}
+          {p.biography && (
+            <p className="text-xs text-muted-foreground line-clamp-3 border-t border-border pt-2">
+              {p.biography}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          {t("compare", "profileNotFetched")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ProfileStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-sm font-semibold text-foreground">{value}</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function OrganicTechnicalView({
   stats,
   t,
@@ -1297,8 +1414,33 @@ function OrganicTechnicalView({
   stats: OrganicCompStats[];
   t: (s: string, k: string) => string;
 }) {
+  // Hide the profile banner entirely if no brand has profile data yet —
+  // keeps the UI clean for brands scanned before profile scraping existed.
+  const anyProfile = stats.some((s) => s.profile);
+
   return (
     <div className="space-y-4">
+      {anyProfile && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
+              {t("compare", "profileOverview")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={cn(
+                "grid gap-4",
+                stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+              )}
+            >
+              {stats.map((s) => (
+                <OrganicProfileCard key={s.id} stat={s} t={t} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <CompareTable
         label={t("compare", "totalPosts")}
         stats={stats}
@@ -1556,6 +1698,168 @@ function CompareTable<T extends { id: string; name: string }>({
             </p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function OrganicBenchmarkCharts({
+  data,
+  t,
+}: {
+  data: OrganicBenchmarkData;
+  t: (section: string, key: string) => string;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* KPI cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <BenchmarkStat
+          label={t("compare", "totalPosts")}
+          value={formatNumber(data.totals.totalPosts)}
+        />
+        <BenchmarkStat
+          label={t("compare", "avgLikes")}
+          value={formatNumber(data.totals.avgLikes)}
+        />
+        <BenchmarkStat
+          label={t("compare", "avgComments")}
+          value={formatNumber(data.totals.avgComments)}
+        />
+        <BenchmarkStat
+          label={t("compare", "avgViews")}
+          value={formatNumber(data.totals.avgViews)}
+        />
+        <BenchmarkStat
+          label={t("compare", "avgCaptionLength")}
+          value={`${data.totals.avgCaptionLength} chr`}
+        />
+      </div>
+
+      {/* Posts per competitor */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "volumePerCompetitor")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <HorizontalBarChart
+            data={data.postsByCompetitor}
+            dataKey="posts"
+            label={t("compare", "totalPosts")}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Format mix per brand */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "globalFormatMix")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={`grid gap-6 ${data.formatMixByCompetitor.length <= 2 ? "grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}
+          >
+            {data.formatMixByCompetitor.map((entry) => (
+              <div key={entry.competitor} className="text-center">
+                <p className="text-xs font-medium text-gold mb-2">
+                  {entry.competitor}
+                </p>
+                <FormatPieChart data={entry.data} />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Top hashtags */}
+      {data.topHashtags.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("compare", "topHashtags")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.topHashtags}
+              dataKey="count"
+              label={t("benchmarks", "adsLabel")}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Engagement: likes / comments / views per competitor */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("compare", "avgLikes")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.avgLikesByCompetitor}
+              dataKey="likes"
+              label={t("compare", "avgLikes")}
+              color="#c9a44d"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("compare", "avgComments")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.avgCommentsByCompetitor}
+              dataKey="comments"
+              label={t("compare", "avgComments")}
+              color="#6b8e6b"
+            />
+          </CardContent>
+        </Card>
+        {data.avgViewsByCompetitor.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("compare", "avgViews")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HorizontalBarChart
+                data={data.avgViewsByCompetitor}
+                dataKey="views"
+                label={t("compare", "avgViews")}
+                color="#5b7ea3"
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Cadence + caption length */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("compare", "postsPerWeek")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.postsPerWeekByCompetitor}
+              dataKey="postsPerWeek"
+              label={t("compare", "postsPerWeekUnit")}
+              color="#a06b5b"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("compare", "avgCaptionLength")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart
+              data={data.avgCaptionLengthByCompetitor}
+              dataKey="chars"
+              label={t("benchmarks", "charsAxisLabel")}
+              color="#8a6bb0"
+            />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -83,6 +83,80 @@ export function cleanInstagramUsername(raw: string | null | undefined): string |
   return v;
 }
 
+/* ── Profile scrape — fetches followers, bio, posts count ───────── */
+
+const PROFILE_ACTOR_ID = "apify/instagram-profile-scraper";
+
+export interface InstagramProfile {
+  username: string;
+  fullName: string | null;
+  biography: string | null;
+  followersCount: number | null;
+  followsCount: number | null;
+  postsCount: number | null;
+  profilePicUrl: string | null;
+  verified: boolean;
+  isBusinessAccount: boolean;
+  businessCategoryName: string | null;
+  externalUrl: string | null;
+  fetchedAt: string;
+}
+
+interface RawInstagramProfile {
+  username?: string;
+  fullName?: string;
+  biography?: string;
+  followersCount?: number;
+  followsCount?: number;
+  postsCount?: number;
+  profilePicUrlHD?: string;
+  profilePicUrl?: string;
+  verified?: boolean;
+  isBusinessAccount?: boolean;
+  businessCategoryName?: string;
+  externalUrl?: string;
+  [k: string]: unknown;
+}
+
+export async function scrapeInstagramProfile(
+  usernameInput: string
+): Promise<InstagramProfile | null> {
+  const handle = cleanInstagramUsername(usernameInput);
+  if (!handle) return null;
+
+  try {
+    const run = await apifyFetch(
+      `/acts/${encodeURIComponent(PROFILE_ACTOR_ID)}/run-sync-get-dataset-items`,
+      {
+        method: "POST",
+        body: JSON.stringify({ usernames: [handle] }),
+      }
+    );
+
+    const items: RawInstagramProfile[] = Array.isArray(run) ? run : [];
+    const p = items[0];
+    if (!p) return null;
+
+    return {
+      username: p.username ?? handle,
+      fullName: p.fullName ?? null,
+      biography: p.biography ?? null,
+      followersCount: p.followersCount ?? null,
+      followsCount: p.followsCount ?? null,
+      postsCount: p.postsCount ?? null,
+      profilePicUrl: p.profilePicUrlHD ?? p.profilePicUrl ?? null,
+      verified: p.verified === true,
+      isBusinessAccount: p.isBusinessAccount === true,
+      businessCategoryName: p.businessCategoryName ?? null,
+      externalUrl: p.externalUrl ?? null,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error(`[Instagram profile] scrape failed for ${handle}:`, err);
+    return null;
+  }
+}
+
 export async function scrapeInstagramPosts(
   opts: InstagramScrapeOptions
 ): Promise<InstagramScrapeResult> {
