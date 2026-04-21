@@ -37,9 +37,10 @@ import { COUNTRIES } from "@/config/countries";
 type Tab = "technical" | "copy" | "visual" | "benchmark";
 type Channel = "all" | "meta" | "google" | "instagram";
 
-interface CompStats {
+interface AdsCompStats {
   id: string;
   name: string;
+  kind: "ads";
   totalAds: number;
   activeAds: number;
   imageCount: number;
@@ -59,6 +60,42 @@ interface CompStats {
     image_url: string | null;
     ad_archive_id: string;
   }[];
+}
+
+interface OrganicCompStats {
+  id: string;
+  name: string;
+  kind: "organic";
+  totalPosts: number;
+  imageCount: number;
+  videoCount: number;
+  reelCount: number;
+  avgLikes: number;
+  avgComments: number;
+  avgViews: number;
+  topHashtags: { name: string; count: number }[];
+  postsPerWeek: number;
+  avgCaptionLength: number;
+  latestPosts: {
+    post_id: string;
+    caption: string | null;
+    display_url: string | null;
+    post_url: string | null;
+    likes: number;
+    comments: number;
+  }[];
+}
+
+type CompStats = AdsCompStats | OrganicCompStats;
+
+/** Old cached rows (pre-organic) have no `kind` — default to "ads". */
+function normalizeStats(raw: unknown): CompStats[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.map((s) => {
+    const rec = s as Record<string, unknown>;
+    if (rec.kind === "organic") return rec as unknown as OrganicCompStats;
+    return { ...(rec as object), kind: "ads" } as AdsCompStats;
+  });
 }
 
 interface CachedComparison {
@@ -215,31 +252,39 @@ export function CompareView({
           }
         }
 
-        // 1. Try fetching from cache
+        // 1. Try fetching from cache. The cache row is keyed only by
+        // (workspace, ids, locale), so data from a different channel may
+        // still be returned — if the stored kind mismatches the requested
+        // channel (organic vs ads), we treat it as a miss and regenerate.
+        const expectedKind: "organic" | "ads" =
+          channel === "instagram" ? "organic" : "ads";
         const getRes = await fetch(
           `/api/comparisons?ids=${ids.sort().join(",")}&locale=${locale}`
         );
 
         if (getRes.ok) {
           const data = await getRes.json();
-          setCache({
-            technical_data: data.technical_data,
-            copy_analysis: data.copy_analysis,
-            visual_analysis: data.visual_analysis,
-            created_at: data.created_at,
-            stale: data.stale,
-          });
-          if (data.technical_data) {
-            setStats(data.technical_data);
-          }
-          if (data.copy_analysis || data.visual_analysis) {
-            setAiResult({
-              copywriterReport: data.copy_analysis ?? null,
-              creativeDirectorReport: data.visual_analysis ?? null,
+          const normalized = normalizeStats(data.technical_data);
+          const cachedKind = normalized?.[0]?.kind ?? null;
+          if (normalized && cachedKind === expectedKind) {
+            setCache({
+              technical_data: normalized,
+              copy_analysis: data.copy_analysis,
+              visual_analysis: data.visual_analysis,
+              created_at: data.created_at,
+              stale: data.stale,
             });
+            setStats(normalized);
+            if (data.copy_analysis || data.visual_analysis) {
+              setAiResult({
+                copywriterReport: data.copy_analysis ?? null,
+                creativeDirectorReport: data.visual_analysis ?? null,
+              });
+            }
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-          return;
+          // kind mismatch — fall through to POST which will overwrite the row
         }
 
         // 2. Not cached — generate technical data
@@ -257,15 +302,16 @@ export function CompareView({
 
         if (postRes.ok) {
           const data = await postRes.json();
+          const normalized = normalizeStats(data.technical_data);
           setCache({
-            technical_data: data.technical_data,
+            technical_data: normalized,
             copy_analysis: data.copy_analysis ?? null,
             visual_analysis: data.visual_analysis ?? null,
             created_at: data.created_at ?? data.updated_at,
             stale: data.stale ?? false,
           });
-          if (data.technical_data) {
-            setStats(data.technical_data);
+          if (normalized) {
+            setStats(normalized);
           }
           if (data.copy_analysis || data.visual_analysis) {
             setAiResult({
@@ -345,7 +391,8 @@ export function CompareView({
         const data = await res.json();
         // Update cache
         setCache((prev) => ({
-          technical_data: prev?.technical_data ?? data.technical_data,
+          technical_data:
+            prev?.technical_data ?? normalizeStats(data.technical_data),
           copy_analysis: data.copy_analysis ?? prev?.copy_analysis ?? null,
           visual_analysis:
             data.visual_analysis ?? prev?.visual_analysis ?? null,
@@ -369,6 +416,7 @@ export function CompareView({
   useEffect(() => {
     if (selected.size < 2 || channel === null) return;
     if (activeTab !== "benchmark") return;
+    if (channel === "instagram") return; // benchmarks are ads-only
     if (benchmarkData) return; // already fetched
 
     setBenchmarkLoading(true);
@@ -426,14 +474,15 @@ export function CompareView({
 
       if (res.ok) {
         const data = await res.json();
+        const normalized = normalizeStats(data.technical_data);
         setCache({
-          technical_data: data.technical_data,
+          technical_data: normalized,
           copy_analysis: data.copy_analysis ?? null,
           visual_analysis: data.visual_analysis ?? null,
           created_at: data.created_at,
           stale: data.stale ?? false,
         });
-        if (data.technical_data) setStats(data.technical_data);
+        if (normalized) setStats(normalized);
         setAiResult({
           copywriterReport: data.copy_analysis ?? null,
           creativeDirectorReport: data.visual_analysis ?? null,
@@ -1008,141 +1057,17 @@ export function CompareView({
             />
           </div>
 
-          {/* Technical Tab */}
+          {/* Technical Tab — branch on stats kind (ads vs organic) */}
           {activeTab === "technical" &&
             (loading || regenerating ? (
               <LoadingState text={t("compare", "generating")} />
             ) : stats && stats.length >= 2 ? (
-              <div className="space-y-4">
-                <CompareTable
-                  label={t("compare", "totalAds")}
-                  stats={stats}
-                  render={(s) => String(s.totalAds)}
-                />
-                <CompareTable
-                  label={t("compare", "activeAds")}
-                  stats={stats}
-                  render={(s) => String(s.activeAds)}
-                  highlight
-                />
-
-                {/* Estimated Campaign Objective */}
-                <ObjectiveCard stats={stats} t={t} />
-
-                <CompareTable
-                  label={t("compare", "formatMix")}
-                  stats={stats}
-                  render={(s) => {
-                    const total = s.imageCount + s.videoCount;
-                    if (total === 0) return "\u2014";
-                    const imgPct = Math.round(
-                      (s.imageCount / total) * 100
-                    );
-                    return `${imgPct}% img \u00B7 ${100 - imgPct}% video`;
-                  }}
-                />
-                <CompareTable
-                  label={t("compare", "topCta")}
-                  stats={stats}
-                  render={(s) =>
-                    s.topCtas
-                      .slice(0, 3)
-                      .map((c) => c.name)
-                      .join(", ") || "\u2014"
-                  }
-                />
-                <CompareTable
-                  label={t("compare", "platformsLabel")}
-                  stats={stats}
-                  render={(s) =>
-                    s.platforms.map((p) => p.name).join(", ") || "\u2014"
-                  }
-                />
-                <CompareTable
-                  label={t("compare", "avgDuration")}
-                  stats={stats}
-                  render={(s) =>
-                    s.avgDuration > 0
-                      ? `${s.avgDuration} ${t("compare", "avgDurationDays")}`
-                      : "\u2014"
-                  }
-                />
-                <CompareTable
-                  label={t("compare", "avgCopyLength")}
-                  stats={stats}
-                  render={(s) =>
-                    s.avgCopyLength > 0
-                      ? `${s.avgCopyLength} ${t("compare", "avgCopyChars")}`
-                      : "\u2014"
-                  }
-                />
-                <CompareTable
-                  label={t("compare", "refreshRate")}
-                  stats={stats}
-                  render={(s) =>
-                    s.adsPerWeek > 0
-                      ? `${s.adsPerWeek} ${t("compare", "adsPerWeek")}`
-                      : "\u2014"
-                  }
-                  highlight
-                />
-                {/* Latest ads */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">
-                      {t("compare", "latestAds")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div
-                      className={cn(
-                        "grid gap-4",
-                        stats.length === 2
-                          ? "grid-cols-2"
-                          : "grid-cols-3"
-                      )}
-                    >
-                      {stats.map((s) => (
-                        <div key={s.id} className="space-y-3">
-                          <p className="text-xs font-medium text-gold">
-                            {s.name}
-                          </p>
-                          {s.latestAds.slice(0, 3).map((ad) => (
-                            <a
-                              key={ad.ad_archive_id}
-                              href={`https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block rounded-lg border border-border overflow-hidden hover:border-gold/40 transition-colors"
-                            >
-                              {ad.image_url &&
-                              !ad.image_url.includes("/render_ad/") ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={ad.image_url}
-                                  alt=""
-                                  className="w-full aspect-video object-cover"
-                                />
-                              ) : (
-                                <div className="aspect-video bg-muted grid place-items-center text-xs text-muted-foreground">
-                                  {ad.headline ?? "Ad"}
-                                </div>
-                              )}
-                              {ad.headline && (
-                                <p className="p-2 text-xs line-clamp-1">
-                                  {ad.headline}
-                                </p>
-                              )}
-                            </a>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              stats[0].kind === "organic" ? (
+                <OrganicTechnicalView stats={stats as OrganicCompStats[]} t={t} />
+              ) : (
+                <AdsTechnicalView stats={stats as AdsCompStats[]} t={t} />
+              )
             ) : null)}
-
           {/* Copy Tab */}
           {activeTab === "copy" &&
             (aiLoading || regenerating ? (
@@ -1171,9 +1096,13 @@ export function CompareView({
               />
             ) : null)}
 
-          {/* Benchmark Tab */}
+          {/* Benchmark Tab — ads-only; organic shows a dedicated notice */}
           {activeTab === "benchmark" &&
-            (benchmarkLoading || regenerating ? (
+            (channel === "instagram" ? (
+              <div className="py-16 text-center text-muted-foreground text-sm">
+                {t("compare", "benchmarkOrganicUnavailable")}
+              </div>
+            ) : benchmarkLoading || regenerating ? (
               <LoadingState text={t("compare", "generating")} />
             ) : benchmarkData && benchmarkData.totals.totalAds > 0 ? (
               <BenchmarkCharts data={benchmarkData} t={t} />
@@ -1242,11 +1171,259 @@ function ErrorState({ text }: { text: string }) {
   );
 }
 
+function AdsTechnicalView({
+  stats,
+  t,
+}: {
+  stats: AdsCompStats[];
+  t: (s: string, k: string) => string;
+}) {
+  return (
+    <div className="space-y-4">
+      <CompareTable
+        label={t("compare", "totalAds")}
+        stats={stats}
+        render={(s) => String(s.totalAds)}
+      />
+      <CompareTable
+        label={t("compare", "activeAds")}
+        stats={stats}
+        render={(s) => String(s.activeAds)}
+        highlight
+      />
+      <ObjectiveCard stats={stats} t={t} />
+      <CompareTable
+        label={t("compare", "formatMix")}
+        stats={stats}
+        render={(s) => {
+          const total = s.imageCount + s.videoCount;
+          if (total === 0) return "—";
+          const imgPct = Math.round((s.imageCount / total) * 100);
+          return `${imgPct}% img · ${100 - imgPct}% video`;
+        }}
+      />
+      <CompareTable
+        label={t("compare", "topCta")}
+        stats={stats}
+        render={(s) =>
+          s.topCtas.slice(0, 3).map((c) => c.name).join(", ") || "—"
+        }
+      />
+      <CompareTable
+        label={t("compare", "platformsLabel")}
+        stats={stats}
+        render={(s) => s.platforms.map((p) => p.name).join(", ") || "—"}
+      />
+      <CompareTable
+        label={t("compare", "avgDuration")}
+        stats={stats}
+        render={(s) =>
+          s.avgDuration > 0
+            ? `${s.avgDuration} ${t("compare", "avgDurationDays")}`
+            : "—"
+        }
+      />
+      <CompareTable
+        label={t("compare", "avgCopyLength")}
+        stats={stats}
+        render={(s) =>
+          s.avgCopyLength > 0
+            ? `${s.avgCopyLength} ${t("compare", "avgCopyChars")}`
+            : "—"
+        }
+      />
+      <CompareTable
+        label={t("compare", "refreshRate")}
+        stats={stats}
+        render={(s) =>
+          s.adsPerWeek > 0
+            ? `${s.adsPerWeek} ${t("compare", "adsPerWeek")}`
+            : "—"
+        }
+        highlight
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">{t("compare", "latestAds")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={cn(
+              "grid gap-4",
+              stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+            )}
+          >
+            {stats.map((s) => (
+              <div key={s.id} className="space-y-3">
+                <p className="text-xs font-medium text-gold">{s.name}</p>
+                {s.latestAds.slice(0, 3).map((ad) => (
+                  <a
+                    key={ad.ad_archive_id}
+                    href={`https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-lg border border-border overflow-hidden hover:border-gold/40 transition-colors"
+                  >
+                    {ad.image_url && !ad.image_url.includes("/render_ad/") ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={ad.image_url}
+                        alt=""
+                        className="w-full aspect-video object-cover"
+                      />
+                    ) : (
+                      <div className="aspect-video bg-muted grid place-items-center text-xs text-muted-foreground">
+                        {ad.headline ?? "Ad"}
+                      </div>
+                    )}
+                    {ad.headline && (
+                      <p className="p-2 text-xs line-clamp-1">{ad.headline}</p>
+                    )}
+                  </a>
+                ))}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function OrganicTechnicalView({
+  stats,
+  t,
+}: {
+  stats: OrganicCompStats[];
+  t: (s: string, k: string) => string;
+}) {
+  return (
+    <div className="space-y-4">
+      <CompareTable
+        label={t("compare", "totalPosts")}
+        stats={stats}
+        render={(s) => String(s.totalPosts)}
+        highlight
+      />
+      <CompareTable
+        label={t("compare", "postsPerWeek")}
+        stats={stats}
+        render={(s) =>
+          s.postsPerWeek > 0
+            ? `${s.postsPerWeek} ${t("compare", "postsPerWeekUnit")}`
+            : "—"
+        }
+        highlight
+      />
+      <CompareTable
+        label={t("compare", "formatMix")}
+        stats={stats}
+        render={(s) => {
+          const total = s.imageCount + s.videoCount + s.reelCount;
+          if (total === 0) return "—";
+          const img = Math.round((s.imageCount / total) * 100);
+          const vid = Math.round((s.videoCount / total) * 100);
+          const reel = 100 - img - vid;
+          return `${img}% img · ${vid}% video · ${reel}% reel`;
+        }}
+      />
+      <CompareTable
+        label={t("compare", "avgLikes")}
+        stats={stats}
+        render={(s) => (s.avgLikes > 0 ? formatNumber(s.avgLikes) : "—")}
+      />
+      <CompareTable
+        label={t("compare", "avgComments")}
+        stats={stats}
+        render={(s) =>
+          s.avgComments > 0 ? formatNumber(s.avgComments) : "—"
+        }
+      />
+      <CompareTable
+        label={t("compare", "avgViews")}
+        stats={stats}
+        render={(s) => (s.avgViews > 0 ? formatNumber(s.avgViews) : "—")}
+      />
+      <CompareTable
+        label={t("compare", "topHashtags")}
+        stats={stats}
+        render={(s) =>
+          s.topHashtags
+            .slice(0, 5)
+            .map((h) => `#${h.name}`)
+            .join(" ") || "—"
+        }
+      />
+      <CompareTable
+        label={t("compare", "avgCaptionLength")}
+        stats={stats}
+        render={(s) =>
+          s.avgCaptionLength > 0
+            ? `${s.avgCaptionLength} ${t("compare", "avgCopyChars")}`
+            : "—"
+        }
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">
+            {t("compare", "latestPosts")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={cn(
+              "grid gap-4",
+              stats.length === 2 ? "grid-cols-2" : "grid-cols-3"
+            )}
+          >
+            {stats.map((s) => (
+              <div key={s.id} className="space-y-3">
+                <p className="text-xs font-medium text-gold">{s.name}</p>
+                {s.latestPosts.slice(0, 3).map((post) => (
+                  <a
+                    key={post.post_id}
+                    href={post.post_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-lg border border-border overflow-hidden hover:border-gold/40 transition-colors"
+                  >
+                    {post.display_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={post.display_url}
+                        alt=""
+                        className="w-full aspect-square object-cover"
+                      />
+                    ) : (
+                      <div className="aspect-square bg-muted grid place-items-center text-xs text-muted-foreground">
+                        Post
+                      </div>
+                    )}
+                    <div className="p-2 space-y-1">
+                      {post.caption && (
+                        <p className="text-xs line-clamp-2">{post.caption}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                        <span>♥ {formatNumber(post.likes)}</span>
+                        <span>💬 {formatNumber(post.comments)}</span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ObjectiveCard({
   stats,
   t,
 }: {
-  stats: CompStats[];
+  stats: AdsCompStats[];
   t: (s: string, k: string) => string;
 }) {
   const OBJECTIVE_LABELS: Record<string, Record<string, string>> = {
@@ -1337,15 +1514,15 @@ function ObjectiveCard({
   );
 }
 
-function CompareTable({
+function CompareTable<T extends { id: string; name: string }>({
   label,
   stats,
   render,
   highlight,
 }: {
   label: string;
-  stats: CompStats[];
-  render: (s: CompStats) => string;
+  stats: T[];
+  render: (s: T) => string;
   highlight?: boolean;
 }) {
   return (

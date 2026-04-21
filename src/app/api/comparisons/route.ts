@@ -182,6 +182,7 @@ async function computeTechnicalStats(
       return {
         id,
         name: comp?.page_name ?? "—",
+        kind: "ads" as const,
         totalAds: adsList.length,
         activeAds: active.length,
         imageCount,
@@ -231,6 +232,181 @@ async function fetchBrandAdData(
           cta: string | null;
           image_url: string | null;
         }[],
+      };
+    })
+  );
+}
+
+/* ── Organic (Instagram) technical stats ─────────────────── */
+
+type OrganicRow = {
+  post_id: string;
+  post_url: string | null;
+  post_type: string | null;
+  caption: string | null;
+  display_url: string | null;
+  video_url: string | null;
+  likes_count: number | null;
+  comments_count: number | null;
+  video_views: number | null;
+  hashtags: string[] | null;
+  posted_at: string | null;
+  created_at: string;
+};
+
+async function computeOrganicStats(
+  ids: string[],
+  admin: ReturnType<typeof createAdminClient>
+) {
+  return Promise.all(
+    ids.map(async (id) => {
+      const [{ data: comp }, { data: posts }] = await Promise.all([
+        admin
+          .from("mait_competitors")
+          .select("id, page_name")
+          .eq("id", id)
+          .single(),
+        admin
+          .from("mait_organic_posts")
+          .select(
+            "post_id, post_url, post_type, caption, display_url, video_url, likes_count, comments_count, video_views, hashtags, posted_at, created_at"
+          )
+          .eq("competitor_id", id)
+          .eq("platform", "instagram")
+          .order("posted_at", { ascending: false, nullsFirst: false })
+          .limit(500),
+      ]);
+
+      const list = (posts ?? []) as OrganicRow[];
+
+      // Format mix: distinguish image / video / reel
+      let imageCount = 0;
+      let videoCount = 0;
+      let reelCount = 0;
+      for (const p of list) {
+        const t = (p.post_type ?? "").toLowerCase();
+        if (t.includes("reel")) reelCount++;
+        else if (p.video_url || t.includes("video")) videoCount++;
+        else imageCount++;
+      }
+
+      // Engagement averages
+      const likes = list.map((p) => p.likes_count ?? 0);
+      const comments = list.map((p) => p.comments_count ?? 0);
+      const views = list
+        .map((p) => p.video_views ?? 0)
+        .filter((v) => v > 0);
+      const avg = (arr: number[]) =>
+        arr.length === 0
+          ? 0
+          : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+      const avgLikes = avg(likes);
+      const avgComments = avg(comments);
+      const avgViews = avg(views);
+
+      // Top hashtags
+      const tagMap = new Map<string, number>();
+      for (const p of list) {
+        for (const raw of p.hashtags ?? []) {
+          const tag = raw.trim().toLowerCase();
+          if (!tag) continue;
+          tagMap.set(tag, (tagMap.get(tag) ?? 0) + 1);
+        }
+      }
+      const topHashtags = [...tagMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count }));
+
+      // Caption length
+      const captionLengths = list
+        .map((p) => (p.caption ?? "").length)
+        .filter((l) => l > 0);
+      const avgCaptionLength =
+        captionLengths.length > 0
+          ? Math.round(
+              captionLengths.reduce((a, b) => a + b, 0) / captionLengths.length
+            )
+          : 0;
+
+      // Cadence (posts/week over last 90 days)
+      const ninetyAgo = Date.now() - 90 * 86_400_000;
+      const recent = list.filter((p) => {
+        const when = p.posted_at ? new Date(p.posted_at).getTime()
+          : new Date(p.created_at).getTime();
+        return when > ninetyAgo;
+      }).length;
+      const postsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
+
+      // Latest posts (5 most recent)
+      const latestPosts = list.slice(0, 5).map((p) => ({
+        post_id: p.post_id,
+        caption: p.caption,
+        display_url: p.display_url,
+        post_url: p.post_url,
+        likes: p.likes_count ?? 0,
+        comments: p.comments_count ?? 0,
+      }));
+
+      return {
+        id,
+        name: comp?.page_name ?? "—",
+        kind: "organic" as const,
+        totalPosts: list.length,
+        imageCount,
+        videoCount,
+        reelCount,
+        avgLikes,
+        avgComments,
+        avgViews,
+        topHashtags,
+        postsPerWeek,
+        avgCaptionLength,
+        latestPosts,
+      };
+    })
+  );
+}
+
+/** Fetch brand organic-post data shaped as BrandAdData so the existing
+ * AI analyzers can reuse the same pipeline on captions + display_urls. */
+async function fetchBrandOrganicData(
+  ids: string[],
+  admin: ReturnType<typeof createAdminClient>
+): Promise<BrandAdData[]> {
+  return Promise.all(
+    ids.map(async (id) => {
+      const [{ data: comp }, { data: posts }] = await Promise.all([
+        admin
+          .from("mait_competitors")
+          .select("id, page_name")
+          .eq("id", id)
+          .single(),
+        admin
+          .from("mait_organic_posts")
+          .select("caption, display_url, hashtags")
+          .eq("competitor_id", id)
+          .eq("platform", "instagram")
+          .order("posted_at", { ascending: false, nullsFirst: false })
+          .limit(12),
+      ]);
+
+      const rows = (posts ?? []) as {
+        caption: string | null;
+        display_url: string | null;
+        hashtags: string[] | null;
+      }[];
+
+      return {
+        brandName: comp?.page_name ?? "Unknown",
+        competitorId: id,
+        ads: rows.map((p) => ({
+          headline: null,
+          ad_text: p.caption,
+          description: (p.hashtags ?? []).slice(0, 10).map((h) => `#${h}`).join(" ") || null,
+          cta: null,
+          image_url: p.display_url,
+        })),
       };
     })
   );
@@ -344,16 +520,24 @@ export async function POST(req: Request) {
     payload.countries = parsed.data.countries;
   }
 
-  // Technical data
+  const isOrganic = parsed.data.channel === "instagram";
+
+  // Technical data — branch on channel. Instagram pulls from organic
+  // posts and returns a differently-shaped record (kind: "organic").
   if (sections.includes("technical")) {
-    const source = parsed.data.channel === "all" ? undefined
-      : parsed.data.channel === "instagram" ? undefined
-      : parsed.data.channel as "meta" | "google";
-    const stats = await computeTechnicalStats(ids, admin, source);
-    payload.technical_data = stats;
+    if (isOrganic) {
+      payload.technical_data = await computeOrganicStats(ids, admin);
+    } else {
+      const source = parsed.data.channel === "all"
+        ? undefined
+        : (parsed.data.channel as "meta" | "google");
+      payload.technical_data = await computeTechnicalStats(ids, admin, source);
+    }
   }
 
-  // AI sections (copy / visual) — fetch brand data once if needed
+  // AI sections (copy / visual) — fetch brand data once if needed.
+  // For organic, captions + display_urls are mapped into the BrandAdData
+  // shape so the same analyzers work unchanged.
   const needsAi = sections.includes("copy") || sections.includes("visual");
   if (needsAi) {
     if (!process.env.OPENROUTER_API_KEY) {
@@ -362,7 +546,9 @@ export async function POST(req: Request) {
         { status: 503 }
       );
     }
-    const brands = await fetchBrandAdData(ids, admin);
+    const brands = isOrganic
+      ? await fetchBrandOrganicData(ids, admin)
+      : await fetchBrandAdData(ids, admin);
     const aiLocale = locale as "it" | "en";
 
     const aiTasks: Promise<void>[] = [];
@@ -384,6 +570,14 @@ export async function POST(req: Request) {
     }
 
     await Promise.all(aiTasks);
+  }
+
+  // If the channel changed since we last stored this comparison, any
+  // previously cached AI (copy/visual) refers to the old channel's content
+  // and must not leak into the new one. Drop it explicitly.
+  if (existing && existing.channel && existing.channel !== parsed.data.channel) {
+    if (!sections.includes("copy")) payload.copy_analysis = null;
+    if (!sections.includes("visual")) payload.visual_analysis = null;
   }
 
   // Upsert
