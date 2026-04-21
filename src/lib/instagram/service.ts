@@ -65,18 +65,43 @@ export interface InstagramScrapeOptions {
   maxPosts?: number;
 }
 
+/**
+ * Extract a clean Instagram handle from whatever the user typed or that was
+ * scraped automatically — a bare username, an @handle, or a full profile URL.
+ * Returns null if nothing valid can be recovered. Apify's directUrls regex
+ * only accepts [A-Za-z0-9._-] in the handle segment.
+ */
+export function cleanInstagramUsername(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let v = raw.trim();
+  // Pull handle out of a URL if present
+  const urlMatch = v.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9._-]+)/i);
+  if (urlMatch) v = urlMatch[1];
+  v = v.replace(/^@/, "");
+  v = v.replace(/[/?#].*$/, "");
+  if (!v || !/^[A-Za-z0-9._-]+$/.test(v)) return null;
+  return v;
+}
+
 export async function scrapeInstagramPosts(
   opts: InstagramScrapeOptions
 ): Promise<InstagramScrapeResult> {
   const maxPosts = opts.maxPosts ?? 30;
 
+  const handle = cleanInstagramUsername(opts.username);
+  if (!handle) {
+    throw new Error(
+      `Instagram username non valido: "${opts.username}". Usa solo il nome utente (es. elenamiro), senza @ o URL.`
+    );
+  }
+
   const input = {
-    directUrls: [`https://www.instagram.com/${opts.username}/`],
+    directUrls: [`https://www.instagram.com/${handle}/`],
     resultsType: "posts",
     resultsLimit: maxPosts,
   };
 
-  console.log(`[Instagram] Starting: actor=${ACTOR_ID} user=${opts.username} max=${maxPosts}`);
+  console.log(`[Instagram] Starting: actor=${ACTOR_ID} user=${handle} max=${maxPosts}`);
 
   const actorPath = `/acts/${encodeURIComponent(ACTOR_ID)}/runs?maxItems=${maxPosts}`;
   const run = await apifyFetch(actorPath, {
@@ -121,7 +146,7 @@ export async function scrapeInstagramPosts(
     } catch { /* ignore */ }
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     console.error(`[Instagram] FAILED: status=${status} after ${pollCount} polls, ${elapsed}s${errorDetail}`);
-    throw new Error(`Instagram actor ${status} after ${elapsed}s (user: ${opts.username})`);
+    throw new Error(`Instagram actor ${status} after ${elapsed}s (user: ${handle})`);
   }
 
   console.log(`[Instagram] Run succeeded, fetching dataset...`);

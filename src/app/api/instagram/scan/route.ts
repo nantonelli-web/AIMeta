@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { scrapeInstagramPosts } from "@/lib/instagram/service";
+import { scrapeInstagramPosts, cleanInstagramUsername } from "@/lib/instagram/service";
 import { storeAdImages } from "@/lib/media/store-ad-images";
 import { consumeCredits, refundCredits } from "@/lib/credits/consume";
 
@@ -81,7 +81,9 @@ export async function POST(req: Request) {
         null;
     }
 
-    // If found, persist it for future use
+    // Clean before persisting so we never store @handles or URLs
+    igUsername = cleanInstagramUsername(igUsername);
+
     if (igUsername) {
       await admin
         .from("mait_competitors")

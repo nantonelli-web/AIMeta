@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { competitorsTag } from "@/lib/library/cached-data";
+import { cleanInstagramUsername } from "@/lib/instagram/service";
 
 const patchSchema = z.object({
   // Monitor config fields
@@ -48,7 +49,12 @@ export async function PATCH(
   if (country !== undefined) directUpdate.country = country;
   if (category !== undefined) directUpdate.category = category;
   if (client_id !== undefined) directUpdate.client_id = client_id;
-  if (instagram_username !== undefined) directUpdate.instagram_username = instagram_username;
+  if (instagram_username !== undefined) {
+    // Accept @handle, handle, or full profile URL; store only the clean handle.
+    directUpdate.instagram_username = instagram_username
+      ? cleanInstagramUsername(instagram_username)
+      : null;
+  }
   if (google_advertiser_id !== undefined) directUpdate.google_advertiser_id = google_advertiser_id;
   if (google_domain !== undefined) directUpdate.google_domain = google_domain;
 
