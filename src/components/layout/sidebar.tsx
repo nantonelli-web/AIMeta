@@ -19,17 +19,20 @@ import {
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 
+// `aliases`: extra URL prefixes that should also mark the item active.
+// /brands rewrites to /competitors via next.config.ts, so both forms
+// can appear in pathname depending on how the user navigated.
 const itemDefs = [
-  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
-  { href: "/brands", key: "brands", icon: Users },
-  { href: "/brands/compare", key: "compare", icon: GitCompareArrows },
-  { href: "/library", key: "library", icon: Library },
-  { href: "/collections", key: "collections", icon: FolderHeart },
-  { href: "/benchmarks", key: "benchmarks", icon: Target },
-  { href: "/report", key: "report", icon: FileText },
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard, aliases: [] as string[] },
+  { href: "/brands", key: "brands", icon: Users, aliases: ["/competitors"] },
+  { href: "/brands/compare", key: "compare", icon: GitCompareArrows, aliases: ["/competitors/compare"] },
+  { href: "/library", key: "library", icon: Library, aliases: [] as string[] },
+  { href: "/collections", key: "collections", icon: FolderHeart, aliases: [] as string[] },
+  { href: "/benchmarks", key: "benchmarks", icon: Target, aliases: [] as string[] },
+  { href: "/report", key: "report", icon: FileText, aliases: [] as string[] },
   // { href: "/alerts", key: "alerts", icon: Bell }, // hidden — info already visible in brand scan history
-  { href: "/credits", key: "credits", icon: Coins },
-  { href: "/settings", key: "settings", icon: Settings },
+  { href: "/credits", key: "credits", icon: Coins, aliases: [] as string[] },
+  { href: "/settings", key: "settings", icon: Settings, aliases: [] as string[] },
 ] as const;
 
 function CreditBadge() {
@@ -62,15 +65,19 @@ export function Sidebar({ userName, userEmail }: { userName: string; userEmail: 
         </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {itemDefs.map(({ href, key, icon: Icon }) => {
-          // Exact match for items that are prefixes of other items
-          // (e.g. /brands should not highlight when on /brands/compare)
-          const isExactMatch = pathname === href;
-          const isChildMatch = pathname.startsWith(`${href}/`);
-          const hasChildInMenu = itemDefs.some(
-            (other) => other.href !== href && other.href.startsWith(`${href}/`)
-          );
-          const active = isExactMatch || (isChildMatch && !hasChildInMenu);
+        {itemDefs.map(({ href, key, icon: Icon, aliases }) => {
+          // Longest-prefix wins — so /competitors/compare activates
+          // Compare, not Brands, even though /competitors also matches.
+          const prefixes = [href, ...aliases];
+          const bestOwnMatch = prefixes
+            .filter((p) => pathname === p || pathname.startsWith(`${p}/`))
+            .reduce((max, p) => (p.length > max ? p.length : max), -1);
+          const bestOtherMatch = itemDefs
+            .filter((o) => o.href !== href)
+            .flatMap((o) => [o.href, ...o.aliases])
+            .filter((p) => pathname === p || pathname.startsWith(`${p}/`))
+            .reduce((max, p) => (p.length > max ? p.length : max), -1);
+          const active = bestOwnMatch >= 0 && bestOwnMatch >= bestOtherMatch;
           return (
             <Link
               key={href}
