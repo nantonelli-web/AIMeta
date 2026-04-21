@@ -7,7 +7,7 @@ import {
   scrapeInstagramProfile,
   cleanInstagramUsername,
 } from "@/lib/instagram/service";
-import { storeAdImages } from "@/lib/media/store-ad-images";
+import { storeAdImages, storeProfilePicture } from "@/lib/media/store-ad-images";
 import { consumeCredits, refundCredits } from "@/lib/credits/consume";
 
 export const maxDuration = 300; // seconds
@@ -155,6 +155,17 @@ export async function POST(req: Request) {
     ]);
 
     if (profile) {
+      // Instagram CDN URLs for profile pics expire — download once and
+      // replace with a permanent Supabase-hosted URL.
+      if (profile.profilePicUrl) {
+        const permanent = await storeProfilePicture(
+          admin,
+          competitor.workspace_id,
+          `ig_${competitor.id}`,
+          profile.profilePicUrl
+        );
+        if (permanent) profile.profilePicUrl = permanent;
+      }
       await admin
         .from("mait_competitors")
         .update({ instagram_profile: profile })

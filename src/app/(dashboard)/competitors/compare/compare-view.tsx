@@ -687,7 +687,7 @@ export function CompareView({
       )}
 
       {/* Selector */}
-      <Card>
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle className="text-sm">
             {t("compare", "selectCompetitors")} ({selected.size}/3)
@@ -720,7 +720,7 @@ export function CompareView({
 
       {/* Country selector — visible after 2+ brands selected */}
       {selected.size >= 2 && (
-        <Card>
+        <Card className="print:hidden">
           <CardHeader>
             <CardTitle className="text-sm">{t("compare", "selectCountries")}</CardTitle>
           </CardHeader>
@@ -764,7 +764,7 @@ export function CompareView({
 
       {/* Country scan gaps warning */}
       {countryGaps.length > 0 && (
-        <Card className="border-amber-500/30">
+        <Card className="border-amber-500/30 print:hidden">
           <CardContent className="py-6 space-y-4">
             <div className="flex items-center gap-4">
               <AlertTriangle className="size-8 text-amber-400 shrink-0" />
@@ -789,7 +789,7 @@ export function CompareView({
 
       {/* Channel selector — visible after 2+ brands + countries selected */}
       {selected.size >= 2 && selectedCountries.size > 0 && (
-        <Card>
+        <Card className="print:hidden">
           <CardHeader>
             <CardTitle className="text-sm">{t("compare", "channel")}</CardTitle>
           </CardHeader>
@@ -911,7 +911,7 @@ export function CompareView({
 
       {/* Missing data prompt — config OK but no scan done */}
       {missingBrands.length > 0 && !scanning && (
-        <Card className="border-amber-500/30">
+        <Card className="border-amber-500/30 print:hidden">
           <CardContent className="py-6 text-center space-y-4">
             <AlertTriangle className="size-8 text-amber-400 mx-auto" />
             <div>

@@ -187,6 +187,13 @@ export async function scrapeInstagramProfile(
     );
     if (!p) return null;
 
+    // Apify sometimes returns things like "None,Brand" — strip the null
+    // subcategory so we only display the meaningful part.
+    const rawCategory = p.businessCategoryName ?? null;
+    const category = rawCategory
+      ? rawCategory.replace(/^None\s*,\s*/i, "").replace(/\s*,\s*None$/i, "").trim() || null
+      : null;
+
     return {
       username: p.username ?? handle,
       fullName: p.fullName ?? null,
@@ -197,7 +204,7 @@ export async function scrapeInstagramProfile(
       profilePicUrl: p.profilePicUrlHD ?? p.profilePicUrl ?? null,
       verified: p.verified === true,
       isBusinessAccount: p.isBusinessAccount === true,
-      businessCategoryName: p.businessCategoryName ?? null,
+      businessCategoryName: category,
       externalUrl: p.externalUrl ?? null,
       fetchedAt: new Date().toISOString(),
     };
