@@ -23,7 +23,7 @@ export default async function DashboardLayout({
         <div className="print:hidden">
           <Header />
         </div>
-        <main className="flex-1 p-6 md:p-8 overflow-auto print:p-0 print:overflow-visible">
+        <main className="flex-1 px-6 md:px-8 pt-2 pb-6 md:pb-8 overflow-auto print:p-0 print:overflow-visible">
           {children}
         </main>
       </div>
