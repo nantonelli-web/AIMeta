@@ -17,8 +17,17 @@ import {
 
 const GOLD = "#0e3590";
 const MUTED = "#d1d5db";
-// Chart palette — brand blue first, complementary hues that read on white
-const COLORS = [GOLD, "#6b8e6b", "#a06b5b", "#8a6bb0", "#5ba09b", "#c9961a"];
+// Chart palette — navy brand first, then six clean complementary hues
+// that read well on white. No muted browns, no gold (which would clash
+// with the navy brand identity).
+const COLORS = [
+  GOLD,        // navy
+  "#2d8a87",   // teal
+  "#d97757",   // warm orange
+  "#8a6bb0",   // violet
+  "#5b7ea3",   // steel blue
+  "#6b8e6b",   // olive
+];
 
 // Chart axes/grid/tooltip tuned for a light background
 const AXIS_TICK = "#5b6472";
@@ -73,20 +82,20 @@ export function FormatPieChart({
 }: {
   data: { name: string; value: number }[];
 }) {
+  // External pie labels get clipped by the narrow grid container, so the
+  // format is rendered in a legend beneath the donut instead.
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <ResponsiveContainer width="100%" height={280}>
       <PieChart>
         <Pie
           data={data}
           cx="50%"
-          cy="50%"
-          innerRadius={55}
-          outerRadius={90}
+          cy="45%"
+          innerRadius={50}
+          outerRadius={82}
           paddingAngle={3}
           dataKey="value"
-          label={(props: PieLabelRenderProps) =>
-            `${props.name ?? ""} ${(((props.percent as number) ?? 0) * 100).toFixed(0)}%`
-          }
+          label={false}
           labelLine={false}
         >
           {data.map((_, i) => (
@@ -94,6 +103,11 @@ export function FormatPieChart({
           ))}
         </Pie>
         <Tooltip {...tooltipStyle} />
+        <Legend
+          verticalAlign="bottom"
+          iconType="circle"
+          wrapperStyle={{ fontSize: 11, color: LEGEND_TEXT, lineHeight: "16px" }}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -118,9 +132,9 @@ export function FormatStackedChart({
         <YAxis tick={{ fill: AXIS_TICK, fontSize: 11 }} />
         <Tooltip {...tooltipStyle} />
         <Legend wrapperStyle={{ fontSize: 12, color: LEGEND_TEXT }} />
-        <Bar dataKey="image" stackId="a" fill={GOLD} name="Image" />
-        <Bar dataKey="video" stackId="a" fill="#5b7ea3" name="Video" />
-        <Bar dataKey="carousel" stackId="a" fill="#8a6bb0" name="Carousel" />
+        <Bar dataKey="image" stackId="a" fill={COLORS[0]} name="Image" />
+        <Bar dataKey="video" stackId="a" fill={COLORS[1]} name="Video" />
+        <Bar dataKey="carousel" stackId="a" fill={COLORS[2]} name="Carousel" />
         <Bar dataKey="unknown" stackId="a" fill={MUTED} name="Other" />
       </BarChart>
     </ResponsiveContainer>

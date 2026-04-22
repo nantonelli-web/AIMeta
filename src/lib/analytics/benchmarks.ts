@@ -70,6 +70,19 @@ export interface BenchmarkData {
   };
 }
 
+/**
+ * Normalize a CTA label so "Shop Now" / "SHOP NOW" / "shop now" all
+ * aggregate into the same bucket. Drops surrounding whitespace, replaces
+ * separator characters (_ -) with spaces, and title-cases each word.
+ */
+function normalizeCtaLabel(raw: string): string {
+  const cleaned = raw.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (!cleaned) return "";
+  return cleaned
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export async function computeBenchmarks(
   supabase: SupabaseClient,
   workspaceId: string,
@@ -172,18 +185,20 @@ export async function computeBenchmarks(
       return tb - ta;
     });
 
-  // ---- Top CTAs ----
+  // ---- Top CTAs (normalised so 'Shop Now' / 'SHOP_NOW' bucket together)
   const ctaCount = new Map<string, number>();
   for (const ad of ads) {
     if (!ad.cta) continue;
-    ctaCount.set(ad.cta, (ctaCount.get(ad.cta) ?? 0) + 1);
+    const key = normalizeCtaLabel(ad.cta);
+    if (!key) continue;
+    ctaCount.set(key, (ctaCount.get(key) ?? 0) + 1);
   }
   const topCtas = [...ctaCount.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, count]) => ({ name, count }));
 
-  // CTA per competitor (top 5 CTAs)
+  // CTA per competitor (top 5 CTAs) — also normalised
   const topCtaNames = topCtas.slice(0, 5).map((c) => c.name);
   const ctaByCompMap = new Map<string, Record<string, number>>();
   // Per-competitor full CTA distribution (for per-brand charts, not limited
@@ -191,13 +206,15 @@ export async function computeBenchmarks(
   const fullCtaByCompMap = new Map<string, Map<string, number>>();
   for (const ad of ads) {
     if (!ad.cta) continue;
+    const normalized = normalizeCtaLabel(ad.cta);
+    if (!normalized) continue;
     const key = ad.competitor_id ?? "unknown";
     const fullEntry = fullCtaByCompMap.get(key) ?? new Map<string, number>();
-    fullEntry.set(ad.cta, (fullEntry.get(ad.cta) ?? 0) + 1);
+    fullEntry.set(normalized, (fullEntry.get(normalized) ?? 0) + 1);
     fullCtaByCompMap.set(key, fullEntry);
-    if (!topCtaNames.includes(ad.cta)) continue;
+    if (!topCtaNames.includes(normalized)) continue;
     const entry = ctaByCompMap.get(key) ?? {};
-    entry[ad.cta] = (entry[ad.cta] ?? 0) + 1;
+    entry[normalized] = (entry[normalized] ?? 0) + 1;
     ctaByCompMap.set(key, entry);
   }
   const ctaByCompetitor = [...ctaByCompMap.entries()].map(([id, ctas]) => ({

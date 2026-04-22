@@ -105,10 +105,18 @@ async function computeTechnicalStats(
       ).length;
       const videoCount = adsList.filter((a) => a.video_url).length;
 
-      // CTA counts
+      // CTA counts — normalise case/separators so 'Shop Now' == 'SHOP_NOW'
       const ctaMap = new Map<string, number>();
       for (const a of adsList) {
-        if (a.cta) ctaMap.set(a.cta, (ctaMap.get(a.cta) ?? 0) + 1);
+        if (!a.cta) continue;
+        const key = a.cta
+          .trim()
+          .replace(/[_-]+/g, " ")
+          .replace(/\s+/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        if (!key) continue;
+        ctaMap.set(key, (ctaMap.get(key) ?? 0) + 1);
       }
       const topCtas = [...ctaMap.entries()]
         .sort((a, b) => b[1] - a[1])
