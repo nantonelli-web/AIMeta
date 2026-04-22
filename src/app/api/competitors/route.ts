@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { extractPageIdentifier } from "@/lib/meta/url";
 import { resolvePageId } from "@/lib/meta/resolve-page-id";
 import { competitorsTag } from "@/lib/library/cached-data";
+import { cleanInstagramUsername } from "@/lib/instagram/service";
+import { cleanAdvertiserDomain } from "@/lib/apify/google-ads-service";
 
 const schema = z.object({
   page_name: z.string().min(1).max(160),
@@ -62,9 +64,13 @@ export async function POST(req: Request) {
       country: parsed.data.country ?? null,
       category: parsed.data.category ?? null,
       client_id: parsed.data.client_id ?? null,
-      instagram_username: parsed.data.instagram_username ?? null,
+      instagram_username: parsed.data.instagram_username
+        ? cleanInstagramUsername(parsed.data.instagram_username)
+        : null,
       google_advertiser_id: parsed.data.google_advertiser_id ?? null,
-      google_domain: parsed.data.google_domain ?? null,
+      google_domain: parsed.data.google_domain
+        ? cleanAdvertiserDomain(parsed.data.google_domain)
+        : null,
     })
     .select("id")
     .single();

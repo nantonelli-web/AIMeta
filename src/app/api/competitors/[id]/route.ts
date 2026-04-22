@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { competitorsTag } from "@/lib/library/cached-data";
 import { cleanInstagramUsername } from "@/lib/instagram/service";
+import { cleanAdvertiserDomain } from "@/lib/apify/google-ads-service";
 
 const patchSchema = z.object({
   // Monitor config fields
@@ -56,7 +57,13 @@ export async function PATCH(
       : null;
   }
   if (google_advertiser_id !== undefined) directUpdate.google_advertiser_id = google_advertiser_id;
-  if (google_domain !== undefined) directUpdate.google_domain = google_domain;
+  if (google_domain !== undefined) {
+    // Accept full URL or bare domain, store only the bare domain so the
+    // Google Ads scraper can query it directly.
+    directUpdate.google_domain = google_domain
+      ? cleanAdvertiserDomain(google_domain)
+      : null;
+  }
 
   // Handle monitor_config merge if frequency or max_items changed
   if (frequency !== undefined || max_items !== undefined) {

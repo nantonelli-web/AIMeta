@@ -68,6 +68,22 @@ export interface GoogleScrapeOptions {
   maxResults?: number;
 }
 
+/**
+ * Strip protocol, www., trailing slash/path/query from a domain input.
+ * "https://axelarigato.com/" → "axelarigato.com"
+ * "http://www.example.com/about?x=1" → "example.com"
+ * Returns null if nothing domain-shaped can be recovered.
+ */
+export function cleanAdvertiserDomain(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let v = raw.trim().toLowerCase();
+  v = v.replace(/^https?:\/\//i, "");
+  v = v.replace(/^www\./i, "");
+  v = v.replace(/[/?#].*$/, "");
+  if (!v || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(v)) return null;
+  return v;
+}
+
 // ─── Normalize ───
 
 function normalize(ad: RawGoogleAd): NormalizedAd {
@@ -119,7 +135,15 @@ export async function scrapeGoogleAds(
   if (opts.advertiserId) {
     input.advertiserIds = [opts.advertiserId];
   } else if (opts.advertiserDomain) {
-    input.domains = [opts.advertiserDomain];
+    // Apify actor wants a bare domain. Normalize whatever the user saved
+    // (full URL, trailing slash, www prefix, mixed case, …).
+    const cleaned = cleanAdvertiserDomain(opts.advertiserDomain);
+    if (!cleaned) {
+      throw new Error(
+        `Dominio Google Ads non valido: "${opts.advertiserDomain}". Usa solo il dominio (es. axelarigato.com).`
+      );
+    }
+    input.domains = [cleaned];
   } else if (opts.advertiserName) {
     input.searchTerms = [opts.advertiserName];
   } else {

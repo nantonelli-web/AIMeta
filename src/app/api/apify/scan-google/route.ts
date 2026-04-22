@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { scrapeGoogleAds } from "@/lib/apify/google-ads-service";
+import {
+  scrapeGoogleAds,
+  cleanAdvertiserDomain,
+} from "@/lib/apify/google-ads-service";
 import { consumeCredits, refundCredits } from "@/lib/credits/consume";
 
 export const maxDuration = 300;
@@ -71,6 +74,18 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Auto-heal legacy google_domain values stored as full URLs.
+  if (competitor.google_domain) {
+    const cleaned = cleanAdvertiserDomain(competitor.google_domain);
+    if (cleaned && cleaned !== competitor.google_domain) {
+      await admin
+        .from("mait_competitors")
+        .update({ google_domain: cleaned })
+        .eq("id", competitor.id);
+      competitor.google_domain = cleaned;
+    }
+  }
 
   // Cleanup stale jobs: any "running" job older than 10 min → mark failed
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
