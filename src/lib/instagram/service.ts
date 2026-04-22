@@ -333,19 +333,32 @@ export async function scrapeInstagramPosts(
     throw normErr;
   }
 
-  // Apply upper-bound date filter (end of dateTo, inclusive).
-  if (opts.dateTo) {
-    const toMs = new Date(opts.dateTo).getTime() + 86_400_000 - 1;
+  // Client-side date filter — belt and braces alongside Apify's
+  // onlyPostsNewerThan, which some actor versions silently ignore.
+  const fromMs = opts.dateFrom ? new Date(opts.dateFrom).getTime() : null;
+  const toMs = opts.dateTo
+    ? new Date(opts.dateTo).getTime() + 86_400_000 - 1
+    : null;
+  if (fromMs !== null || toMs !== null) {
     const before = records.length;
+    let droppedOlder = 0;
+    let droppedNewer = 0;
     records = records.filter((r) => {
       if (!r.posted_at) return true;
-      return new Date(r.posted_at).getTime() <= toMs;
+      const t = new Date(r.posted_at).getTime();
+      if (fromMs !== null && t < fromMs) {
+        droppedOlder++;
+        return false;
+      }
+      if (toMs !== null && t > toMs) {
+        droppedNewer++;
+        return false;
+      }
+      return true;
     });
-    if (records.length !== before) {
-      console.log(
-        `[Instagram] Date filter (to=${opts.dateTo}): ${before} -> ${records.length}`
-      );
-    }
+    console.log(
+      `[Instagram] Date filter (from=${opts.dateFrom ?? "-"} to=${opts.dateTo ?? "-"}): ${before} fetched, dropped ${droppedOlder} older + ${droppedNewer} newer → ${records.length} kept`
+    );
   }
 
   console.log(`[Instagram] Normalized: ${records.length} posts`);

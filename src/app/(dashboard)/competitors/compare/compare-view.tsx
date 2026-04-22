@@ -1432,8 +1432,11 @@ function OrganicProfileCard({
             />
           </div>
           {p.businessCategoryName && (
-            <p className="text-[11px] text-muted-foreground text-center">
-              {p.businessCategoryName}
+            <p className="text-[11px] text-center">
+              <span className="text-muted-foreground uppercase tracking-wider">
+                {t("compare", "categoryLabel")}{" "}
+              </span>
+              <span className="text-foreground">{p.businessCategoryName}</span>
             </p>
           )}
           {p.biography && (

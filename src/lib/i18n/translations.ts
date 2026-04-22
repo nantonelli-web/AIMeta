@@ -559,6 +559,7 @@ const translations = {
     followers: { it: "Followers", en: "Followers" },
     following: { it: "Following", en: "Following" },
     postsTotal: { it: "Post", en: "Posts" },
+    categoryLabel: { it: "Categoria:", en: "Category:" },
     verified: { it: "Verificato", en: "Verified" },
     profileNotFetched: {
       it: "Dati profilo non ancora disponibili. Rilancia uno scan Instagram per aggiornarli.",
