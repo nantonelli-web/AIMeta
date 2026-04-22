@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, ExternalLink, Pencil, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ExternalLink, Pencil } from "lucide-react";
 import { getSessionUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { getLocale, serverT } from "@/lib/i18n/server";
 import { ScanAllButton } from "./scan-all-button";
+import { CollapsibleClientSection } from "./collapsible-client-section";
 import type { MaitCompetitor, MaitClient } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export default async function CompetitorsPage() {
       .order("page_name"),
     admin
       .from("mait_clients")
-      .select("id, name, workspace_id")
+      .select("id, name, color, workspace_id")
       .eq("workspace_id", profile.workspace_id!)
       .order("name"),
   ]);
@@ -93,33 +94,32 @@ export default async function CompetitorsPage() {
           </CardContent>
         </Card>
       ) : sections.length > 0 && (clients.length > 0 || unassigned.length < list.length) ? (
-        // Grouped view
+        // Grouped view — each client section collapsible for discretion
         <div className="space-y-6">
-          {sections.map((section) => (
-            <div key={section.client?.id ?? "unassigned"}>
-              <div className="flex items-center gap-2 mb-3">
-                <div
-                  className="size-3 rounded-sm shrink-0"
-                  style={{ backgroundColor: section.client?.color ?? "#3a3a3a" }}
-                />
-                <h2 className="text-sm font-semibold">
-                  {section.client?.name ?? t("clients", "unassigned")}
-                </h2>
-                <Badge variant="muted">{section.brands.length}</Badge>
-              </div>
-              {section.brands.length === 0 ? (
-                <p className="text-xs text-muted-foreground ml-5 mb-4">
-                  {t("clients", "emptyClient")}
-                </p>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 ml-5">
-                  {section.brands.map((c) => (
-                    <BrandCard key={c.id} brand={c} t={t} />
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+          {sections.map((section) => {
+            const clientKey = section.client?.id ?? "unassigned";
+            return (
+              <CollapsibleClientSection
+                key={clientKey}
+                clientKey={clientKey}
+                clientName={section.client?.name ?? t("clients", "unassigned")}
+                clientColor={section.client?.color ?? "#3a3a3a"}
+                brandCount={section.brands.length}
+              >
+                {section.brands.length === 0 ? (
+                  <p className="text-xs text-muted-foreground ml-5 mb-4">
+                    {t("clients", "emptyClient")}
+                  </p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 ml-5">
+                    {section.brands.map((c) => (
+                      <BrandCard key={c.id} brand={c} t={t} />
+                    ))}
+                  </div>
+                )}
+              </CollapsibleClientSection>
+            );
+          })}
         </div>
       ) : (
         // Flat view (no clients created yet)
