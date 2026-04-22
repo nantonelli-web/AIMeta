@@ -390,8 +390,8 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
 
       {/* ─── 3. Missing config details (amber box) ─── */}
       {(!hasGoogleConfig || !hasInstagramConfig) && (
-        <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3 space-y-1.5">
-          <p className="text-xs font-medium text-amber-400">{t("scan", "configRequiredBrand")}</p>
+        <div className="rounded-md border border-gold/30 bg-gold/5 p-3 space-y-1.5">
+          <p className="text-xs font-medium text-gold">{t("scan", "configRequiredBrand")}</p>
           {!hasGoogleConfig && (
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Google Ads: {t("scan", "googleNotConfigured")}</span>

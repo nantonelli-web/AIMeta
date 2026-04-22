@@ -541,8 +541,8 @@ export function ReportBuilder({
               }
               if (details.length === 0) return null;
               return (
-                <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3 space-y-1.5">
-                  <p className="text-xs font-medium text-amber-400">{t("report", "configRequired")}</p>
+                <div className="rounded-md border border-gold/30 bg-gold/5 p-3 space-y-1.5">
+                  <p className="text-xs font-medium text-gold">{t("report", "configRequired")}</p>
                   {details.map((d, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="text-foreground font-medium">{d.brand}</span>
@@ -675,7 +675,7 @@ export function ReportBuilder({
                                   {new Date(sc.updated_at).toLocaleDateString(locale === "it" ? "it-IT" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
                                 </span>
                                 {sc.stale && (
-                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-400">
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-gold">
                                     <AlertTriangle className="size-2.5" /> {t("report", "stale")}
                                   </span>
                                 )}
@@ -1041,9 +1041,9 @@ export function ReportBuilder({
 
       {/* Missing data prompt */}
       {missingBrands.length > 0 && !scanning && (
-        <Card className="border-amber-500/30">
+        <Card className="border-gold/30">
           <CardContent className="py-6 text-center space-y-4">
-            <AlertTriangle className="size-8 text-amber-400 mx-auto" />
+            <AlertTriangle className="size-8 text-gold mx-auto" />
             <div>
               <p className="text-sm font-medium">{t("report", "noDataForChannel")}</p>
               <p className="text-xs text-muted-foreground mt-1">

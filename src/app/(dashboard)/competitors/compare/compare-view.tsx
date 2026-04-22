@@ -930,10 +930,10 @@ export function CompareView({
 
       {/* Country scan gaps warning */}
       {countryGaps.length > 0 && (
-        <Card className="border-amber-500/30 print:hidden">
+        <Card className="border-gold/30 print:hidden">
           <CardContent className="py-6 space-y-4">
             <div className="flex items-center gap-4">
-              <AlertTriangle className="size-8 text-amber-400 shrink-0" />
+              <AlertTriangle className="size-8 text-gold shrink-0" />
               <p className="text-sm font-medium flex-1">{t("compare", "countryScanNeeded")}</p>
             </div>
             <div className="space-y-2 ml-12">
@@ -1027,10 +1027,10 @@ export function CompareView({
             </div>
             {/* Detailed disabled reasons per brand (collapsible) */}
             {disabledDetails.length > 0 && (
-              <div className="rounded-md border border-amber-500/20 bg-amber-500/5">
+              <div className="rounded-md border border-gold/30 bg-gold/5">
                 <button
                   onClick={() => setConfigOpen(!configOpen)}
-                  className="w-full flex items-center gap-2 p-3 text-xs font-medium text-amber-400 cursor-pointer hover:bg-amber-500/10 transition-colors rounded-md"
+                  className="w-full flex items-center gap-2 p-3 text-xs font-medium text-gold cursor-pointer hover:bg-gold/10 transition-colors rounded-md"
                 >
                   <ChevronDown className={cn("size-3.5 transition-transform", !configOpen && "-rotate-90")} />
                   {t("compare", "configRequired")}
@@ -1077,9 +1077,9 @@ export function CompareView({
 
       {/* Missing data prompt — config OK but no scan done */}
       {missingBrands.length > 0 && !scanning && (
-        <Card className="border-amber-500/30 print:hidden">
+        <Card className="border-gold/30 print:hidden">
           <CardContent className="py-6 text-center space-y-4">
-            <AlertTriangle className="size-8 text-amber-400 mx-auto" />
+            <AlertTriangle className="size-8 text-gold mx-auto" />
             <div>
               <p className="text-sm font-medium">
                 {t("compare", "noDataForChannel")}
@@ -1145,7 +1145,7 @@ export function CompareView({
                           <span>·</span>
                           {formatTimestamp(sc.updated_at, locale)}
                           {sc.stale && (
-                            <span className="ml-1 text-amber-400">
+                            <span className="ml-1 text-gold">
                               ⚠ {t("compare", "staleShort")}
                             </span>
                           )}
@@ -1170,15 +1170,15 @@ export function CompareView({
       {hasResults && cache && (
         <div className="space-y-2">
           {cache.stale && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-              <AlertTriangle className="size-4 text-amber-400 shrink-0" />
-              <p className="text-xs text-amber-300 flex-1">
+            <div className="flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-2.5">
+              <AlertTriangle className="size-4 text-gold shrink-0" />
+              <p className="text-xs text-gold flex-1">
                 {t("compare", "staleWarning")}
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shrink-0"
+                className="border-gold/30 text-gold hover:bg-gold/20 shrink-0"
                 onClick={handleRegenerate}
                 disabled={regenerating}
               >

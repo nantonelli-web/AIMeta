@@ -97,7 +97,7 @@ function Field({ label, value, highlight }: { label: string; value: string; high
       <p className={cn(
         "text-xs leading-relaxed",
         highlight === "positive" && "text-emerald-400",
-        highlight === "negative" && "text-amber-400",
+        highlight === "negative" && "text-gold",
         !highlight && "text-foreground"
       )}>{value}</p>
     </div>
