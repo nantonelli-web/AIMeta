@@ -90,12 +90,19 @@ function buildReverseMap(): Map<string, string> {
   // `Intl.supportedValuesOf("region")` gives every ISO 3166-1 alpha-2 code
   // known to the runtime. The ambient type definitions are conservative —
   // Node 18+ supports the "region" key at runtime, so cast around it.
+  // Whole block wrapped in try/catch because some runtimes throw here
+  // (edge, older Node) rather than returning an empty array.
   type SupportedValuesOf = (key: string) => string[];
-  const supportedValuesOf =
-    typeof Intl.supportedValuesOf === "function"
-      ? (Intl.supportedValuesOf as unknown as SupportedValuesOf)
-      : null;
-  const regions = supportedValuesOf ? supportedValuesOf("region") : [];
+  let regions: string[] = [];
+  try {
+    const supportedValuesOf =
+      typeof Intl.supportedValuesOf === "function"
+        ? (Intl.supportedValuesOf as unknown as SupportedValuesOf)
+        : null;
+    if (supportedValuesOf) regions = supportedValuesOf("region");
+  } catch {
+    regions = [];
+  }
 
   for (const locale of ["it", "en"] as const) {
     let names: Intl.DisplayNames;

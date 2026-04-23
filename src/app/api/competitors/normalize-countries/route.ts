@@ -122,7 +122,15 @@ export async function POST(req: Request) {
       },
     });
   } catch (e) {
+    // This is an admin-gated, workspace-scoped one-shot utility — echoing
+    // the real error back to the caller is worth it for debuggability. Not
+    // a pattern to copy into user-facing routes.
+    const message = e instanceof Error ? e.message : String(e);
+    const stack = e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined;
     console.error("[normalize-countries] unhandled", e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error", detail: message, stackHint: stack },
+      { status: 500 }
+    );
   }
 }
