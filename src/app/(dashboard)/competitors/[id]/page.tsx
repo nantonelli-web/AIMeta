@@ -61,6 +61,13 @@ export default async function CompetitorDetailPage({
   const adsList = (ads ?? []) as MaitAdExternal[];
   const jobsList = (jobs ?? []) as MaitScrapeJob[];
   const organicList = (organicPosts ?? []) as MaitOrganicPost[];
+  // A fresh-enough running job (<10 min) means the scan is genuinely in
+  // flight. Beyond that the cron cleanup will flip it to failed, so we
+  // intentionally skip displaying a stale stop button for zombie rows.
+  const tenMinAgoMs = Date.now() - 10 * 60_000;
+  const hasRunningJob = jobsList.some(
+    (j) => j.status === "running" && j.started_at && new Date(j.started_at).getTime() > tenMinAgoMs
+  );
 
   // Organic engagement stats
   const organicCount = organicList.length;
@@ -184,6 +191,7 @@ export default async function CompetitorDetailPage({
             competitorId={c.id}
             hasGoogleConfig={!!(c.google_advertiser_id || c.google_domain)}
             hasInstagramConfig={!!c.instagram_username}
+            hasRunningJob={hasRunningJob}
           />
         </CardContent>
       </Card>

@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { getLocale, serverT } from "@/lib/i18n/server";
-import { ScanAllButton } from "./scan-all-button";
 import { CollapsibleClientSection } from "./collapsible-client-section";
 import { PrintButton } from "@/components/ui/print-button";
 import type { MaitCompetitor, MaitClient } from "@/types";
@@ -76,11 +75,6 @@ export default async function CompetitorsPage() {
         </div>
         <div className="flex items-center gap-3">
           <PrintButton label={t("common", "print")} variant="outline" />
-          {list.length > 0 && (
-            <ScanAllButton
-              competitors={list.map((c) => ({ id: c.id, page_name: c.page_name }))}
-            />
-          )}
           <Button asChild className="print:hidden">
             <Link href="/competitors/new">
               <Plus className="size-4" /> {t("competitors", "addCompetitor")}

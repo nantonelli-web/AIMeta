@@ -371,6 +371,7 @@ const translations = {
     organic: { it: "Organic", en: "Organic" },
     days: { it: "giorni", en: "days" },
     scanStopped: { it: "Scansione interrotta.", en: "Scan stopped." },
+    stopping: { it: "Fermando…", en: "Stopping…" },
     scanGoogle: { it: "Scan Google Ads", en: "Scan Google Ads" },
     scanningGoogle: { it: "Scanning Google\u2026", en: "Scanning Google\u2026" },
     scrapingGoogleInProgress: {

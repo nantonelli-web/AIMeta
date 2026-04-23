@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { RefreshCw, ChevronDown, CalendarRange, Square } from "lucide-react";
+import { RefreshCw, CalendarRange, Square } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
 import { Button } from "@/components/ui/button";
@@ -47,56 +47,55 @@ interface Props {
   competitorId: string;
   hasGoogleConfig: boolean;
   hasInstagramConfig: boolean;
+  /** DB-confirmed running job; shows Stop even after a page reload. */
+  hasRunningJob?: boolean;
 }
 
 type ScanTarget = "meta" | "google" | "instagram";
 
-export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig }: Props) {
+export function ScanDropdown({
+  competitorId,
+  hasGoogleConfig,
+  hasInstagramConfig,
+  hasRunningJob = false,
+}: Props) {
   const router = useRouter();
   const { t } = useT();
   const [loading, setLoading] = useState<ScanTarget | null>(null);
+  const [stopping, setStopping] = useState(false);
 
   // Shared date range
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Meta status dropdown
-  const [showMetaMenu, setShowMetaMenu] = useState(false);
-  const metaRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (metaRef.current && !metaRef.current.contains(e.target as Node)) {
-        setShowMetaMenu(false);
-      }
-    }
-    if (showMetaMenu) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showMetaMenu]);
-
   const isLoading = loading !== null;
+  const showStop = isLoading || hasRunningJob;
   const abortRef = useRef<AbortController | null>(null);
 
   async function stopScan() {
-    // 1. Abort the client-side fetch
+    setStopping(true);
+    // 1. Abort the client-side fetch if we own it
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
-    setLoading(null);
-    toast.info(t("scan", "scanStopped"));
 
-    // 2. Abort Apify run + mark job failed server-side
+    // 2. Abort Apify run + mark job failed server-side. This also catches
+    //    orphan runs started in a previous session (page reload case).
     try {
       await fetch("/api/apify/abort", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ competitor_id: competitorId }),
       });
+      toast.info(t("scan", "scanStopped"));
     } catch {
-      // Best effort — client already stopped
+      toast.error("Stop failed");
+    } finally {
+      setLoading(null);
+      setStopping(false);
+      router.refresh();
     }
-    router.refresh();
   }
 
   // Effective range: custom or last 30 days
@@ -115,8 +114,7 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
 
   // ─── Scan handlers ───
 
-  async function scanMeta(adStatus: "ACTIVE" | "ALL") {
-    setShowMetaMenu(false);
+  async function scanMeta() {
     if (rangeExceeded) return;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -131,7 +129,6 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
           max_items: 200,
           date_from: effectiveFrom,
           date_to: effectiveTo,
-          active_status: adStatus,
         }),
         signal: controller.signal,
       });
@@ -280,16 +277,18 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
         )}
       </div>
 
-      {/* ─── 2. Stop button — only while a scan is in flight ─── */}
-      {isLoading && (
+      {/* ─── 2. Stop button — visible whenever a scan is in flight on
+              the client OR already running in the DB (survives a reload). */}
+      {showStop && (
         <Button
           onClick={stopScan}
+          disabled={stopping}
           variant="outline"
           size="lg"
           className={cn(bigCta, "border-red-400/40 text-red-400 hover:bg-red-400/15 hover:border-red-400")}
         >
           <Square className="size-5 fill-current" />
-          Stop
+          {stopping ? t("scan", "stopping") : "Stop"}
         </Button>
       )}
 
@@ -299,51 +298,21 @@ export function ScanDropdown({ competitorId, hasGoogleConfig, hasInstagramConfig
         <div className="space-y-2">
           <p className={groupLabel}>{t("scan", "paid")}</p>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Meta Ads — with ad status dropdown */}
-            <div className="relative" ref={metaRef}>
-              <div className="flex">
-                <Button
-                  onClick={() => scanMeta("ACTIVE")}
-                  disabled={isLoading || rangeExceeded}
-                  variant="outline"
-                  size="lg"
-                  className={cn(bigCta, "rounded-r-none")}
-                >
-                  {loading === "meta" ? (
-                    <RefreshCw className="size-6 animate-spin" />
-                  ) : (
-                    <MetaIcon className="size-6" />
-                  )}
-                  {loading === "meta" ? t("scan", "scanning") : "Meta Ads"}
-                </Button>
-                <Button
-                  onClick={() => setShowMetaMenu(!showMetaMenu)}
-                  disabled={isLoading || rangeExceeded}
-                  variant="outline"
-                  size="lg"
-                  className="h-12 rounded-l-none border-l-0 px-3 cursor-pointer"
-                >
-                  <ChevronDown className="size-4" />
-                </Button>
-              </div>
-
-              {showMetaMenu && (
-                <div className="absolute left-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-card shadow-lg p-1">
-                  <button
-                    onClick={() => scanMeta("ACTIVE")}
-                    className="flex items-center w-full rounded-md px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  >
-                    {t("scan", "activeOnly")}
-                  </button>
-                  <button
-                    onClick={() => scanMeta("ALL")}
-                    className="flex items-center w-full rounded-md px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  >
-                    {t("scan", "allAds")}
-                  </button>
-                </div>
+            {/* Meta Ads — active ads only, no ALL fallback. */}
+            <Button
+              onClick={scanMeta}
+              disabled={isLoading || rangeExceeded}
+              variant="outline"
+              size="lg"
+              className={bigCta}
+            >
+              {loading === "meta" ? (
+                <RefreshCw className="size-6 animate-spin" />
+              ) : (
+                <MetaIcon className="size-6" />
               )}
-            </div>
+              {loading === "meta" ? t("scan", "scanning") : "Meta Ads"}
+            </Button>
 
             {/* Google Ads */}
             <Button
