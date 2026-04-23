@@ -245,9 +245,13 @@ export async function computeBenchmarks(
 ): Promise<BenchmarkData> {
   // Heavy query (format / CTA / UTM / tags / raw_data-dependent metrics).
   // Paginated with .range() because PostgREST caps each response at 1000
-  // rows regardless of .limit(). ORDER BY created_at DESC ensures the
-  // page walk is deterministic — without it PostgreSQL would return a
-  // random subset each time. 15k safety cap keeps payload bounded.
+  // rows regardless of .limit().
+  //
+  // Sort key is (created_at DESC, id DESC). created_at alone is NOT unique
+  // — bulk upserts land in the same millisecond — so pagination over a
+  // non-unique sort can return the same row in multiple pages. The id
+  // tiebreaker makes the sort total and the page walk deterministic.
+  // An additional id-based dedupe at the end is belt-and-suspenders.
   async function fetchAllHeavyRows(): Promise<AdRow[]> {
     const PAGE = 2000;
     const SAFETY_CAP = 15_000;
@@ -260,6 +264,7 @@ export async function computeBenchmarks(
         )
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(from, from + PAGE - 1);
       if (source) q = q.eq("source", source);
       if (competitorIds && competitorIds.length > 0) q = q.in("competitor_id", competitorIds);
@@ -274,7 +279,17 @@ export async function computeBenchmarks(
       rows.push(...(data as AdRow[]));
       if (data.length < PAGE) break;
     }
-    return rows;
+    // Final dedupe: if the provider still returned the same row on
+    // consecutive pages, strip the duplicates here so every metric sees
+    // each ad exactly once.
+    const seen = new Set<string>();
+    const unique: AdRow[] = [];
+    for (const r of rows) {
+      if (!r.id || seen.has(r.id)) continue;
+      seen.add(r.id);
+      unique.push(r);
+    }
+    return unique;
   }
 
   // Separate lightweight + paginated query used for the Volume chart AND
