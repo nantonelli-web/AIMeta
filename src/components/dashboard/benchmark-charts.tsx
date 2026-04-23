@@ -83,7 +83,8 @@ export function VolumeChart({
 }) {
   // Vertical bars read well up to ~8 brands; past that, x-axis labels crowd
   // each other and chart compresses. Switch to a horizontal layout whose
-  // height grows with the brand count.
+  // height grows with the brand count. We only render the `active` series
+  // because inactive ads are no longer scanned product-side.
   if (data.length > 8) {
     const height = Math.max(240, data.length * 36);
     return (
@@ -98,9 +99,7 @@ export function VolumeChart({
             width={140}
           />
           <Tooltip {...tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 12, color: LEGEND_TEXT }} />
-          <Bar dataKey="active" stackId="a" fill={GOLD} name="Active" radius={[0, 4, 4, 0]} />
-          <Bar dataKey="inactive" stackId="a" fill={MUTED} name="Inactive" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="active" fill={GOLD} name="Active ads" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
@@ -118,14 +117,7 @@ export function VolumeChart({
         />
         <YAxis tick={{ fill: AXIS_TICK, fontSize: 11 }} />
         <Tooltip {...tooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 12, color: LEGEND_TEXT }} />
-        <Bar dataKey="active" fill={GOLD} name="Active" radius={[4, 4, 0, 0]} />
-        <Bar
-          dataKey="inactive"
-          fill={MUTED}
-          name="Inactive"
-          radius={[4, 4, 0, 0]}
-        />
+        <Bar dataKey="active" fill={GOLD} name="Active ads" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -10,6 +10,7 @@ import { InstagramIcon } from "@/components/ui/instagram-icon";
 import Link from "next/link";
 import { BenchmarkContent } from "./benchmark-content";
 import { BrandFilter } from "./brand-filter";
+import { CountryFilter } from "./country-filter";
 import { DateRangeFilter } from "./date-range-filter";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +81,7 @@ export default async function BenchmarksPage({
   const channel = parseChannel(sp.channel);
   const rawClient = typeof sp.client === "string" ? sp.client : null;
   const rawBrands = typeof sp.brands === "string" ? sp.brands : null;
+  const rawCountries = typeof sp.countries === "string" ? sp.countries : null;
   const rawFrom = typeof sp.from === "string" ? sp.from : null;
   const rawTo = typeof sp.to === "string" ? sp.to : null;
 
@@ -97,12 +99,12 @@ export default async function BenchmarksPage({
       .order("name"),
     supabase
       .from("mait_competitors")
-      .select("id, page_name, client_id")
+      .select("id, page_name, client_id, country")
       .eq("workspace_id", profile.workspace_id!)
       .order("page_name"),
   ]);
   const clients = (clientsData ?? []) as { id: string; name: string; color: string }[];
-  const allCompetitors = (competitorsData ?? []) as { id: string; page_name: string; client_id: string | null }[];
+  const allCompetitors = (competitorsData ?? []) as { id: string; page_name: string; client_id: string | null; country: string | null }[];
 
   const activeClient: "unassigned" | string | null =
     rawClient === "unassigned"
@@ -111,18 +113,41 @@ export default async function BenchmarksPage({
         ? rawClient
         : null;
 
+  // Brands within the active project. Country cascades on top of this.
   const projectBrands = allCompetitors.filter((c) => {
     if (activeClient === null) return true;
     if (activeClient === "unassigned") return c.client_id === null;
     return c.client_id === activeClient;
   });
 
-  const projectBrandIds = new Set(projectBrands.map((b) => b.id));
+  // Countries actually present on the projectBrands — localized for display.
+  const countryNames = new Intl.DisplayNames([locale], { type: "region" });
+  const countryCodeSet = new Set(
+    projectBrands.map((b) => (b.country ?? "").toUpperCase()).filter(Boolean)
+  );
+  const availableCountries = [...countryCodeSet]
+    .map((code) => ({ code, name: countryNames.of(code) ?? code }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const urlCountries = rawCountries
+    ? rawCountries.split(",").map((c) => c.toUpperCase()).filter((c) => countryCodeSet.has(c))
+    : null;
+  const activeCountryCodes =
+    urlCountries && urlCountries.length > 0 ? urlCountries : availableCountries.map((c) => c.code);
+
+  // Brands intersection: project ∩ countries. If a URL specifies brands, we
+  // validate them against this intersection so stale URLs don't bleed across
+  // country changes.
+  const brandsInCountries = projectBrands.filter((b) => {
+    if (!b.country) return activeCountryCodes.length === availableCountries.length; // no-country rows only when "all"
+    return activeCountryCodes.includes(b.country.toUpperCase());
+  });
+  const brandsInCountriesIds = new Set(brandsInCountries.map((b) => b.id));
   const urlBrandIds = rawBrands
-    ? rawBrands.split(",").filter((id) => projectBrandIds.has(id))
+    ? rawBrands.split(",").filter((id) => brandsInCountriesIds.has(id))
     : null;
   const activeBrandIds =
-    urlBrandIds && urlBrandIds.length > 0 ? urlBrandIds : projectBrands.map((b) => b.id);
+    urlBrandIds && urlBrandIds.length > 0 ? urlBrandIds : brandsInCountries.map((b) => b.id);
 
   const today = new Date();
   const thirtyAgo = new Date(today);
@@ -153,7 +178,7 @@ export default async function BenchmarksPage({
 
   const hasUnassigned = allCompetitors.some((c) => c.client_id === null);
 
-  const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}`;
+  const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeCountryCodes.join(",")}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}`;
 
   const chipClass = (selected: boolean) =>
     selected
@@ -201,25 +226,44 @@ export default async function BenchmarksPage({
         </div>
       </div>
 
-      {/* ─── Project + Brand selector on the same row ─── */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
-            {t("benchmarks", "filterByProject")}
-          </span>
-          <Link href={hrefForProject(channel, null)} className={chipClass(activeClient === null)}>
-            {t("benchmarks", "allProjects")}
+      {/* ─── Project row ─── */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-3 print:hidden">
+        <span className="text-[10px] uppercase tracking-wider text-foreground font-bold mr-1">
+          {t("benchmarks", "filterByProject")}
+        </span>
+        <Link href={hrefForProject(channel, null)} className={chipClass(activeClient === null)}>
+          {t("benchmarks", "allProjects")}
+        </Link>
+        {clients.map((c) => (
+          <Link key={c.id} href={hrefForProject(channel, c.id)} className={chipClass(activeClient === c.id)}>
+            <span className="size-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
+            {c.name}
           </Link>
-          {clients.map((c) => (
-            <Link key={c.id} href={hrefForProject(channel, c.id)} className={chipClass(activeClient === c.id)}>
-              <span className="size-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
-              {c.name}
-            </Link>
-          ))}
-          {hasUnassigned && (
-            <Link href={hrefForProject(channel, "unassigned")} className={chipClass(activeClient === "unassigned")}>
-              {t("clients", "unassigned")}
-            </Link>
+        ))}
+        {hasUnassigned && (
+          <Link href={hrefForProject(channel, "unassigned")} className={chipClass(activeClient === "unassigned")}>
+            {t("clients", "unassigned")}
+          </Link>
+        )}
+      </div>
+
+      {/* ─── Country + Brand — country drives the brand list ─── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
+            {t("benchmarks", "filterByCountry")}
+          </span>
+          {availableCountries.length > 0 ? (
+            <CountryFilter
+              availableCountries={availableCountries}
+              activeCountryCodes={activeCountryCodes}
+              channel={channel}
+              client={activeClient}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground italic">—</span>
           )}
         </div>
         <div className="h-5 w-px bg-border" />
@@ -228,10 +272,12 @@ export default async function BenchmarksPage({
             {t("benchmarks", "filterByBrand")}
           </span>
           <BrandFilter
-            availableBrands={projectBrands.map((b) => ({ id: b.id, name: b.page_name }))}
+            availableBrands={brandsInCountries.map((b) => ({ id: b.id, name: b.page_name }))}
             activeBrandIds={activeBrandIds}
             channel={channel}
             client={activeClient}
+            countries={activeCountryCodes}
+            totalCountries={availableCountries.length}
             dateFrom={dateFrom}
             dateTo={dateTo}
           />
@@ -245,7 +291,9 @@ export default async function BenchmarksPage({
         channel={channel}
         client={activeClient}
         activeBrandIds={activeBrandIds}
-        totalBrands={projectBrands.length}
+        totalBrands={brandsInCountries.length}
+        countries={activeCountryCodes}
+        totalCountries={availableCountries.length}
       />
 
       <Suspense key={suspenseKey} fallback={<ContentSkeleton />}>

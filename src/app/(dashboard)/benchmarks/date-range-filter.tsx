@@ -14,6 +14,8 @@ interface Props {
   client: string | null;
   activeBrandIds: string[];
   totalBrands: number;
+  countries: string[];
+  totalCountries: number;
 }
 
 /**
@@ -28,6 +30,8 @@ export function DateRangeFilter({
   client,
   activeBrandIds,
   totalBrands,
+  countries,
+  totalCountries,
 }: Props) {
   const router = useRouter();
   const { t } = useT();
@@ -41,6 +45,9 @@ export function DateRangeFilter({
     const params = new URLSearchParams();
     params.set("channel", channel);
     if (client) params.set("client", client);
+    if (countries.length !== totalCountries && countries.length > 0) {
+      params.set("countries", countries.join(","));
+    }
     if (activeBrandIds.length !== totalBrands && activeBrandIds.length > 0) {
       params.set("brands", activeBrandIds.join(","));
     }

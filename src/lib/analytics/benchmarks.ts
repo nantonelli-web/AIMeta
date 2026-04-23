@@ -377,26 +377,40 @@ export async function computeBenchmarks(
     const displayFormat = (snapshot?.displayFormat as string) ?? null;
     const cards = Array.isArray(snapshot?.cards) ? (snapshot?.cards as unknown[]) : null;
     const videos = Array.isArray(snapshot?.videos) ? (snapshot?.videos as unknown[]) : null;
-    // True carousel formats: DPA (catalog carousel) and CAROUSEL.
-    // DCO is a delivery mode (Dynamic Creative Optimization) that can resolve
-    // to image, video, OR carousel — inspect the snapshot cards/videos.
-    const isDpaOrCarousel = displayFormat === "DPA" || displayFormat === "CAROUSEL";
-    const isDco = displayFormat === "DCO";
 
-    if (isDpaOrCarousel || (cards && cards.length > 1)) {
-      carouselCount++;
-      entry.carousel++;
-    } else if (displayFormat === "VIDEO" || (videos && videos.length > 0) || (!displayFormat && ad.video_url)) {
-      videoCount++;
-      entry.video++;
-    } else if (displayFormat === "IMAGE" || (!displayFormat && ad.image_url) || isDco) {
-      // DCO without a video in the snapshot → default to image; DPA already handled above.
-      imageCount++;
-      entry.image++;
-    } else {
-      unknownCount++;
-      entry.unknown++;
+    // Strict priority: trust Meta's explicit displayFormat before looking at
+    // the raw snapshot payload. A VIDEO-flagged ad that happens to carry
+    // multiple cards (video carousels do exist) must NOT be misclassified
+    // as a plain image carousel, which was the bug in the previous logic.
+    let bucket: "image" | "video" | "carousel" | "unknown";
+    switch (displayFormat) {
+      case "CAROUSEL":
+      case "DPA": // Dynamic Product Ads — always rendered as a catalog carousel
+        bucket = "carousel";
+        break;
+      case "VIDEO":
+        bucket = "video";
+        break;
+      case "IMAGE":
+        bucket = "image";
+        break;
+      case "DCO":
+      default: {
+        // DCO (Dynamic Creative Optimization) is a delivery mode that can
+        // resolve to any format — fall back to inspecting the payload.
+        const cardsLen = cards?.length ?? 0;
+        const videosLen = videos?.length ?? 0;
+        if (cardsLen > 1) bucket = "carousel";
+        else if (videosLen > 0 || ad.video_url) bucket = "video";
+        else if (ad.image_url) bucket = "image";
+        else bucket = "unknown";
+      }
     }
+
+    if (bucket === "carousel") { carouselCount++; entry.carousel++; }
+    else if (bucket === "video") { videoCount++; entry.video++; }
+    else if (bucket === "image") { imageCount++; entry.image++; }
+    else { unknownCount++; entry.unknown++; }
     formatByComp.set(key, entry);
   }
   const formatMix = [
