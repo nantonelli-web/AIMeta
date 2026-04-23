@@ -60,7 +60,11 @@ export async function POST(req: Request) {
   const unchanged: number = rows?.filter((r) => {
     const before = (r.country as string | null)?.trim() ?? null;
     if (!before) return true;
-    return CANONICAL_SHAPE.test(before);
+    // Row is clean iff it is already equal to its coerced form AND that
+    // form has the canonical shape. This catches "UK" as NOT clean
+    // (coerces to "GB") while keeping "IT,DE" as clean.
+    const canonical = coerceCountryForStorage(before) ?? before;
+    return CANONICAL_SHAPE.test(canonical) && canonical === before;
   }).length ?? 0;
 
   for (const r of rows ?? []) {
@@ -68,12 +72,11 @@ export async function POST(req: Request) {
     if (before == null) continue;
     const trimmed = before.trim();
     if (!trimmed) continue;
-    // Already in canonical form — no write needed.
-    if (CANONICAL_SHAPE.test(trimmed)) continue;
 
-    // coerceCountryForStorage handles both single values ("Italy" -> "IT")
-    // and comma-separated lists ("IT, DE, UK, FR, ES" -> "IT,DE,GB,FR,ES").
-    // If it cannot produce a canonical shape, we flag the row as unresolved.
+    // Always compute the canonical form so we catch alpha-2 aliases too
+    // (UK -> GB, EL -> GR). A shape-only pre-check would short-circuit
+    // rows like "IT,DE,UK,FR,ES" — they match the CSV-of-alpha-2 regex
+    // even though UK still needs rewriting to GB.
     const canonical = coerceCountryForStorage(trimmed) ?? trimmed;
     const isCanonical = CANONICAL_SHAPE.test(canonical);
 
@@ -87,6 +90,8 @@ export async function POST(req: Request) {
       });
       continue;
     }
+    // Input already matches the canonical output — no rewrite needed.
+    if (canonical === trimmed) continue;
 
     if (!dryRun) {
       const { error: upErr } = await admin
