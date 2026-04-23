@@ -173,7 +173,7 @@ export default async function BenchmarksPage({
       {/* ─── Channels grouped by Paid / Organic ─── */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
             {t("benchmarks", "paidChannels")}
           </span>
           <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ export default async function BenchmarksPage({
         </div>
         <div className="h-5 w-px bg-border" />
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
             {t("benchmarks", "organicChannels")}
           </span>
           <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export default async function BenchmarksPage({
       {/* ─── Project + Brand selector on the same row ─── */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
             {t("benchmarks", "filterByProject")}
           </span>
           <Link href={hrefForProject(channel, null)} className={chipClass(activeClient === null)}>
@@ -224,7 +224,7 @@ export default async function BenchmarksPage({
         </div>
         <div className="h-5 w-px bg-border" />
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
             {t("benchmarks", "filterByBrand")}
           </span>
           <BrandFilter

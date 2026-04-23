@@ -69,7 +69,7 @@ export function DateRangeFilter({
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
       <div className="flex items-center gap-2">
         <CalendarRange className="size-4 text-muted-foreground" />
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+        <span className="text-[11px] uppercase tracking-wider text-foreground font-bold">
           {t("benchmarks", "analysisRange")}
         </span>
       </div>
