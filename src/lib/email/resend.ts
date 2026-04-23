@@ -11,9 +11,24 @@ export function getResend(): Resend | null {
 const FROM =
   process.env.EMAIL_FROM ?? "AISCAN <noreply@nimadigital.ae>";
 
-// Logo served from the public production domain so email clients can
-// load it without being logged into the app. Emails must use absolute URLs.
-const LOGO_URL = "https://aiscan.biz/logo.webp";
+// Logo served from the public production domain. Derive from the configured
+// app URL so preview/staging environments serve their own copy, and prefer
+// a .png over .webp because legacy email clients (Outlook in particular)
+// still do not render WebP.
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://aiscan.biz";
+const LOGO_URL = `${APP_URL}/logo.webp`;
+
+// Light, brand-consistent palette. Keep these as constants so every
+// template stays in sync.
+const EMAIL_BG = "#ffffff";
+const CARD_BG = "#f9fafb";       // very light gray, above white
+const CARD_BORDER = "#e5e7eb";
+const TEXT_PRIMARY = "#0a0a0a";
+const TEXT_MUTED = "#5b6472";
+const BRAND = "#0e3590";          // navy — matches app
+const BRAND_FG = "#ffffff";
+const FOOTER_MUTED = "#9ca3af";
 
 /** Escape user-controlled text before interpolating into email HTML. */
 function esc(value: string | null | undefined): string {
@@ -68,18 +83,18 @@ export async function sendNewAdsNotification(
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;color:#f5f5f5;font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background:${EMAIL_BG};color:${TEXT_PRIMARY};font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
     <div style="text-align:center;margin-bottom:24px;">
-      <img src="${LOGO_URL}" alt="AISCAN" height="48" style="display:inline-block;height:48px;width:auto;border:0;outline:none;text-decoration:none;" />
+      <img src="${LOGO_URL}" alt="AISCAN" height="40" style="display:inline-block;height:40px;width:auto;border:0;outline:none;text-decoration:none;" />
     </div>
 
-    <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:24px;margin-bottom:24px;">
-      <h1 style="margin:0 0 8px;font-size:20px;color:#f5f5f5;">
+    <div style="background:${CARD_BG};border:1px solid ${CARD_BORDER};border-radius:12px;padding:24px;margin-bottom:24px;">
+      <h1 style="margin:0 0 8px;font-size:20px;color:${TEXT_PRIMARY};">
         ${data.adsCount} nuove ads rilevate
       </h1>
-      <p style="margin:0;color:#b0b0b0;font-size:14px;">
-        <strong style="color:#0e3590;">${esc(data.competitorName)}</strong> ha pubblicato nuove creatività.
+      <p style="margin:0;color:${TEXT_MUTED};font-size:14px;">
+        <strong style="color:${BRAND};">${esc(data.competitorName)}</strong> ha pubblicato nuove creatività.
       </p>
     </div>
 
@@ -88,26 +103,26 @@ export async function sendNewAdsNotification(
         const imgUrl = ad.imageUrl && !ad.imageUrl.includes("/render_ad/") ? safeUrl(ad.imageUrl) : null;
         const truncated = ad.adText ? ad.adText.slice(0, 120) + (ad.adText.length > 120 ? "…" : "") : null;
         return `
-    <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;">
+    <div style="background:#ffffff;border:1px solid ${CARD_BORDER};border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;">
       ${imgUrl && imgUrl !== "#" ? `<img src="${imgUrl}" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0;" />` : ""}
       <div>
-        ${ad.headline ? `<p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#f5f5f5;">${esc(ad.headline)}</p>` : ""}
-        ${truncated ? `<p style="margin:0;font-size:12px;color:#b0b0b0;line-height:1.5;">${esc(truncated)}</p>` : ""}
-        <a href="${safeUrl(ad.adLibraryUrl)}" style="display:inline-block;margin-top:8px;font-size:11px;color:#0e3590;text-decoration:none;">Vedi su Ad Library →</a>
+        ${ad.headline ? `<p style="margin:0 0 4px;font-size:14px;font-weight:600;color:${TEXT_PRIMARY};">${esc(ad.headline)}</p>` : ""}
+        ${truncated ? `<p style="margin:0;font-size:12px;color:${TEXT_MUTED};line-height:1.5;">${esc(truncated)}</p>` : ""}
+        <a href="${safeUrl(ad.adLibraryUrl)}" style="display:inline-block;margin-top:8px;font-size:11px;color:${BRAND};text-decoration:none;">Vedi su Ad Library →</a>
       </div>
     </div>`;
       })
       .join("")}
 
-    ${data.adsCount > 5 ? `<p style="text-align:center;color:#b0b0b0;font-size:12px;">+ altre ${data.adsCount - 5} ads</p>` : ""}
+    ${data.adsCount > 5 ? `<p style="text-align:center;color:${TEXT_MUTED};font-size:12px;">+ altre ${data.adsCount - 5} ads</p>` : ""}
 
     <div style="text-align:center;margin-top:24px;">
-      <a href="${safeUrl(data.dashboardUrl)}" style="display:inline-block;background:#0e3590;color:#ffffff;font-size:14px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;">
+      <a href="${safeUrl(data.dashboardUrl)}" style="display:inline-block;background:${BRAND};color:${BRAND_FG};font-size:14px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;">
         Apri Dashboard
       </a>
     </div>
 
-    <p style="text-align:center;margin-top:32px;font-size:10px;color:#666;letter-spacing:0.1em;text-transform:uppercase;">
+    <p style="text-align:center;margin-top:32px;font-size:10px;color:${FOOTER_MUTED};letter-spacing:0.1em;text-transform:uppercase;">
       NIMA Digital Consulting FZCO · Dubai
     </p>
   </div>
@@ -151,32 +166,32 @@ export async function sendWeeklyDigest(
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;color:#f5f5f5;font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background:${EMAIL_BG};color:${TEXT_PRIMARY};font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
     <div style="text-align:center;margin-bottom:24px;">
-      <img src="${LOGO_URL}" alt="AISCAN" height="48" style="display:inline-block;height:48px;width:auto;border:0;outline:none;text-decoration:none;" />
+      <img src="${LOGO_URL}" alt="AISCAN" height="40" style="display:inline-block;height:40px;width:auto;border:0;outline:none;text-decoration:none;" />
     </div>
 
-    <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:24px;margin-bottom:24px;">
-      <h1 style="margin:0 0 4px;font-size:20px;color:#f5f5f5;">
+    <div style="background:${CARD_BG};border:1px solid ${CARD_BORDER};border-radius:12px;padding:24px;margin-bottom:24px;">
+      <h1 style="margin:0 0 4px;font-size:20px;color:${TEXT_PRIMARY};">
         ${esc(data.workspaceName)}
       </h1>
-      <p style="margin:0;color:#b0b0b0;font-size:13px;">
+      <p style="margin:0;color:${TEXT_MUTED};font-size:13px;">
         ${esc(data.weekRange)} · ${data.totalNewAds} nuove ads rilevate
       </p>
     </div>
 
-    <h2 style="font-size:13px;color:#0e3590;text-transform:uppercase;letter-spacing:0.1em;margin:24px 0 12px;">
+    <h2 style="font-size:13px;color:${BRAND};text-transform:uppercase;letter-spacing:0.1em;margin:24px 0 12px;">
       Attività competitor
     </h2>
-    <div style="background:#121212;border:1px solid #232323;border-radius:12px;overflow:hidden;">
+    <div style="background:#ffffff;border:1px solid ${CARD_BORDER};border-radius:12px;overflow:hidden;">
       ${data.competitors
         .map(
           (c, i) => `
-      <div style="padding:12px 16px;${i > 0 ? "border-top:1px solid #232323;" : ""}display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:14px;font-weight:500;">${esc(c.name)}</span>
-        <span style="font-size:12px;color:#b0b0b0;">
-          <strong style="color:#0e3590;">+${c.newAds}</strong> nuove · ${c.totalActive} attive
+      <div style="padding:12px 16px;${i > 0 ? `border-top:1px solid ${CARD_BORDER};` : ""}display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:14px;font-weight:500;color:${TEXT_PRIMARY};">${esc(c.name)}</span>
+        <span style="font-size:12px;color:${TEXT_MUTED};">
+          <strong style="color:${BRAND};">+${c.newAds}</strong> nuove · ${c.totalActive} attive
         </span>
       </div>`
         )
@@ -186,17 +201,17 @@ export async function sendWeeklyDigest(
     ${
       data.topAds.length > 0
         ? `
-    <h2 style="font-size:13px;color:#0e3590;text-transform:uppercase;letter-spacing:0.1em;margin:24px 0 12px;">
+    <h2 style="font-size:13px;color:${BRAND};text-transform:uppercase;letter-spacing:0.1em;margin:24px 0 12px;">
       Top creatività della settimana
     </h2>
     ${data.topAds
       .slice(0, 3)
       .map(
         (ad) => `
-    <div style="background:#121212;border:1px solid #232323;border-radius:12px;padding:16px;margin-bottom:12px;">
-      <p style="margin:0 0 4px;font-size:11px;color:#0e3590;">${esc(ad.competitorName)}</p>
-      ${ad.headline ? `<p style="margin:0;font-size:14px;font-weight:500;">${esc(ad.headline)}</p>` : ""}
-      <a href="${safeUrl(ad.adLibraryUrl)}" style="font-size:11px;color:#0e3590;text-decoration:none;">Vedi su Ad Library →</a>
+    <div style="background:#ffffff;border:1px solid ${CARD_BORDER};border-radius:12px;padding:16px;margin-bottom:12px;">
+      <p style="margin:0 0 4px;font-size:11px;color:${BRAND};">${esc(ad.competitorName)}</p>
+      ${ad.headline ? `<p style="margin:0;font-size:14px;font-weight:500;color:${TEXT_PRIMARY};">${esc(ad.headline)}</p>` : ""}
+      <a href="${safeUrl(ad.adLibraryUrl)}" style="font-size:11px;color:${BRAND};text-decoration:none;">Vedi su Ad Library →</a>
     </div>`
       )
       .join("")}`
@@ -204,12 +219,12 @@ export async function sendWeeklyDigest(
     }
 
     <div style="text-align:center;margin-top:24px;">
-      <a href="${safeUrl(data.dashboardUrl)}" style="display:inline-block;background:#0e3590;color:#ffffff;font-size:14px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;">
+      <a href="${safeUrl(data.dashboardUrl)}" style="display:inline-block;background:${BRAND};color:${BRAND_FG};font-size:14px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;">
         Apri Dashboard
       </a>
     </div>
 
-    <p style="text-align:center;margin-top:32px;font-size:10px;color:#666;letter-spacing:0.1em;text-transform:uppercase;">
+    <p style="text-align:center;margin-top:32px;font-size:10px;color:${FOOTER_MUTED};letter-spacing:0.1em;text-transform:uppercase;">
       NIMA Digital Consulting FZCO · Dubai
     </p>
   </div>
