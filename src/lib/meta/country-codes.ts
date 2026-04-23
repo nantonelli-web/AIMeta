@@ -158,9 +158,28 @@ export function toIsoCountry(input: string | null | undefined): string | null {
 }
 
 /**
- * Return `input` unchanged if it already is alpha-2; otherwise return the
- * normalised alpha-2; otherwise return the trimmed original so we don't
- * throw away user input on save.
+ * Parse a country column value (single ISO code OR a comma-separated list
+ * like "IT, DE, UK") into an array of alpha-2 codes. Unresolved tokens are
+ * dropped. Duplicates are collapsed. Returns [] for null / empty input.
+ */
+export function parseCountryCodes(input: string | null | undefined): string[] {
+  if (input == null) return [];
+  const trimmed = String(input).trim();
+  if (!trimmed) return [];
+  const parts = trimmed.includes(",") ? trimmed.split(",") : [trimmed];
+  const out = new Set<string>();
+  for (const part of parts) {
+    const iso = toIsoCountry(part);
+    if (iso) out.add(iso);
+  }
+  return [...out];
+}
+
+/**
+ * Return `input` coerced to the canonical storage format. Single-value
+ * inputs become an alpha-2 code; multi-country values become a comma-joined
+ * list of alpha-2 codes ("IT,DE,GB,FR,ES"). Falls back to the trimmed
+ * original so we don't silently throw away user input on save.
  */
 export function coerceCountryForStorage(
   input: string | null | undefined
@@ -168,5 +187,9 @@ export function coerceCountryForStorage(
   if (input == null) return null;
   const trimmed = String(input).trim();
   if (!trimmed) return null;
+  if (trimmed.includes(",")) {
+    const codes = parseCountryCodes(trimmed);
+    return codes.length > 0 ? codes.join(",") : trimmed;
+  }
   return toIsoCountry(trimmed) ?? trimmed;
 }

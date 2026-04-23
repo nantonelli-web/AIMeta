@@ -12,6 +12,7 @@ import { BenchmarkContent } from "./benchmark-content";
 import { BrandFilter } from "./brand-filter";
 import { CountryFilter } from "./country-filter";
 import { DateRangeFilter } from "./date-range-filter";
+import { parseCountryCodes } from "@/lib/meta/country-codes";
 
 export const dynamic = "force-dynamic";
 
@@ -121,9 +122,10 @@ export default async function BenchmarksPage({
   });
 
   // Countries actually present on the projectBrands — localized for display.
-  // Guard against legacy values in the column: only 2- or 3-letter alphabetic
-  // strings are valid ISO 3166-1 inputs for Intl.DisplayNames, and the API
-  // throws RangeError for anything else (e.g. "Italy" or lower-case codes).
+  // `mait_competitors.country` can be a single ISO code OR a CSV list
+  // ("IT, DE, UK, FR, ES") for brands that were scanned across multiple
+  // countries. parseCountryCodes normalises both shapes to an array of
+  // alpha-2 codes; anything it can't resolve is dropped.
   const countryNames = new Intl.DisplayNames([locale], { type: "region" });
   function safeCountryName(code: string): string {
     try {
@@ -133,9 +135,11 @@ export default async function BenchmarksPage({
     }
   }
   const countryCodeSet = new Set<string>();
+  const brandCountries = new Map<string, string[]>();
   for (const b of projectBrands) {
-    const raw = (b.country ?? "").trim().toUpperCase();
-    if (/^[A-Z]{2,3}$/.test(raw)) countryCodeSet.add(raw);
+    const codes = parseCountryCodes(b.country);
+    brandCountries.set(b.id, codes);
+    for (const c of codes) countryCodeSet.add(c);
   }
   const availableCountries = [...countryCodeSet]
     .map((code) => ({ code, name: safeCountryName(code) }))
@@ -147,20 +151,17 @@ export default async function BenchmarksPage({
   const activeCountryCodes =
     urlCountries && urlCountries.length > 0 ? urlCountries : availableCountries.map((c) => c.code);
 
-  // Brands intersection: project ∩ countries. If a URL specifies brands, we
-  // validate them against this intersection so stale URLs don't bleed across
-  // country changes.
-  // A brand with a non-ISO value (e.g. "Italy" instead of "IT") gets treated
-  // the same as a brand with no country at all — included only when the
-  // user has "all countries" selected. Without this normalisation, legacy
-  // rows with full country names silently disappeared from every chart.
+  // Brand matches the active country filter when AT LEAST ONE of its
+  // countries is in the selection (multi-country brands appear under each
+  // of their scan countries). Brands with no resolvable country appear
+  // only when the user has "all countries" selected.
   const ALL_COUNTRIES_SELECTED =
     activeCountryCodes.length === availableCountries.length;
+  const activeCountrySet = new Set(activeCountryCodes);
   const brandsInCountries = projectBrands.filter((b) => {
-    const raw = (b.country ?? "").trim().toUpperCase();
-    const isoCode = /^[A-Z]{2,3}$/.test(raw) ? raw : null;
-    if (!isoCode) return ALL_COUNTRIES_SELECTED;
-    return activeCountryCodes.includes(isoCode);
+    const codes = brandCountries.get(b.id) ?? [];
+    if (codes.length === 0) return ALL_COUNTRIES_SELECTED;
+    return codes.some((c) => activeCountrySet.has(c));
   });
   const brandsInCountriesIds = new Set(brandsInCountries.map((b) => b.id));
   const urlBrandIds = rawBrands
