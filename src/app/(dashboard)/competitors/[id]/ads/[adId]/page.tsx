@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Calendar, Clock, Globe, Tag, Bot, Zap, LayoutGrid, MapPin, Users } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, Clock, Globe, Tag, Bot, Zap, LayoutGrid, MapPin, Users, UsersRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatNumber } from "@/lib/utils";
 import { getLocale, serverT } from "@/lib/i18n/server";
+import { extractAdInsights } from "@/lib/meta/ad-insights";
 import type { MaitAdExternal } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,13 @@ export default async function AdDetailPage({
   const isReshared = (snapshot?.isReshared as boolean) ?? false;
   const collationCount = (raw?.collationCount as number) ?? null;
   const targetedCountries = (raw?.targetedOrReachedCountries as string[]) ?? [];
+  const insights = extractAdInsights(raw);
+  const genderLabelKey: Record<NonNullable<typeof insights.genderLabel>, string> = {
+    all: "genderAll",
+    mostlyMale: "genderMostlyMale",
+    mostlyFemale: "genderMostlyFemale",
+  };
+  const totalAgeCount = insights.ageTotals.reduce((s, a) => s + a.count, 0);
   const pageInfoRaw = raw?.pageInfo as Record<string, unknown> | null;
   const adLibPageInfo = pageInfoRaw?.adLibraryPageInfo as Record<string, unknown> | null;
   const relatedPages = (adLibPageInfo?.relatedPages ?? []) as Array<{
@@ -364,6 +372,63 @@ export default async function AdDetailPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{t("adDetail", "reshared")}</span>
                     <Badge variant="muted">{t("adDetail", "yes")}</Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Audience & Reach (EU DSA) */}
+          {insights.hasData && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <UsersRound className="size-4" /> {t("adDetail", "audienceReach")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {insights.euReach != null && (
+                  <div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-muted-foreground">{t("adDetail", "reachLabel")}</span>
+                      <span className="text-lg font-semibold text-gold">{formatNumber(insights.euReach)}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                      {t("adDetail", "reachHelp")}
+                    </p>
+                  </div>
+                )}
+                {insights.ageRangeLabel && (
+                  <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
+                    <span className="text-muted-foreground">{t("adDetail", "dominantAge")}</span>
+                    <span className="font-medium">{insights.ageRangeLabel}</span>
+                  </div>
+                )}
+                {insights.genderLabel && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t("adDetail", "genderMix")}</span>
+                    <span className="font-medium">
+                      {t("adDetail", genderLabelKey[insights.genderLabel])}
+                    </span>
+                  </div>
+                )}
+                {insights.ageTotals.length > 0 && totalAgeCount > 0 && (
+                  <div className="pt-3 border-t border-border space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      {t("adDetail", "ageDistribution")}
+                    </p>
+                    {insights.ageTotals.map((a) => {
+                      const pct = Math.round((a.count / totalAgeCount) * 100);
+                      return (
+                        <div key={a.ageRange} className="flex items-center gap-2 text-[11px]">
+                          <span className="w-12 text-muted-foreground tabular-nums shrink-0">{a.ageRange}</span>
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full bg-gold/70" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-8 text-right text-muted-foreground tabular-nums">{pct}%</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

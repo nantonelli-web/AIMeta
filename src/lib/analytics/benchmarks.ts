@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { extractAdInsights } from "@/lib/meta/ad-insights";
 
 export type InferredAudience =
   | "prospecting"
@@ -79,6 +80,19 @@ export interface BenchmarkData {
     earliestStart: string | null;
     adsInRange: number;
   }[];
+  /**
+   * EU DSA transparency roll-up per brand. Only populated for ads whose
+   * raw_data carries the breakdown (EU-delivered ads).
+   */
+  audienceByCompetitor: {
+    competitor: string;
+    euReach: number;
+    adsWithInsights: number;
+    ageTotals: { ageRange: string; count: number }[];
+    dominantAge: string | null;
+    gender: { male: number; female: number; unknown: number };
+    genderLabel: "all" | "mostlyMale" | "mostlyFemale" | null;
+  }[];
   /** Format mix per competitor (for individual pie charts) */
   formatMixByCompetitor: { competitor: string; data: { name: string; value: number }[] }[];
   /** Platform distribution */
@@ -114,6 +128,11 @@ export interface BenchmarkData {
  * aggregate into the same bucket. Drops surrounding whitespace, replaces
  * separator characters (_ -) with spaces, and title-cases each word.
  */
+function ageRangeBucketOrder(range: string): number {
+  const m = range.match(/^(\d+)/);
+  return m ? parseInt(m[1], 10) : 999;
+}
+
 function normalizeCtaLabel(raw: string): string {
   const cleaned = raw.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
   if (!cleaned) return "";
@@ -675,6 +694,65 @@ export async function computeBenchmarks(
     }))
     .sort((a, b) => b.variants - a.variants);
 
+  // ---- EU DSA audience roll-up per competitor ----
+  const audienceByComp = new Map<
+    string,
+    {
+      euReach: number;
+      adsWithInsights: number;
+      ageMap: Map<string, number>;
+      gender: { male: number; female: number; unknown: number };
+    }
+  >();
+  for (const ad of ads) {
+    const insights = extractAdInsights(ad.raw_data);
+    if (!insights.hasData) continue;
+    const key = ad.competitor_id ?? "unknown";
+    const entry = audienceByComp.get(key) ?? {
+      euReach: 0,
+      adsWithInsights: 0,
+      ageMap: new Map<string, number>(),
+      gender: { male: 0, female: 0, unknown: 0 },
+    };
+    entry.adsWithInsights++;
+    if (insights.euReach != null) entry.euReach += insights.euReach;
+    for (const a of insights.ageTotals) {
+      entry.ageMap.set(a.ageRange, (entry.ageMap.get(a.ageRange) ?? 0) + a.count);
+    }
+    entry.gender.male += insights.genderTotals.male;
+    entry.gender.female += insights.genderTotals.female;
+    entry.gender.unknown += insights.genderTotals.unknown;
+    audienceByComp.set(key, entry);
+  }
+  const audienceByCompetitor = [...audienceByComp.entries()]
+    .map(([id, v]) => {
+      const ageTotals = [...v.ageMap.entries()]
+        .map(([ageRange, count]) => ({ ageRange, count }))
+        .sort((a, b) => ageRangeBucketOrder(a.ageRange) - ageRangeBucketOrder(b.ageRange));
+      const dominantAge = ageTotals.reduce<{ ageRange: string; count: number } | null>(
+        (best, cur) => (best && best.count >= cur.count ? best : cur),
+        null
+      );
+      const paid = v.gender.male + v.gender.female;
+      let genderLabel: "all" | "mostlyMale" | "mostlyFemale" | null = null;
+      if (paid > 0) {
+        const maleShare = v.gender.male / paid;
+        if (maleShare >= 0.65) genderLabel = "mostlyMale";
+        else if (maleShare <= 0.35) genderLabel = "mostlyFemale";
+        else genderLabel = "all";
+      }
+      return {
+        competitor: compMap.get(id) ?? "N/A",
+        euReach: v.euReach,
+        adsWithInsights: v.adsWithInsights,
+        ageTotals,
+        dominantAge: dominantAge?.ageRange ?? null,
+        gender: v.gender,
+        genderLabel,
+      };
+    })
+    .sort((a, b) => b.euReach - a.euReach);
+
   // ---- Top targeted countries ----
   const countryCount = new Map<string, number>();
   for (const ad of ads) {
@@ -726,6 +804,7 @@ export async function computeBenchmarks(
     ctaMixByCompetitor,
     utmInsightsByCompetitor,
     coverageByCompetitor,
+    audienceByCompetitor,
     platformDistribution,
     platformByCompetitor,
     avgDurationByCompetitor,

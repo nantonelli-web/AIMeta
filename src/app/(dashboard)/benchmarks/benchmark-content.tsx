@@ -173,6 +173,53 @@ export async function BenchmarkContent({
         </CardContent>
       </Card>
 
+      {/* Audience insights (EU DSA) */}
+      {data.audienceByCompetitor.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("benchmarks", "audienceInsights")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">
+              {t("benchmarks", "audienceInsightsDesc")}
+            </p>
+            <div className="mb-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              {t("benchmarks", "audienceInsightsDisclaimer")}
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium text-foreground mb-2">
+                  {t("benchmarks", "audienceReachChart")}
+                </p>
+                <HorizontalBarChart
+                  data={data.audienceByCompetitor.map((c) => ({ name: c.competitor, reach: c.euReach }))}
+                  dataKey="reach"
+                  label={t("benchmarks", "reachAxisLabel")}
+                  color="#2d8a87"
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground mb-2">
+                  {t("benchmarks", "audienceProfile")}
+                </p>
+                <div className="space-y-2">
+                  {data.audienceByCompetitor.slice(0, 12).map((c) => (
+                    <AudienceProfileRow
+                      key={c.competitor}
+                      competitor={c.competitor}
+                      dominantAge={c.dominantAge}
+                      genderLabel={c.genderLabel}
+                      ageTotals={c.ageTotals}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* UTM analysis per brand — hidden pending further work on the
           audience/objective inference. Computation is still done in
           computeBenchmarks so nothing needs re-plumbing when we re-enable it. */}
@@ -531,6 +578,66 @@ function NoScanWarning({
           <li key={b}>{b}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Compact per-brand audience profile: dominant age + gender + mini age bars. */
+function AudienceProfileRow({
+  competitor,
+  dominantAge,
+  genderLabel,
+  ageTotals,
+  t,
+}: {
+  competitor: string;
+  dominantAge: string | null;
+  genderLabel: "all" | "mostlyMale" | "mostlyFemale" | null;
+  ageTotals: { ageRange: string; count: number }[];
+  t: (section: string, key: string) => string;
+}) {
+  const total = ageTotals.reduce((s, a) => s + a.count, 0);
+  const genderDisplay = genderLabel
+    ? t("benchmarks", genderLabel === "all" ? "genderAll" : genderLabel === "mostlyMale" ? "genderMostlyMale" : "genderMostlyFemale")
+    : "—";
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-xs font-medium text-foreground truncate">{competitor}</span>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0">
+          {dominantAge && (
+            <span>
+              <span className="text-foreground font-semibold">{dominantAge}</span>
+            </span>
+          )}
+          <span>{genderDisplay}</span>
+        </div>
+      </div>
+      {total > 0 && (
+        <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+          {ageTotals.map((a, i) => {
+            const pct = (a.count / total) * 100;
+            const palette = ["#0e3590", "#2d8a87", "#d97757", "#8a6bb0", "#5b7ea3", "#6b8e6b", "#a38a4c"];
+            return (
+              <div
+                key={a.ageRange}
+                title={`${a.ageRange}: ${Math.round(pct)}%`}
+                className="h-full"
+                style={{ width: `${pct}%`, backgroundColor: palette[i % palette.length] }}
+              />
+            );
+          })}
+        </div>
+      )}
+      {ageTotals.length > 0 && (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[10px] text-muted-foreground">
+          {ageTotals.map((a) => (
+            <span key={a.ageRange} className="tabular-nums">
+              {a.ageRange}: {Math.round((a.count / total) * 100)}%
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
