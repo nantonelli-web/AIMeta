@@ -14,10 +14,14 @@ export async function BenchmarkContent({
   workspaceId,
   channel,
   competitorIdsFilter,
+  dateFrom,
+  dateTo,
 }: {
   workspaceId: string;
   channel: "meta" | "google";
   competitorIdsFilter: string[] | undefined;
+  dateFrom: string;
+  dateTo: string;
 }) {
   const supabase = await createClient();
   const locale = await getLocale();
@@ -27,8 +31,25 @@ export async function BenchmarkContent({
     supabase,
     workspaceId,
     channel,
-    competitorIdsFilter
+    competitorIdsFilter,
+    dateFrom,
+    dateTo
   );
+
+  // Scan-coverage check — flag brands whose earliest-seen ad starts after
+  // the requested window opens. 3-day tolerance covers ads that may have
+  // started slightly after dateFrom for legitimate reasons (genuinely new
+  // brand activity, not a scan gap).
+  const TOLERANCE_DAYS = 3;
+  const fromTs = new Date(dateFrom).getTime();
+  const coverageGaps = data.coverageByCompetitor
+    .map((c) => {
+      if (!c.earliestStart) return { ...c, gapDays: null as number | null };
+      const earliestTs = new Date(c.earliestStart).getTime();
+      const gapDays = Math.round((earliestTs - fromTs) / 86_400_000);
+      return { ...c, gapDays };
+    })
+    .filter((c) => c.gapDays !== null && c.gapDays > TOLERANCE_DAYS);
 
   if (data.totals.totalAds === 0) {
     return (
@@ -47,13 +68,37 @@ export async function BenchmarkContent({
         {data.volumeByCompetitor.length} {t("benchmarks", "competitorsWord")}
       </p>
 
+      {/* Scan coverage warning: only surfaces when at least one brand in the
+          selection has no ads reaching back to dateFrom. */}
+      {coverageGaps.length > 0 && (
+        <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
+          <p className="text-xs font-semibold text-gold mb-1.5">
+            {t("benchmarks", "coverageWarningTitle")}
+          </p>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            {t("benchmarks", "coverageWarningBody")}
+          </p>
+          <ul className="text-[11px] text-foreground space-y-0.5">
+            {coverageGaps.map((c) => (
+              <li key={c.competitor}>
+                <span className="font-medium">{c.competitor}</span>
+                <span className="text-muted-foreground">
+                  {" — "}
+                  {t("benchmarks", "coverageFrom")} {c.earliestStart ?? "—"}
+                  {c.gapDays != null && ` (${c.gapDays} ${t("benchmarks", "coverageDaysShort")})`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Stat label={t("benchmarks", "totalAds")} value={formatNumber(data.totals.totalAds)} />
         <Stat label={t("benchmarks", "activeAds")} value={formatNumber(data.totals.activeAds)} />
         <Stat label={t("benchmarks", "avgCampaignDuration")} value={`${data.totals.avgDuration}gg`} />
         <Stat label={t("benchmarks", "avgCopyLength")} value={`${data.totals.avgCopyLength} chr`} />
-        <Stat label={t("benchmarks", "aiGeneratedPercent")} value={`${data.totals.aiGeneratedPercent}%`} />
         <Stat label={t("benchmarks", "advantagePlusPercent")} value={`${data.totals.advantagePlusPercent}%`} />
       </div>
 

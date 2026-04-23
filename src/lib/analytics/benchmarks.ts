@@ -67,6 +67,18 @@ export interface BenchmarkData {
     objectiveConfidence: number; // 0-100
     sampleCampaign: string | null; // most frequent utm_campaign value for context
   }[];
+  /**
+   * Per-brand scan-coverage signal. `earliestStart` is the oldest
+   * `start_date` we have for that brand anywhere in the DB (regardless
+   * of the requested date range). If it is more recent than `dateFrom`
+   * the page uses it to warn the user that the brand has less history
+   * than the range they asked to analyse.
+   */
+  coverageByCompetitor: {
+    competitor: string;
+    earliestStart: string | null;
+    adsInRange: number;
+  }[];
   /** Format mix per competitor (for individual pie charts) */
   formatMixByCompetitor: { competitor: string; data: { name: string; value: number }[] }[];
   /** Platform distribution */
@@ -196,7 +208,12 @@ export async function computeBenchmarks(
   supabase: SupabaseClient,
   workspaceId: string,
   source?: "meta" | "google",
-  competitorIds?: string[]
+  competitorIds?: string[],
+  /** ISO dates (YYYY-MM-DD). If given, only ads overlapping this window
+   * are counted. Ads overlap when they started on/before `dateTo` AND
+   * (they are still active OR they ended on/after `dateFrom`). */
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<BenchmarkData> {
   // Heavy query (format / CTA / UTM / tags / raw_data-dependent metrics).
   // Capped to 3000 most-recent rows to keep payload sane; ORDER BY is
@@ -217,20 +234,36 @@ export async function computeBenchmarks(
   if (competitorIds && competitorIds.length > 0) {
     adsQuery = adsQuery.in("competitor_id", competitorIds);
   }
+  if (dateTo) {
+    adsQuery = adsQuery.lte("start_date", dateTo);
+  }
+  if (dateFrom) {
+    // Ad still running during the range: end_date missing / in the future,
+    // OR ad is marked ACTIVE, OR it ended on/after dateFrom.
+    adsQuery = adsQuery.or(
+      `end_date.gte.${dateFrom},end_date.is.null,status.eq.ACTIVE`
+    );
+  }
 
-  // Separate lightweight + paginated query used for the Volume chart.
+  // Separate lightweight + paginated query used for the Volume chart AND
+  // for the per-brand coverage signal. We pull start_date too so we can
+  // compute the oldest ad start per brand without a second trip.
   // Supabase/PostgREST caps single responses (1000 rows by default) even if
   // you pass a larger .limit(), so we page through with .range() until we
-  // have every (competitor_id, status) row. The 500k safety stop guards
-  // against a runaway loop if the table misbehaves.
-  async function fetchAllVolumeRows(): Promise<{ competitor_id: string | null; status: string | null }[]> {
+  // have every row. The 500k safety stop guards against a runaway loop.
+  async function fetchAllVolumeRows(): Promise<{
+    competitor_id: string | null;
+    status: string | null;
+    start_date: string | null;
+    end_date: string | null;
+  }[]> {
     const PAGE = 5000;
     const SAFETY_CAP = 500_000;
-    const rows: { competitor_id: string | null; status: string | null }[] = [];
+    const rows: { competitor_id: string | null; status: string | null; start_date: string | null; end_date: string | null }[] = [];
     for (let from = 0; from < SAFETY_CAP; from += PAGE) {
       let q = supabase
         .from("mait_ads_external")
-        .select("competitor_id, status")
+        .select("competitor_id, status, start_date, end_date")
         .eq("workspace_id", workspaceId)
         .order("id")
         .range(from, from + PAGE - 1);
@@ -244,7 +277,7 @@ export async function computeBenchmarks(
     return rows;
   }
 
-  const [{ data: competitors }, { data: rawAds }, volumeRows] = await Promise.all([
+  const [{ data: competitors }, { data: rawAds }, allAdsMeta] = await Promise.all([
     supabase
       .from("mait_competitors")
       .select("id, page_name")
@@ -253,6 +286,21 @@ export async function computeBenchmarks(
     adsQuery,
     fetchAllVolumeRows(),
   ]);
+
+  // Ads within the requested date range — drives volume counts.
+  const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
+  const toMs = dateTo ? new Date(dateTo + "T23:59:59Z").getTime() : null;
+  const volumeRows = allAdsMeta.filter((r) => {
+    if (!r.start_date) return false;
+    const s = new Date(r.start_date).getTime();
+    if (toMs !== null && s > toMs) return false;
+    if (fromMs !== null) {
+      const stillRunning = r.status === "ACTIVE" || !r.end_date;
+      const e = r.end_date ? new Date(r.end_date).getTime() : null;
+      if (!stillRunning && e !== null && e < fromMs) return false;
+    }
+    return true;
+  });
 
   const comps = (competitors ?? []) as CompetitorRef[];
   const ads = (rawAds ?? []) as AdRow[];
@@ -273,6 +321,36 @@ export async function computeBenchmarks(
     else entry.inactive++;
     volumeMap.set(key, entry);
   }
+
+  // ---- Coverage per competitor (based on the full paginated set) ----
+  // For each brand we track the earliest start_date we have anywhere in
+  // the DB, regardless of the requested date range. The UI compares this
+  // against dateFrom to surface "this brand's scans do not cover the
+  // analysis window" warnings.
+  const earliestByComp = new Map<string, string>();
+  const inRangeByComp = new Map<string, number>();
+  const inRangeIds = new Set(volumeRows.map((r) => r.competitor_id).filter(Boolean) as string[]);
+  for (const row of allAdsMeta) {
+    const key = row.competitor_id;
+    if (!key) continue;
+    if (row.start_date) {
+      const prev = earliestByComp.get(key);
+      if (!prev || row.start_date < prev) earliestByComp.set(key, row.start_date);
+    }
+  }
+  for (const row of volumeRows) {
+    const key = row.competitor_id;
+    if (!key) continue;
+    inRangeByComp.set(key, (inRangeByComp.get(key) ?? 0) + 1);
+  }
+  const coverageIds = scopedCompetitorIds ?? new Set(comps.map((c) => c.id));
+  const coverageByCompetitor = [...coverageIds]
+    .filter((id) => inRangeIds.has(id) || earliestByComp.has(id) || coverageIds.has(id))
+    .map((id) => ({
+      competitor: compMap.get(id) ?? "N/A",
+      earliestStart: earliestByComp.get(id) ?? null,
+      adsInRange: inRangeByComp.get(id) ?? 0,
+    }));
   // Pad with zero-ads brands so the chart always shows the full project scope.
   const volumeIds = scopedCompetitorIds ?? new Set(comps.map((c) => c.id));
   for (const id of volumeIds) {
@@ -633,6 +711,7 @@ export async function computeBenchmarks(
     ctaByCompetitor,
     ctaMixByCompetitor,
     utmInsightsByCompetitor,
+    coverageByCompetitor,
     platformDistribution,
     platformByCompetitor,
     avgDurationByCompetitor,

@@ -8,6 +8,7 @@ import { getLocale, serverT } from "@/lib/i18n/server";
 import { MetaIcon } from "@/components/ui/meta-icon";
 import Link from "next/link";
 import { BenchmarkContent } from "./benchmark-content";
+import { BenchmarkFilterBar } from "./filter-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,8 @@ function ContentSkeleton() {
   return (
     <div className="space-y-8">
       <SkeletonBar className="h-4 w-72" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="p-5 space-y-2">
               <SkeletonBar className="h-3 w-16" />
@@ -48,20 +49,16 @@ function ContentSkeleton() {
           <SkeletonBar className="h-[300px] w-full" />
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <SkeletonBar className="h-5 w-48" />
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonBar key={i} className="h-[260px]" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function isValidIsoDate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s).getTime());
 }
 
 export default async function BenchmarksPage({
@@ -72,14 +69,16 @@ export default async function BenchmarksPage({
   const sp = await searchParams;
   const channel = sp.channel === "google" ? "google" : "meta";
   const rawClient = typeof sp.client === "string" ? sp.client : null;
+  const rawBrands = typeof sp.brands === "string" ? sp.brands : null;
+  const rawFrom = typeof sp.from === "string" ? sp.from : null;
+  const rawTo = typeof sp.to === "string" ? sp.to : null;
+
   const { profile } = await getSessionUser();
   const supabase = await createClient();
   const admin = createAdminClient();
   const locale = await getLocale();
   const t = serverT(locale);
 
-  // Load clients + competitors for the filter bar — lightweight, keeps
-  // the shell snappy even when the heavy query below is slow.
   const [{ data: clientsData }, { data: competitorsData }] = await Promise.all([
     admin
       .from("mait_clients")
@@ -88,11 +87,12 @@ export default async function BenchmarksPage({
       .order("name"),
     supabase
       .from("mait_competitors")
-      .select("id, client_id")
-      .eq("workspace_id", profile.workspace_id!),
+      .select("id, page_name, client_id")
+      .eq("workspace_id", profile.workspace_id!)
+      .order("page_name"),
   ]);
   const clients = (clientsData ?? []) as { id: string; name: string; color: string }[];
-  const allCompetitors = (competitorsData ?? []) as { id: string; client_id: string | null }[];
+  const allCompetitors = (competitorsData ?? []) as { id: string; page_name: string; client_id: string | null }[];
 
   const activeClient: "unassigned" | string | null =
     rawClient === "unassigned"
@@ -101,35 +101,48 @@ export default async function BenchmarksPage({
         ? rawClient
         : null;
 
-  const competitorIdsFilter: string[] | undefined = activeClient === null
-    ? undefined
-    : allCompetitors
-        .filter((c) =>
-          activeClient === "unassigned"
-            ? c.client_id === null
-            : c.client_id === activeClient
-        )
-        .map((c) => c.id);
+  // Brands available under the current project filter.
+  const projectBrands = allCompetitors.filter((c) => {
+    if (activeClient === null) return true;
+    if (activeClient === "unassigned") return c.client_id === null;
+    return c.client_id === activeClient;
+  });
+
+  // Brand subset from URL, validated against projectBrands so a stale URL
+  // cannot leak brands from another project.
+  const projectBrandIds = new Set(projectBrands.map((b) => b.id));
+  const urlBrandIds = rawBrands
+    ? rawBrands.split(",").filter((id) => projectBrandIds.has(id))
+    : null;
+  const activeBrandIds =
+    urlBrandIds && urlBrandIds.length > 0 ? urlBrandIds : projectBrands.map((b) => b.id);
+
+  // Date range: validated or defaulted to last 30 days.
+  const today = new Date();
+  const thirtyAgo = new Date(today);
+  thirtyAgo.setDate(today.getDate() - 30);
+  const defaultFrom = isoDate(thirtyAgo);
+  const defaultTo = isoDate(today);
+  const dateFrom = rawFrom && isValidIsoDate(rawFrom) ? rawFrom : defaultFrom;
+  const dateTo = rawTo && isValidIsoDate(rawTo) ? rawTo : defaultTo;
 
   const channels = [
     { key: "meta" as const, label: "Meta Ads", icon: <MetaIcon className="size-3.5" /> },
     { key: "google" as const, label: "Google Ads", icon: <GoogleIcon className="size-3.5" /> },
   ];
 
-  function hrefFor(ch: string | null, cl: string | null): string {
+  function hrefForProject(ch: string | null, cl: string | null): string {
     const params = new URLSearchParams();
     if (ch) params.set("channel", ch);
     if (cl) params.set("client", cl);
+    // Reset brand subset + range when switching project/channel — context changes.
     const qs = params.toString();
     return qs ? `/benchmarks?${qs}` : "/benchmarks";
   }
 
   const hasUnassigned = allCompetitors.some((c) => c.client_id === null);
 
-  // Key drives the Suspense boundary: on filter change the boundary remounts
-  // and shows the fallback immediately, so the page reacts to clicks even
-  // while the server is still computing.
-  const suspenseKey = `${channel}|${activeClient ?? "all"}`;
+  const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}`;
 
   return (
     <div className="space-y-8">
@@ -145,7 +158,7 @@ export default async function BenchmarksPage({
         {channels.map((ch) => (
           <Link
             key={ch.key}
-            href={hrefFor(ch.key, activeClient)}
+            href={hrefForProject(ch.key, activeClient)}
             className={
               channel === ch.key
                 ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
@@ -163,7 +176,7 @@ export default async function BenchmarksPage({
           {t("benchmarks", "filterByProject")}
         </span>
         <Link
-          href={hrefFor(channel, null)}
+          href={hrefForProject(channel, null)}
           className={
             activeClient === null
               ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
@@ -175,7 +188,7 @@ export default async function BenchmarksPage({
         {clients.map((c) => (
           <Link
             key={c.id}
-            href={hrefFor(channel, c.id)}
+            href={hrefForProject(channel, c.id)}
             className={
               activeClient === c.id
                 ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
@@ -188,7 +201,7 @@ export default async function BenchmarksPage({
         ))}
         {hasUnassigned && (
           <Link
-            href={hrefFor(channel, "unassigned")}
+            href={hrefForProject(channel, "unassigned")}
             className={
               activeClient === "unassigned"
                 ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
@@ -200,11 +213,22 @@ export default async function BenchmarksPage({
         )}
       </div>
 
+      <BenchmarkFilterBar
+        availableBrands={projectBrands.map((b) => ({ id: b.id, name: b.page_name }))}
+        activeBrandIds={activeBrandIds}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        channel={channel}
+        client={activeClient}
+      />
+
       <Suspense key={suspenseKey} fallback={<ContentSkeleton />}>
         <BenchmarkContent
           workspaceId={profile.workspace_id!}
           channel={channel}
-          competitorIdsFilter={competitorIdsFilter}
+          competitorIdsFilter={activeBrandIds}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
         />
       </Suspense>
 
