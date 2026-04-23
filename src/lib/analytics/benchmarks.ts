@@ -771,7 +771,9 @@ export interface OrganicBenchmarkData {
 export async function computeOrganicBenchmarks(
   supabase: SupabaseClient,
   workspaceId: string,
-  competitorIds?: string[]
+  competitorIds?: string[],
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<OrganicBenchmarkData> {
   let q = supabase
     .from("mait_organic_posts")
@@ -780,10 +782,13 @@ export async function computeOrganicBenchmarks(
     )
     .eq("workspace_id", workspaceId)
     .eq("platform", "instagram")
-    .limit(3000);
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(5000);
   if (competitorIds && competitorIds.length > 0) {
     q = q.in("competitor_id", competitorIds);
   }
+  if (dateFrom) q = q.gte("posted_at", dateFrom);
+  if (dateTo) q = q.lte("posted_at", dateTo + "T23:59:59Z");
 
   const [{ data: competitors }, { data: rawPosts }] = await Promise.all([
     supabase

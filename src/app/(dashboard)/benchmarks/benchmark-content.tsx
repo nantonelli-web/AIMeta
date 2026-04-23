@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { computeBenchmarks, type InferredAudience, type InferredObjective } from "@/lib/analytics/benchmarks";
+import {
+  computeBenchmarks,
+  computeOrganicBenchmarks,
+  type InferredAudience,
+  type InferredObjective,
+} from "@/lib/analytics/benchmarks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber } from "@/lib/utils";
 import {
@@ -18,7 +23,7 @@ export async function BenchmarkContent({
   dateTo,
 }: {
   workspaceId: string;
-  channel: "meta" | "google";
+  channel: "meta" | "google" | "instagram";
   competitorIdsFilter: string[] | undefined;
   dateFrom: string;
   dateTo: string;
@@ -26,6 +31,19 @@ export async function BenchmarkContent({
   const supabase = await createClient();
   const locale = await getLocale();
   const t = serverT(locale);
+
+  if (channel === "instagram") {
+    return (
+      <OrganicContent
+        supabase={supabase}
+        workspaceId={workspaceId}
+        competitorIdsFilter={competitorIdsFilter}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        t={t}
+      />
+    );
+  }
 
   const data = await computeBenchmarks(
     supabase,
@@ -291,6 +309,128 @@ export async function BenchmarkContent({
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/* ─── Instagram / organic variant ─────────────────────────────
+   Uses the existing computeOrganicBenchmarks so we can share the
+   shape with the Compare page without duplicating logic here. */
+async function OrganicContent({
+  supabase,
+  workspaceId,
+  competitorIdsFilter,
+  dateFrom,
+  dateTo,
+  t,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  workspaceId: string;
+  competitorIdsFilter: string[] | undefined;
+  dateFrom: string;
+  dateTo: string;
+  t: (section: string, key: string) => string;
+}) {
+  const data = await computeOrganicBenchmarks(
+    supabase,
+    workspaceId,
+    competitorIdsFilter,
+    dateFrom,
+    dateTo
+  );
+
+  if (data.totals.totalPosts === 0) {
+    return (
+      <Card>
+        <CardContent className="py-16 text-center text-muted-foreground">
+          {t("benchmarks", "noData")}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <p className="text-sm text-muted-foreground">
+        {t("benchmarks", "comparativeAnalysis")} {formatNumber(data.totals.totalPosts)} {t("organic", "posts")}{" "}
+        {t("benchmarks", "adsOf")} {data.postsByCompetitor.length} {t("benchmarks", "competitorsWord")}
+      </p>
+
+      {/* KPIs */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <Stat label={t("organic", "postsLabel")} value={formatNumber(data.totals.totalPosts)} />
+        <Stat label={t("organic", "avgLikes")} value={formatNumber(data.totals.avgLikes)} />
+        <Stat label={t("organic", "avgComments")} value={formatNumber(data.totals.avgComments)} />
+        <Stat label={t("organic", "avgViews")} value={formatNumber(data.totals.avgViews)} />
+        <Stat label={t("benchmarks", "avgCopyLength")} value={`${data.totals.avgCaptionLength} chr`} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("organic", "postsPerBrand")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <HorizontalBarChart
+            data={data.postsByCompetitor}
+            dataKey="posts"
+            label={t("organic", "postsLabel")}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("benchmarks", "globalFormatMix")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className={`grid gap-6 ${data.formatMixByCompetitor.length <= 2 ? "grid-cols-2" : data.formatMixByCompetitor.length <= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"}`}>
+            {data.formatMixByCompetitor.map((entry) => (
+              <div key={entry.competitor} className="text-center">
+                <p className="text-xs font-medium text-gold mb-2">{entry.competitor}</p>
+                <FormatPieChart data={entry.data} />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {data.topHashtags.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("organic", "topHashtags")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart data={data.topHashtags} dataKey="count" label={t("organic", "postsLabel")} color="#8a6bb0" />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("organic", "avgLikes")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart data={data.avgLikesByCompetitor} dataKey="likes" label={t("organic", "avgLikes")} color="#d97757" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("organic", "avgComments")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart data={data.avgCommentsByCompetitor} dataKey="comments" label={t("organic", "avgComments")} color="#5b7ea3" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("organic", "postsPerWeek")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarChart data={data.postsPerWeekByCompetitor} dataKey="postsPerWeek" label={t("organic", "postsPerWeek")} color="#6b8e6b" />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

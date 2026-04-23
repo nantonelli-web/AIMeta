@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PrintButton } from "@/components/ui/print-button";
 import { getLocale, serverT } from "@/lib/i18n/server";
 import { MetaIcon } from "@/components/ui/meta-icon";
+import { InstagramIcon } from "@/components/ui/instagram-icon";
 import Link from "next/link";
 import { BenchmarkContent } from "./benchmark-content";
-import { BenchmarkFilterBar } from "./filter-bar";
+import { BrandFilter } from "./brand-filter";
+import { DateRangeFilter } from "./date-range-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -61,13 +63,21 @@ function isValidIsoDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s).getTime());
 }
 
+type Channel = "meta" | "google" | "instagram";
+
+function parseChannel(raw: string | string[] | undefined): Channel {
+  if (raw === "google") return "google";
+  if (raw === "instagram") return "instagram";
+  return "meta";
+}
+
 export default async function BenchmarksPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const channel = sp.channel === "google" ? "google" : "meta";
+  const channel = parseChannel(sp.channel);
   const rawClient = typeof sp.client === "string" ? sp.client : null;
   const rawBrands = typeof sp.brands === "string" ? sp.brands : null;
   const rawFrom = typeof sp.from === "string" ? sp.from : null;
@@ -101,15 +111,12 @@ export default async function BenchmarksPage({
         ? rawClient
         : null;
 
-  // Brands available under the current project filter.
   const projectBrands = allCompetitors.filter((c) => {
     if (activeClient === null) return true;
     if (activeClient === "unassigned") return c.client_id === null;
     return c.client_id === activeClient;
   });
 
-  // Brand subset from URL, validated against projectBrands so a stale URL
-  // cannot leak brands from another project.
   const projectBrandIds = new Set(projectBrands.map((b) => b.id));
   const urlBrandIds = rawBrands
     ? rawBrands.split(",").filter((id) => projectBrandIds.has(id))
@@ -117,7 +124,6 @@ export default async function BenchmarksPage({
   const activeBrandIds =
     urlBrandIds && urlBrandIds.length > 0 ? urlBrandIds : projectBrands.map((b) => b.id);
 
-  // Date range: validated or defaulted to last 30 days.
   const today = new Date();
   const thirtyAgo = new Date(today);
   thirtyAgo.setDate(today.getDate() - 30);
@@ -126,16 +132,21 @@ export default async function BenchmarksPage({
   const dateFrom = rawFrom && isValidIsoDate(rawFrom) ? rawFrom : defaultFrom;
   const dateTo = rawTo && isValidIsoDate(rawTo) ? rawTo : defaultTo;
 
-  const channels = [
+  const paidChannels = [
     { key: "meta" as const, label: "Meta Ads", icon: <MetaIcon className="size-3.5" /> },
     { key: "google" as const, label: "Google Ads", icon: <GoogleIcon className="size-3.5" /> },
   ];
+  const organicChannels = [
+    { key: "instagram" as const, label: "Instagram", icon: <InstagramIcon className="size-3.5" /> },
+  ];
 
-  function hrefForProject(ch: string | null, cl: string | null): string {
+  function hrefForProject(ch: string, cl: string | null): string {
     const params = new URLSearchParams();
-    if (ch) params.set("channel", ch);
+    params.set("channel", ch);
     if (cl) params.set("client", cl);
-    // Reset brand subset + range when switching project/channel — context changes.
+    // Brand subset + date range reset on channel/project switch because the
+    // available brands differ across projects and the user typically wants
+    // to re-scope when they pivot.
     const qs = params.toString();
     return qs ? `/benchmarks?${qs}` : "/benchmarks";
   }
@@ -144,8 +155,13 @@ export default async function BenchmarksPage({
 
   const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}`;
 
+  const chipClass = (selected: boolean) =>
+    selected
+      ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
+      : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-serif tracking-tight">{t("benchmarks", "title")}</h1>
@@ -154,72 +170,82 @@ export default async function BenchmarksPage({
         <PrintButton label={t("common", "print")} variant="outline" />
       </div>
 
-      <div className="flex items-center gap-2 print:hidden">
-        {channels.map((ch) => (
-          <Link
-            key={ch.key}
-            href={hrefForProject(ch.key, activeClient)}
-            className={
-              channel === ch.key
-                ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
-                : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            }
-          >
-            {ch.icon}
-            {ch.label}
-          </Link>
-        ))}
+      {/* ─── Channels grouped by Paid / Organic ─── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            {t("benchmarks", "paidChannels")}
+          </span>
+          <div className="flex items-center gap-2">
+            {paidChannels.map((ch) => (
+              <Link key={ch.key} href={hrefForProject(ch.key, activeClient)} className={chipClass(channel === ch.key)}>
+                {ch.icon}
+                {ch.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="h-5 w-px bg-border" />
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            {t("benchmarks", "organicChannels")}
+          </span>
+          <div className="flex items-center gap-2">
+            {organicChannels.map((ch) => (
+              <Link key={ch.key} href={hrefForProject(ch.key, activeClient)} className={chipClass(channel === ch.key)}>
+                {ch.icon}
+                {ch.label}
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap print:hidden">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">
-          {t("benchmarks", "filterByProject")}
-        </span>
-        <Link
-          href={hrefForProject(channel, null)}
-          className={
-            activeClient === null
-              ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
-              : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          }
-        >
-          {t("benchmarks", "allProjects")}
-        </Link>
-        {clients.map((c) => (
-          <Link
-            key={c.id}
-            href={hrefForProject(channel, c.id)}
-            className={
-              activeClient === c.id
-                ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
-                : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            }
-          >
-            <span className="size-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
-            {c.name}
+      {/* ─── Project + Brand selector on the same row ─── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            {t("benchmarks", "filterByProject")}
+          </span>
+          <Link href={hrefForProject(channel, null)} className={chipClass(activeClient === null)}>
+            {t("benchmarks", "allProjects")}
           </Link>
-        ))}
-        {hasUnassigned && (
-          <Link
-            href={hrefForProject(channel, "unassigned")}
-            className={
-              activeClient === "unassigned"
-                ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors"
-                : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            }
-          >
-            {t("clients", "unassigned")}
-          </Link>
-        )}
+          {clients.map((c) => (
+            <Link key={c.id} href={hrefForProject(channel, c.id)} className={chipClass(activeClient === c.id)}>
+              <span className="size-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
+              {c.name}
+            </Link>
+          ))}
+          {hasUnassigned && (
+            <Link href={hrefForProject(channel, "unassigned")} className={chipClass(activeClient === "unassigned")}>
+              {t("clients", "unassigned")}
+            </Link>
+          )}
+        </div>
+        <div className="h-5 w-px bg-border" />
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            {t("benchmarks", "filterByBrand")}
+          </span>
+          <BrandFilter
+            availableBrands={projectBrands.map((b) => ({ id: b.id, name: b.page_name }))}
+            activeBrandIds={activeBrandIds}
+            channel={channel}
+            client={activeClient}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+          />
+        </div>
       </div>
 
-      <BenchmarkFilterBar
-        availableBrands={projectBrands.map((b) => ({ id: b.id, name: b.page_name }))}
-        activeBrandIds={activeBrandIds}
+      {/* ─── Date range last before the data ─── */}
+      <DateRangeFilter
         dateFrom={dateFrom}
         dateTo={dateTo}
         channel={channel}
         client={activeClient}
+        activeBrandIds={activeBrandIds}
+        totalBrands={projectBrands.length}
       />
 
       <Suspense key={suspenseKey} fallback={<ContentSkeleton />}>
