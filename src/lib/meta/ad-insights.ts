@@ -92,7 +92,10 @@ export function extractAdInsights(
   );
 
   if (!breakdowns || breakdowns.length === 0) {
-    if (euReach == null) return empty;
+    // Only flag hasData when there is a real number to show. An ad with
+    // euReach === 0 (EU DSA row but no one saw it) was previously marked
+    // hasData: true and rendered an empty "EU Reach: 0" card.
+    if (euReach == null || euReach <= 0) return empty;
     return { ...empty, euReach, hasData: true };
   }
 
@@ -171,6 +174,15 @@ export function extractAdInsights(
     return "all";
   })();
 
+  // Privacy-suppressed DSA rows can come back with the breakdown array
+  // populated but every count zero. Treat that as "no data" instead of
+  // rendering a card full of empty bars.
+  const totalGenderCount = gender.male + gender.female + gender.unknown;
+  const totalAgeCount = ageTotals.reduce((s, a) => s + a.count, 0);
+  const hasReach = euReach != null && euReach > 0;
+  const hasBreakdown = totalGenderCount > 0 || totalAgeCount > 0 || byCountry.length > 0;
+  const hasData = hasReach || hasBreakdown;
+
   return {
     euReach,
     ageTotals,
@@ -178,7 +190,7 @@ export function extractAdInsights(
     genderTotals: gender,
     genderLabel,
     byCountry,
-    hasData: true,
+    hasData,
   };
 }
 

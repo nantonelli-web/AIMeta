@@ -80,25 +80,41 @@ async function computeTechnicalStats(
 ) {
   return Promise.all(
     ids.map(async (id) => {
-      let adsQuery = admin
-        .from("mait_ads_external")
-        .select(
-          "ad_archive_id, headline, ad_text, description, cta, image_url, video_url, platforms, status, start_date, end_date, created_at, raw_data"
-        )
-        .eq("competitor_id", id)
-        .limit(500);
-      if (source) adsQuery = adsQuery.eq("source", source);
+      // Paginated walk — the previous .limit(500) gave the Compare view a
+      // different sample from the Benchmarks view for brands with more
+      // than 500 ads, so the two pages reported different top CTAs / top
+      // platforms for the same brand. 5k safety cap matches the heavier
+      // cap on the Benchmarks page.
+      async function fetchAllAds(): Promise<AdRow[]> {
+        const PAGE = 1000;
+        const SAFETY_CAP = 5_000;
+        const rows: AdRow[] = [];
+        for (let from = 0; from < SAFETY_CAP; from += PAGE) {
+          let q = admin
+            .from("mait_ads_external")
+            .select(
+              "ad_archive_id, headline, ad_text, description, cta, image_url, video_url, platforms, status, start_date, end_date, created_at, raw_data"
+            )
+            .eq("competitor_id", id)
+            .order("created_at", { ascending: false })
+            .range(from, from + PAGE - 1);
+          if (source) q = q.eq("source", source);
+          const { data, error } = await q;
+          if (error || !data || data.length === 0) break;
+          rows.push(...(data as AdRow[]));
+          if (data.length < PAGE) break;
+        }
+        return rows;
+      }
 
-      const [{ data: comp }, { data: ads }] = await Promise.all([
+      const [{ data: comp }, adsList] = await Promise.all([
         admin
           .from("mait_competitors")
           .select("id, page_name")
           .eq("id", id)
           .single(),
-        adsQuery,
+        fetchAllAds(),
       ]);
-
-      const adsList = (ads ?? []) as AdRow[];
       const active = adsList.filter((a) => a.status === "ACTIVE");
       const imageCount = adsList.filter(
         (a) => a.image_url && !a.video_url

@@ -244,33 +244,37 @@ export async function computeBenchmarks(
   dateTo?: string,
 ): Promise<BenchmarkData> {
   // Heavy query (format / CTA / UTM / tags / raw_data-dependent metrics).
-  // Capped to 3000 most-recent rows to keep payload sane; ORDER BY is
-  // CRUCIAL — without it PostgreSQL returns a non-deterministic subset
-  // and brands near the cap can randomly appear/disappear on each request.
-  let adsQuery = supabase
-    .from("mait_ads_external")
-    .select(
-      "id, competitor_id, cta, platforms, image_url, video_url, status, start_date, end_date, ad_text, created_at, raw_data"
-    )
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
-    .limit(3000);
-
-  if (source) {
-    adsQuery = adsQuery.eq("source", source);
-  }
-  if (competitorIds && competitorIds.length > 0) {
-    adsQuery = adsQuery.in("competitor_id", competitorIds);
-  }
-  if (dateTo) {
-    adsQuery = adsQuery.lte("start_date", dateTo);
-  }
-  if (dateFrom) {
-    // Ad still running during the range: end_date missing / in the future,
-    // OR ad is marked ACTIVE, OR it ended on/after dateFrom.
-    adsQuery = adsQuery.or(
-      `end_date.gte.${dateFrom},end_date.is.null,status.eq.ACTIVE`
-    );
+  // Paginated with .range() because PostgREST caps each response at 1000
+  // rows regardless of .limit(). ORDER BY created_at DESC ensures the
+  // page walk is deterministic — without it PostgreSQL would return a
+  // random subset each time. 15k safety cap keeps payload bounded.
+  async function fetchAllHeavyRows(): Promise<AdRow[]> {
+    const PAGE = 2000;
+    const SAFETY_CAP = 15_000;
+    const rows: AdRow[] = [];
+    for (let from = 0; from < SAFETY_CAP; from += PAGE) {
+      let q = supabase
+        .from("mait_ads_external")
+        .select(
+          "id, competitor_id, cta, platforms, image_url, video_url, status, start_date, end_date, ad_text, created_at, raw_data"
+        )
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (source) q = q.eq("source", source);
+      if (competitorIds && competitorIds.length > 0) q = q.in("competitor_id", competitorIds);
+      if (dateTo) q = q.lte("start_date", dateTo);
+      if (dateFrom) {
+        // Ad still running during the range: end_date missing/in the future,
+        // OR ad is marked ACTIVE, OR it ended on/after dateFrom.
+        q = q.or(`end_date.gte.${dateFrom},end_date.is.null,status.eq.ACTIVE`);
+      }
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) break;
+      rows.push(...(data as AdRow[]));
+      if (data.length < PAGE) break;
+    }
+    return rows;
   }
 
   // Separate lightweight + paginated query used for the Volume chart AND
@@ -305,13 +309,13 @@ export async function computeBenchmarks(
     return rows;
   }
 
-  const [{ data: competitors }, { data: rawAds }, allAdsMeta] = await Promise.all([
+  const [{ data: competitors }, rawAdsPages, allAdsMeta] = await Promise.all([
     supabase
       .from("mait_competitors")
       .select("id, page_name")
       .eq("workspace_id", workspaceId)
       .order("page_name"),
-    adsQuery,
+    fetchAllHeavyRows(),
     fetchAllVolumeRows(),
   ]);
 
@@ -331,7 +335,7 @@ export async function computeBenchmarks(
   });
 
   const comps = (competitors ?? []) as CompetitorRef[];
-  const ads = (rawAds ?? []) as AdRow[];
+  const ads = rawAdsPages;
   // When a project filter is applied we want every brand in the filter scope
   // to appear in "volume per brand" even if it has zero ads so the chart
   // reflects the whole project — not just brands with scanned ads.
@@ -635,7 +639,9 @@ export async function computeBenchmarks(
 
   // ---- Campaign duration ----
   // For ACTIVE ads, ignore end_date (Meta Ad Library sets it to snapshot date,
-  // not actual campaign end). Use Date.now() instead.
+  // not actual campaign end). Use Date.now() instead. Clamp to a minimum
+  // of 1 day so sub-day test campaigns are not silently dropped from the
+  // average — previously `if (days < 1) continue` excluded them.
   const durationByComp = new Map<string, number[]>();
   for (const ad of ads) {
     if (!ad.start_date) continue;
@@ -643,8 +649,8 @@ export async function computeBenchmarks(
     const end = ad.status === "ACTIVE" || !ad.end_date
       ? Date.now()
       : new Date(ad.end_date).getTime();
-    const days = Math.round((end - start) / 86_400_000);
-    if (days < 1) continue;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
+    const days = Math.max(1, Math.round((end - start) / 86_400_000));
     const key = ad.competitor_id ?? "unknown";
     const arr = durationByComp.get(key) ?? [];
     arr.push(days);
@@ -934,21 +940,38 @@ export async function computeOrganicBenchmarks(
   dateFrom?: string,
   dateTo?: string,
 ): Promise<OrganicBenchmarkData> {
-  // Heavy query: full post payload inside the date window, for metrics.
-  let q = supabase
-    .from("mait_organic_posts")
-    .select(
-      "competitor_id, post_type, video_url, caption, likes_count, comments_count, video_views, hashtags, posted_at, created_at"
-    )
-    .eq("workspace_id", workspaceId)
-    .eq("platform", "instagram")
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .limit(5000);
-  if (competitorIds && competitorIds.length > 0) {
-    q = q.in("competitor_id", competitorIds);
+  // Heavy query: paginated walk through every post in the date window so
+  // the coverage check and the metrics agree. Previously this stopped at
+  // 5000 rows while the coverage query fetched the full history — a
+  // workspace with 20k posts would see "earliest post 2023" in the gap
+  // warning but only 5k in the charts. Posts are lightweight (no JSONB
+  // heavy fields) so the 30k cap is safe.
+  async function fetchAllPosts(): Promise<OrganicRow[]> {
+    const PAGE = 5000;
+    const SAFETY_CAP = 30_000;
+    const rows: OrganicRow[] = [];
+    for (let from = 0; from < SAFETY_CAP; from += PAGE) {
+      let hq = supabase
+        .from("mait_organic_posts")
+        .select(
+          "competitor_id, post_type, video_url, caption, likes_count, comments_count, video_views, hashtags, posted_at, created_at"
+        )
+        .eq("workspace_id", workspaceId)
+        .eq("platform", "instagram")
+        .order("posted_at", { ascending: false, nullsFirst: false })
+        .range(from, from + PAGE - 1);
+      if (competitorIds && competitorIds.length > 0) {
+        hq = hq.in("competitor_id", competitorIds);
+      }
+      if (dateFrom) hq = hq.gte("posted_at", dateFrom);
+      if (dateTo) hq = hq.lte("posted_at", dateTo + "T23:59:59Z");
+      const { data, error } = await hq;
+      if (error || !data || data.length === 0) break;
+      rows.push(...(data as OrganicRow[]));
+      if (data.length < PAGE) break;
+    }
+    return rows;
   }
-  if (dateFrom) q = q.gte("posted_at", dateFrom);
-  if (dateTo) q = q.lte("posted_at", dateTo + "T23:59:59Z");
 
   // Lightweight + paginated coverage query. No date filter here: we want
   // every (competitor_id, posted_at) so we can detect brands that have
@@ -977,18 +1000,18 @@ export async function computeOrganicBenchmarks(
     return rows;
   }
 
-  const [{ data: competitors }, { data: rawPosts }, coverageRows] = await Promise.all([
+  const [{ data: competitors }, rawPosts, coverageRows] = await Promise.all([
     supabase
       .from("mait_competitors")
       .select("id, page_name")
       .eq("workspace_id", workspaceId)
       .order("page_name"),
-    q,
+    fetchAllPosts(),
     fetchCoverageRows(),
   ]);
 
   const comps = (competitors ?? []) as CompetitorRef[];
-  const posts = (rawPosts ?? []) as OrganicRow[];
+  const posts = rawPosts;
   const compMap = new Map(comps.map((c) => [c.id, c.page_name]));
 
   // Coverage computation — earliest post per brand across all time + count
