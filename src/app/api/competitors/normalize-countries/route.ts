@@ -13,33 +13,37 @@ import { toIsoCountry, coerceCountryForStorage } from "@/lib/meta/country-codes"
  * successful pass is a no-op because every row already matches alpha-2.
  */
 export async function POST(req: Request) {
-  const url = new URL(req.url);
-  const dryRun = url.searchParams.get("dry") === "true";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const url = new URL(req.url);
+    const dryRun = url.searchParams.get("dry") === "true";
+    const supabase = await createClient();
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user ?? null;
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from("mait_users")
-    .select("workspace_id, role")
-    .eq("id", user.id)
-    .single();
+    const { data: profile, error: profileErr } = await supabase
+      .from("mait_users")
+      .select("workspace_id, role")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  if (!profile?.workspace_id || !["super_admin", "admin"].includes(profile.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+    if (profileErr) {
+      console.error("[normalize-countries] profile", profileErr);
+      return NextResponse.json({ error: "Server error" }, { status: 500 });
+    }
+    if (!profile?.workspace_id || !["super_admin", "admin"].includes(profile.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  const admin = createAdminClient();
-  const { data: rows, error } = await admin
-    .from("mait_competitors")
-    .select("id, page_name, country")
-    .eq("workspace_id", profile.workspace_id);
-  if (error) {
-    console.error("[normalize-countries] fetch", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
-  }
+    const admin = createAdminClient();
+    const { data: rows, error } = await admin
+      .from("mait_competitors")
+      .select("id, page_name, country")
+      .eq("workspace_id", profile.workspace_id);
+    if (error) {
+      console.error("[normalize-countries] fetch", error);
+      return NextResponse.json({ error: "Server error" }, { status: 500 });
+    }
 
   type Change = {
     id: string;
@@ -105,16 +109,20 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json({
-    ok: true,
-    dryRun,
-    updated,
-    skipped,
-    stats: {
-      total: rows?.length ?? 0,
-      alreadyClean: unchanged,
-      normalised: updated.length,
-      unresolved: skipped.length,
-    },
-  });
+    return NextResponse.json({
+      ok: true,
+      dryRun,
+      updated,
+      skipped,
+      stats: {
+        total: rows?.length ?? 0,
+        alreadyClean: unchanged,
+        normalised: updated.length,
+        unresolved: skipped.length,
+      },
+    });
+  } catch (e) {
+    console.error("[normalize-countries] unhandled", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }
