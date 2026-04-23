@@ -440,12 +440,21 @@ export async function computeBenchmarks(
       case "SINGLE_IMAGE":
         bucket = "image";
         break;
-      case "DCO":
+      case "DCO": {
+        // DCO = Dynamic Creative Optimization. snapshot.cards is a POOL of
+        // creative variants Meta rotates among, NOT carousel slides.
+        // Ad Library renders the primary variant (first card), so classify
+        // by what the primary actually is. We rely on ad.video_url /
+        // ad.image_url because normalize() already resolves the first card.
+        if (ad.video_url) bucket = "video";
+        else if (ad.image_url) bucket = "image";
+        else bucket = "unknown";
+        break;
+      }
       case null:
       default: {
-        // DCO (Dynamic Creative Optimization) or missing format — inspect
-        // the payload. >1 cards => carousel; a video hint => video; image
-        // URL => image; else unknown.
+        // Missing / unknown displayFormat — here the cards.length > 1
+        // heuristic is safe because we have no explicit signal either way.
         const cardsLen = cards?.length ?? 0;
         const videosLen = videos?.length ?? 0;
         if (cardsLen > 1) bucket = "carousel";
