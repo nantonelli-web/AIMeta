@@ -121,12 +121,24 @@ export default async function BenchmarksPage({
   });
 
   // Countries actually present on the projectBrands — localized for display.
+  // Guard against legacy values in the column: only 2- or 3-letter alphabetic
+  // strings are valid ISO 3166-1 inputs for Intl.DisplayNames, and the API
+  // throws RangeError for anything else (e.g. "Italy" or lower-case codes).
   const countryNames = new Intl.DisplayNames([locale], { type: "region" });
-  const countryCodeSet = new Set(
-    projectBrands.map((b) => (b.country ?? "").toUpperCase()).filter(Boolean)
-  );
+  function safeCountryName(code: string): string {
+    try {
+      return countryNames.of(code) ?? code;
+    } catch {
+      return code;
+    }
+  }
+  const countryCodeSet = new Set<string>();
+  for (const b of projectBrands) {
+    const raw = (b.country ?? "").trim().toUpperCase();
+    if (/^[A-Z]{2,3}$/.test(raw)) countryCodeSet.add(raw);
+  }
   const availableCountries = [...countryCodeSet]
-    .map((code) => ({ code, name: countryNames.of(code) ?? code }))
+    .map((code) => ({ code, name: safeCountryName(code) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const urlCountries = rawCountries
