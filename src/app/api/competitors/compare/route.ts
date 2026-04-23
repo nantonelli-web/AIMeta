@@ -107,11 +107,14 @@ export async function POST(req: Request) {
           ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length)
           : 0;
 
-      // Refresh rate (90 days)
+      // Refresh rate (90 days) — uses start_date so a recent bulk scan
+      // does not inflate the metric via created_at.
       const ninetyAgo = Date.now() - 90 * 86_400_000;
-      const recent = adsList.filter(
-        (a) => new Date(a.created_at).getTime() > ninetyAgo
-      ).length;
+      const recent = adsList.filter((a) => {
+        if (!a.start_date) return false;
+        const t = new Date(a.start_date).getTime();
+        return Number.isFinite(t) && t > ninetyAgo;
+      }).length;
       const adsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
 
       // Latest ads

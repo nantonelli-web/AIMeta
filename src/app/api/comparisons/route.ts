@@ -96,7 +96,11 @@ async function computeTechnicalStats(
               "ad_archive_id, headline, ad_text, description, cta, image_url, video_url, platforms, status, start_date, end_date, created_at, raw_data"
             )
             .eq("competitor_id", id)
+            // created_at alone is not unique (bulk upserts share the
+            // same millisecond); ad_archive_id breaks ties so pagination
+            // is deterministic and no row appears in two pages.
             .order("created_at", { ascending: false })
+            .order("ad_archive_id", { ascending: false })
             .range(from, from + PAGE - 1);
           if (source) q = q.eq("source", source);
           const { data, error } = await q;
@@ -104,7 +108,16 @@ async function computeTechnicalStats(
           rows.push(...(data as AdRow[]));
           if (data.length < PAGE) break;
         }
-        return rows;
+        // Dedupe by ad_archive_id — belt-and-suspenders against any
+        // page overlap that survives the tiebreaker.
+        const seen = new Set<string>();
+        const unique: AdRow[] = [];
+        for (const r of rows) {
+          if (!r.ad_archive_id || seen.has(r.ad_archive_id)) continue;
+          seen.add(r.ad_archive_id);
+          unique.push(r);
+        }
+        return unique;
       }
 
       const [{ data: comp }, adsList] = await Promise.all([
@@ -178,11 +191,17 @@ async function computeTechnicalStats(
           ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length)
           : 0;
 
-      // Refresh rate (90 days)
+      // Refresh rate (90 days). Driven by start_date (real Meta launch),
+      // not created_at (our DB insert time). When the scraper recently
+      // imported a brand's catalog, every row has created_at near "now"
+      // and falsely inflates the rate. Ads without a start_date are
+      // skipped rather than guessed.
       const ninetyAgo = Date.now() - 90 * 86_400_000;
-      const recent = adsList.filter(
-        (a) => new Date(a.created_at).getTime() > ninetyAgo
-      ).length;
+      const recent = adsList.filter((a) => {
+        if (!a.start_date) return false;
+        const t = new Date(a.start_date).getTime();
+        return Number.isFinite(t) && t > ninetyAgo;
+      }).length;
       const adsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
 
       // Latest ads
@@ -354,12 +373,15 @@ async function computeOrganicStats(
             )
           : 0;
 
-      // Cadence (posts/week over last 90 days)
+      // Cadence (posts/week over last 90 days). Use posted_at (real
+      // Instagram publish date); fall back to nothing when it's missing.
+      // Previously a created_at fallback falsely counted back-filled
+      // posts as "recent" right after a scan.
       const ninetyAgo = Date.now() - 90 * 86_400_000;
       const recent = list.filter((p) => {
-        const when = p.posted_at ? new Date(p.posted_at).getTime()
-          : new Date(p.created_at).getTime();
-        return when > ninetyAgo;
+        if (!p.posted_at) return false;
+        const when = new Date(p.posted_at).getTime();
+        return Number.isFinite(when) && when > ninetyAgo;
       }).length;
       const postsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
 

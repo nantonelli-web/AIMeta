@@ -137,10 +137,14 @@ async function fetchBrandData(
       : 0;
 
   // Refresh rate (90 days)
+  // Refresh rate (90 days) — uses start_date; see benchmarks.ts for the
+  // rationale. created_at shifts with scans and falsely inflates the rate.
   const ninetyAgo = Date.now() - 90 * 86_400_000;
-  const recent = adsList.filter(
-    (a) => new Date(a.created_at).getTime() > ninetyAgo
-  ).length;
+  const recent = adsList.filter((a) => {
+    if (!a.start_date) return false;
+    const t = new Date(a.start_date).getTime();
+    return Number.isFinite(t) && t > ninetyAgo;
+  }).length;
   const adsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
 
   // Advantage+ usage (Meta-specific flag in raw_data.isAaaEligible)
@@ -335,9 +339,13 @@ async function fetchInstagramBrandData(
     ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length)
     : 0;
 
-  // Refresh rate
+  // Refresh rate — organic posts, based on posted_at (Instagram publish).
   const ninetyAgo = Date.now() - 90 * 86_400_000;
-  const recent = postsList.filter((p) => new Date(p.created_at).getTime() > ninetyAgo).length;
+  const recent = postsList.filter((p) => {
+    if (!p.posted_at) return false;
+    const when = new Date(p.posted_at).getTime();
+    return Number.isFinite(when) && when > ninetyAgo;
+  }).length;
   const adsPerWeek = Math.round((recent / (90 / 7)) * 10) / 10;
 
   const latestAds = postsList.slice(0, 6).map((p) => ({
