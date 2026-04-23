@@ -759,6 +759,17 @@ export interface OrganicBenchmarkData {
   avgViewsByCompetitor: { name: string; views: number }[];
   postsPerWeekByCompetitor: { name: string; postsPerWeek: number }[];
   avgCaptionLengthByCompetitor: { name: string; chars: number }[];
+  /**
+   * Per-selected-brand Instagram scan coverage. `earliestPost` is null when
+   * the brand has NEVER been scanned on Instagram — the UI uses this to
+   * split the warning between "no scan at all" and "scan does not reach
+   * dateFrom".
+   */
+  coverageByCompetitor: {
+    competitor: string;
+    earliestPost: string | null;
+    postsInRange: number;
+  }[];
   totals: {
     totalPosts: number;
     avgLikes: number;
@@ -775,6 +786,7 @@ export async function computeOrganicBenchmarks(
   dateFrom?: string,
   dateTo?: string,
 ): Promise<OrganicBenchmarkData> {
+  // Heavy query: full post payload inside the date window, for metrics.
   let q = supabase
     .from("mait_organic_posts")
     .select(
@@ -790,18 +802,71 @@ export async function computeOrganicBenchmarks(
   if (dateFrom) q = q.gte("posted_at", dateFrom);
   if (dateTo) q = q.lte("posted_at", dateTo + "T23:59:59Z");
 
-  const [{ data: competitors }, { data: rawPosts }] = await Promise.all([
+  // Lightweight + paginated coverage query. No date filter here: we want
+  // every (competitor_id, posted_at) so we can detect brands that have
+  // never been scanned on Instagram AND brands whose oldest post is
+  // newer than dateFrom.
+  async function fetchCoverageRows(): Promise<
+    { competitor_id: string | null; posted_at: string | null }[]
+  > {
+    const PAGE = 5000;
+    const SAFETY_CAP = 500_000;
+    const rows: { competitor_id: string | null; posted_at: string | null }[] = [];
+    for (let from = 0; from < SAFETY_CAP; from += PAGE) {
+      let cq = supabase
+        .from("mait_organic_posts")
+        .select("competitor_id, posted_at")
+        .eq("workspace_id", workspaceId)
+        .eq("platform", "instagram")
+        .order("id")
+        .range(from, from + PAGE - 1);
+      if (competitorIds && competitorIds.length > 0) cq = cq.in("competitor_id", competitorIds);
+      const { data, error } = await cq;
+      if (error || !data || data.length === 0) break;
+      rows.push(...data);
+      if (data.length < PAGE) break;
+    }
+    return rows;
+  }
+
+  const [{ data: competitors }, { data: rawPosts }, coverageRows] = await Promise.all([
     supabase
       .from("mait_competitors")
       .select("id, page_name")
       .eq("workspace_id", workspaceId)
       .order("page_name"),
     q,
+    fetchCoverageRows(),
   ]);
 
   const comps = (competitors ?? []) as CompetitorRef[];
   const posts = (rawPosts ?? []) as OrganicRow[];
   const compMap = new Map(comps.map((c) => [c.id, c.page_name]));
+
+  // Coverage computation — earliest post per brand across all time + count
+  // of posts in the requested window. We always include every selected
+  // competitor so the UI can see "no scan at all" as well.
+  const earliestByComp = new Map<string, string>();
+  const inRangeCount = new Map<string, number>();
+  const fromTs = dateFrom ? new Date(dateFrom).getTime() : null;
+  const toTs = dateTo ? new Date(dateTo + "T23:59:59Z").getTime() : null;
+  for (const row of coverageRows) {
+    if (!row.competitor_id || !row.posted_at) continue;
+    const prev = earliestByComp.get(row.competitor_id);
+    if (!prev || row.posted_at < prev) earliestByComp.set(row.competitor_id, row.posted_at);
+    const ts = new Date(row.posted_at).getTime();
+    if ((fromTs === null || ts >= fromTs) && (toTs === null || ts <= toTs)) {
+      inRangeCount.set(row.competitor_id, (inRangeCount.get(row.competitor_id) ?? 0) + 1);
+    }
+  }
+  const coverageIds = competitorIds && competitorIds.length > 0
+    ? competitorIds
+    : comps.map((c) => c.id);
+  const coverageByCompetitor = coverageIds.map((id) => ({
+    competitor: compMap.get(id) ?? "N/A",
+    earliestPost: earliestByComp.get(id) ?? null,
+    postsInRange: inRangeCount.get(id) ?? 0,
+  }));
 
   function classify(p: OrganicRow): "image" | "video" | "reel" {
     const t = (p.post_type ?? "").toLowerCase();
@@ -961,6 +1026,7 @@ export async function computeOrganicBenchmarks(
     avgViewsByCompetitor,
     postsPerWeekByCompetitor,
     avgCaptionLengthByCompetitor,
+    coverageByCompetitor,
     totals: {
       totalPosts: posts.length,
       avgLikes: avg(allLikes),

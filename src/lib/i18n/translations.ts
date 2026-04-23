@@ -760,6 +760,14 @@ const translations = {
     rangeInvalid: { it: "Range non valido", en: "Invalid range" },
     paidChannels: { it: "Paid", en: "Paid" },
     organicChannels: { it: "Organic", en: "Organic" },
+    noScanWarningTitle: {
+      it: "Brand senza scansioni {channel}",
+      en: "Brands with no {channel} scans",
+    },
+    noScanWarningBody: {
+      it: "Questi brand non hanno scansioni del canale {channel} e non compaiono nei grafici sotto. Lancia uno scan per includerli nel confronto.",
+      en: "These brands have no {channel} scans and are missing from the charts below. Run a scan to include them in the comparison.",
+    },
     coverageWarningTitle: { it: "Attenzione: copertura non uniforme tra i brand", en: "Warning: uneven scan coverage between brands" },
     coverageWarningBody: {
       it: "Alcuni brand hanno scansioni che non coprono l'intero periodo selezionato. Il confronto potrebbe essere distorto dalla profondità diversa dei dati.",

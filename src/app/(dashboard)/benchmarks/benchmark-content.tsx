@@ -54,28 +54,44 @@ export async function BenchmarkContent({
     dateTo
   );
 
-  // Scan-coverage check — flag brands whose earliest-seen ad starts after
-  // the requested window opens. 3-day tolerance covers ads that may have
-  // started slightly after dateFrom for legitimate reasons (genuinely new
-  // brand activity, not a scan gap).
+  // Scan-coverage check — split selected brands into two buckets:
+  //   * noScan     = brand was never scanned for this channel
+  //   * gap        = scanned but oldest ad starts well after dateFrom
+  // 3-day tolerance on the gap check covers ads that may have started
+  // slightly after dateFrom for legitimate reasons (new brand activity,
+  // not a scan gap).
   const TOLERANCE_DAYS = 3;
   const fromTs = new Date(dateFrom).getTime();
+  const noScanBrands = data.coverageByCompetitor
+    .filter((c) => c.earliestStart === null)
+    .map((c) => c.competitor);
   const coverageGaps = data.coverageByCompetitor
+    .filter((c) => c.earliestStart !== null)
     .map((c) => {
-      if (!c.earliestStart) return { ...c, gapDays: null as number | null };
-      const earliestTs = new Date(c.earliestStart).getTime();
+      const earliestTs = new Date(c.earliestStart!).getTime();
       const gapDays = Math.round((earliestTs - fromTs) / 86_400_000);
       return { ...c, gapDays };
     })
-    .filter((c) => c.gapDays !== null && c.gapDays > TOLERANCE_DAYS);
+    .filter((c) => c.gapDays > TOLERANCE_DAYS);
 
+  // Empty state handles the "no scans at all in this selection" case, but we
+  // still show the no-scan list so the user knows *which* brands need a scan.
   if (data.totals.totalAds === 0) {
     return (
-      <Card>
-        <CardContent className="py-16 text-center text-muted-foreground">
-          {t("benchmarks", "noData")}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {noScanBrands.length > 0 && (
+          <NoScanWarning
+            brands={noScanBrands}
+            channelLabel={channel === "meta" ? "Meta Ads" : "Google Ads"}
+            t={t}
+          />
+        )}
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">
+            {t("benchmarks", "noData")}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -86,8 +102,16 @@ export async function BenchmarkContent({
         {data.volumeByCompetitor.length} {t("benchmarks", "competitorsWord")}
       </p>
 
-      {/* Scan coverage warning: only surfaces when at least one brand in the
-          selection has no ads reaching back to dateFrom. */}
+      {noScanBrands.length > 0 && (
+        <NoScanWarning
+          brands={noScanBrands}
+          channelLabel={channel === "meta" ? "Meta Ads" : "Google Ads"}
+          t={t}
+        />
+      )}
+
+      {/* Scan coverage warning: surfaces when a scanned brand has ads
+          that do not reach back to dateFrom. */}
       {coverageGaps.length > 0 && (
         <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
           <p className="text-xs font-semibold text-gold mb-1.5">
@@ -103,7 +127,7 @@ export async function BenchmarkContent({
                 <span className="text-muted-foreground">
                   {" — "}
                   {t("benchmarks", "coverageFrom")} {c.earliestStart ?? "—"}
-                  {c.gapDays != null && ` (${c.gapDays} ${t("benchmarks", "coverageDaysShort")})`}
+                  {` (${c.gapDays} ${t("benchmarks", "coverageDaysShort")})`}
                 </span>
               </li>
             ))}
@@ -339,13 +363,32 @@ async function OrganicContent({
     dateTo
   );
 
+  const TOLERANCE_DAYS = 3;
+  const fromTs = new Date(dateFrom).getTime();
+  const noScanBrands = data.coverageByCompetitor
+    .filter((c) => c.earliestPost === null)
+    .map((c) => c.competitor);
+  const coverageGaps = data.coverageByCompetitor
+    .filter((c) => c.earliestPost !== null)
+    .map((c) => {
+      const earliestTs = new Date(c.earliestPost!).getTime();
+      const gapDays = Math.round((earliestTs - fromTs) / 86_400_000);
+      return { ...c, gapDays };
+    })
+    .filter((c) => c.gapDays > TOLERANCE_DAYS);
+
   if (data.totals.totalPosts === 0) {
     return (
-      <Card>
-        <CardContent className="py-16 text-center text-muted-foreground">
-          {t("benchmarks", "noData")}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {noScanBrands.length > 0 && (
+          <NoScanWarning brands={noScanBrands} channelLabel="Instagram" t={t} />
+        )}
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">
+            {t("benchmarks", "noData")}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -355,6 +398,32 @@ async function OrganicContent({
         {t("benchmarks", "comparativeAnalysis")} {formatNumber(data.totals.totalPosts)} {t("organic", "posts")}{" "}
         {t("benchmarks", "adsOf")} {data.postsByCompetitor.length} {t("benchmarks", "competitorsWord")}
       </p>
+
+      {noScanBrands.length > 0 && (
+        <NoScanWarning brands={noScanBrands} channelLabel="Instagram" t={t} />
+      )}
+      {coverageGaps.length > 0 && (
+        <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
+          <p className="text-xs font-semibold text-gold mb-1.5">
+            {t("benchmarks", "coverageWarningTitle")}
+          </p>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            {t("benchmarks", "coverageWarningBody")}
+          </p>
+          <ul className="text-[11px] text-foreground space-y-0.5">
+            {coverageGaps.map((c) => (
+              <li key={c.competitor}>
+                <span className="font-medium">{c.competitor}</span>
+                <span className="text-muted-foreground">
+                  {" — "}
+                  {t("benchmarks", "coverageFrom")} {c.earliestPost ?? "—"}
+                  {` (${c.gapDays} ${t("benchmarks", "coverageDaysShort")})`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -431,6 +500,37 @@ async function OrganicContent({
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Warn the user that one or more of the selected brands has never been
+ * scanned on the active channel — otherwise they would be invisibly
+ * excluded from the charts below, making the comparison misleading.
+ */
+function NoScanWarning({
+  brands,
+  channelLabel,
+  t,
+}: {
+  brands: string[];
+  channelLabel: string;
+  t: (section: string, key: string) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+      <p className="text-xs font-semibold text-red-700 mb-1.5">
+        {t("benchmarks", "noScanWarningTitle").replace("{channel}", channelLabel)}
+      </p>
+      <p className="text-[11px] text-red-900/80 mb-2">
+        {t("benchmarks", "noScanWarningBody").replace("{channel}", channelLabel)}
+      </p>
+      <ul className="text-[11px] text-red-950 space-y-0.5 list-disc list-inside">
+        {brands.map((b) => (
+          <li key={b}>{b}</li>
+        ))}
+      </ul>
     </div>
   );
 }
