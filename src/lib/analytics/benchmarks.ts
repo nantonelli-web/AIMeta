@@ -94,8 +94,16 @@ export interface BenchmarkData {
     gender: { male: number; female: number; unknown: number };
     genderLabel: "all" | "mostlyMale" | "mostlyFemale" | null;
   }[];
-  /** Format mix per competitor (for individual pie charts) */
-  formatMixByCompetitor: { competitor: string; data: { name: string; value: number }[] }[];
+  /**
+   * Format mix per competitor (for individual pie charts). `rawFormats` keeps
+   * the source `snapshot.displayFormat` distribution from Meta/Apify so the
+   * UI can surface it as a small audit trail beneath each pie.
+   */
+  formatMixByCompetitor: {
+    competitor: string;
+    data: { name: string; value: number }[];
+    rawFormats: { label: string; count: number }[];
+  }[];
   /** Platform distribution */
   platformDistribution: { name: string; count: number }[];
   /** Platform distribution per competitor */
@@ -394,11 +402,18 @@ export async function computeBenchmarks(
     string,
     { image: number; video: number; carousel: number; dpa: number; unknown: number }
   >();
+  // Raw displayFormat tally per brand — audit trail exposed in the UI so we
+  // can see exactly what the scraper returns instead of just our bucketing.
+  const rawFormatByComp = new Map<string, Map<string, number>>();
   for (const ad of ads) {
     const key = ad.competitor_id ?? "unknown";
     const entry = formatByComp.get(key) ?? { image: 0, video: 0, carousel: 0, dpa: 0, unknown: 0 };
     const snapshot = (ad.raw_data?.snapshot ?? null) as Record<string, unknown> | null;
     const rawFormat = (snapshot?.displayFormat as string | undefined)?.toUpperCase() ?? null;
+    const rawLabel = rawFormat ?? "(empty)";
+    const rawMap = rawFormatByComp.get(key) ?? new Map<string, number>();
+    rawMap.set(rawLabel, (rawMap.get(rawLabel) ?? 0) + 1);
+    rawFormatByComp.set(key, rawMap);
     const cards = Array.isArray(snapshot?.cards) ? (snapshot?.cards as unknown[]) : null;
     const videos = Array.isArray(snapshot?.videos) ? (snapshot?.videos as unknown[]) : null;
 
@@ -466,6 +481,9 @@ export async function computeBenchmarks(
   const formatMixByCompetitor = [...formatByComp.entries()]
     .map(([id, v]) => ({
       competitor: compMap.get(id) ?? "N/A",
+      rawFormats: [...(rawFormatByComp.get(id) ?? new Map<string, number>()).entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, count]) => ({ label, count })),
       data: [
         { name: "Image", value: v.image },
         { name: "Video", value: v.video },
