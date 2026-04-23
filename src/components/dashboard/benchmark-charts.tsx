@@ -29,6 +29,24 @@ const COLORS = [
   "#6b8e6b",   // olive
 ];
 
+// Stable format-name → color map. The previous implementation coloured each
+// pie slice by index into COLORS[], so a brand that lacked (say) Image would
+// have Carousel rendered in navy — different from brands where Image existed.
+// Colouring by NAME guarantees "Image = navy, Video = teal, Carousel =
+// orange, DPA = violet, Reel = steel blue" everywhere. Fallback to COLORS[]
+// for any unexpected label so the pie still renders something distinct.
+const FORMAT_COLOR: Record<string, string> = {
+  Image: GOLD,           // navy
+  Video: "#2d8a87",      // teal
+  Carousel: "#d97757",   // warm orange (manual carousel)
+  DPA: "#8a6bb0",        // violet (dynamic product ads / catalog)
+  Reel: "#5b7ea3",       // steel blue (Instagram)
+  Other: MUTED,          // muted grey
+};
+function colorForFormat(name: string, i: number): string {
+  return FORMAT_COLOR[name] ?? COLORS[i % COLORS.length];
+}
+
 // Chart axes/grid/tooltip tuned for a light background
 const AXIS_TICK = "#5b6472";
 const GRID_STROKE = "#e5e7eb";
@@ -145,8 +163,8 @@ export function FormatPieChart({
           label={PieSlicePercent}
           labelLine={false}
         >
-          {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          {data.map((d, i) => (
+            <Cell key={d.name} fill={colorForFormat(d.name, i)} />
           ))}
         </Pie>
         <Tooltip {...tooltipStyle} />
@@ -163,7 +181,14 @@ export function FormatPieChart({
 export function FormatStackedChart({
   data,
 }: {
-  data: { name: string; image: number; video: number; carousel: number; unknown: number }[];
+  data: {
+    name: string;
+    image: number;
+    video: number;
+    carousel: number;
+    dpa: number;
+    unknown: number;
+  }[];
 }) {
   if (data.length > 8) {
     const height = Math.max(240, data.length * 36);
@@ -180,9 +205,10 @@ export function FormatStackedChart({
           />
           <Tooltip {...tooltipStyle} />
           <Legend wrapperStyle={{ fontSize: 12, color: LEGEND_TEXT }} />
-          <Bar dataKey="image" stackId="a" fill={COLORS[0]} name="Image" />
-          <Bar dataKey="video" stackId="a" fill={COLORS[1]} name="Video" />
-          <Bar dataKey="carousel" stackId="a" fill={COLORS[2]} name="Carousel" />
+          <Bar dataKey="image" stackId="a" fill={FORMAT_COLOR.Image} name="Image" />
+          <Bar dataKey="video" stackId="a" fill={FORMAT_COLOR.Video} name="Video" />
+          <Bar dataKey="carousel" stackId="a" fill={FORMAT_COLOR.Carousel} name="Carousel" />
+          <Bar dataKey="dpa" stackId="a" fill={FORMAT_COLOR.DPA} name="DPA" />
           <Bar dataKey="unknown" stackId="a" fill={MUTED} name="Other" />
         </BarChart>
       </ResponsiveContainer>
@@ -202,9 +228,10 @@ export function FormatStackedChart({
         <YAxis tick={{ fill: AXIS_TICK, fontSize: 11 }} />
         <Tooltip {...tooltipStyle} />
         <Legend wrapperStyle={{ fontSize: 12, color: LEGEND_TEXT }} />
-        <Bar dataKey="image" stackId="a" fill={COLORS[0]} name="Image" />
-        <Bar dataKey="video" stackId="a" fill={COLORS[1]} name="Video" />
-        <Bar dataKey="carousel" stackId="a" fill={COLORS[2]} name="Carousel" />
+        <Bar dataKey="image" stackId="a" fill={FORMAT_COLOR.Image} name="Image" />
+        <Bar dataKey="video" stackId="a" fill={FORMAT_COLOR.Video} name="Video" />
+        <Bar dataKey="carousel" stackId="a" fill={FORMAT_COLOR.Carousel} name="Carousel" />
+        <Bar dataKey="dpa" stackId="a" fill={FORMAT_COLOR.DPA} name="DPA" />
         <Bar dataKey="unknown" stackId="a" fill={MUTED} name="Other" />
       </BarChart>
     </ResponsiveContainer>

@@ -51,6 +51,7 @@ export interface BenchmarkData {
     image: number;
     video: number;
     carousel: number;
+    dpa: number;
     unknown: number;
   }[];
   /** Top CTAs across all ads */
@@ -381,19 +382,23 @@ export async function computeBenchmarks(
     .sort((a, b) => b.active + b.inactive - (a.active + a.inactive));
 
   // ---- Format mix (uses displayFormat from raw_data) ----
+  // Buckets: image / video / carousel (manual) / dpa (catalog carousel) /
+  // unknown. We separate DPA from CAROUSEL so fashion / ecom workspaces can
+  // see how much of their "carousel" share is really dynamic catalog ads.
   let imageCount = 0;
   let videoCount = 0;
   let carouselCount = 0;
+  let dpaCount = 0;
   let unknownCount = 0;
   const formatByComp = new Map<
     string,
-    { image: number; video: number; carousel: number; unknown: number }
+    { image: number; video: number; carousel: number; dpa: number; unknown: number }
   >();
   for (const ad of ads) {
     const key = ad.competitor_id ?? "unknown";
-    const entry = formatByComp.get(key) ?? { image: 0, video: 0, carousel: 0, unknown: 0 };
+    const entry = formatByComp.get(key) ?? { image: 0, video: 0, carousel: 0, dpa: 0, unknown: 0 };
     const snapshot = (ad.raw_data?.snapshot ?? null) as Record<string, unknown> | null;
-    const displayFormat = (snapshot?.displayFormat as string) ?? null;
+    const rawFormat = (snapshot?.displayFormat as string | undefined)?.toUpperCase() ?? null;
     const cards = Array.isArray(snapshot?.cards) ? (snapshot?.cards as unknown[]) : null;
     const videos = Array.isArray(snapshot?.videos) ? (snapshot?.videos as unknown[]) : null;
 
@@ -401,22 +406,31 @@ export async function computeBenchmarks(
     // the raw snapshot payload. A VIDEO-flagged ad that happens to carry
     // multiple cards (video carousels do exist) must NOT be misclassified
     // as a plain image carousel, which was the bug in the previous logic.
-    let bucket: "image" | "video" | "carousel" | "unknown";
-    switch (displayFormat) {
+    let bucket: "image" | "video" | "carousel" | "dpa" | "unknown";
+    switch (rawFormat) {
+      case "DPA":
+        bucket = "dpa";
+        break;
       case "CAROUSEL":
-      case "DPA": // Dynamic Product Ads — always rendered as a catalog carousel
+      case "CAROUSEL_IMAGE":
+      case "CAROUSEL_VIDEO":
+      case "MULTIPLE_IMAGES":
         bucket = "carousel";
         break;
       case "VIDEO":
+      case "SINGLE_VIDEO":
         bucket = "video";
         break;
       case "IMAGE":
+      case "SINGLE_IMAGE":
         bucket = "image";
         break;
       case "DCO":
+      case null:
       default: {
-        // DCO (Dynamic Creative Optimization) is a delivery mode that can
-        // resolve to any format — fall back to inspecting the payload.
+        // DCO (Dynamic Creative Optimization) or missing format — inspect
+        // the payload. >1 cards => carousel; a video hint => video; image
+        // URL => image; else unknown.
         const cardsLen = cards?.length ?? 0;
         const videosLen = videos?.length ?? 0;
         if (cardsLen > 1) bucket = "carousel";
@@ -427,20 +441,26 @@ export async function computeBenchmarks(
     }
 
     if (bucket === "carousel") { carouselCount++; entry.carousel++; }
+    else if (bucket === "dpa") { dpaCount++; entry.dpa++; }
     else if (bucket === "video") { videoCount++; entry.video++; }
     else if (bucket === "image") { imageCount++; entry.image++; }
     else { unknownCount++; entry.unknown++; }
     formatByComp.set(key, entry);
   }
+  // Canonical order: Image, Video, Carousel, DPA, Other. Order matters so
+  // the UI always lays slices out the same way.
   const formatMix = [
     { name: "Image", value: imageCount },
     { name: "Video", value: videoCount },
     { name: "Carousel", value: carouselCount },
+    { name: "DPA", value: dpaCount },
     ...(unknownCount > 0 ? [{ name: "Other", value: unknownCount }] : []),
   ].filter((f) => f.value > 0);
   const formatByCompetitor = [...formatByComp.entries()]
     .map(([id, v]) => ({ name: compMap.get(id) ?? "N/A", ...v }))
-    .sort((a, b) => b.image + b.video + b.carousel - (a.image + a.video + a.carousel));
+    .sort((a, b) =>
+      (b.image + b.video + b.carousel + b.dpa) - (a.image + a.video + a.carousel + a.dpa)
+    );
 
   // Format mix per competitor (individual pie charts)
   const formatMixByCompetitor = [...formatByComp.entries()]
@@ -450,6 +470,7 @@ export async function computeBenchmarks(
         { name: "Image", value: v.image },
         { name: "Video", value: v.video },
         { name: "Carousel", value: v.carousel },
+        { name: "DPA", value: v.dpa },
         ...(v.unknown > 0 ? [{ name: "Other", value: v.unknown }] : []),
       ].filter((f) => f.value > 0),
     }))
