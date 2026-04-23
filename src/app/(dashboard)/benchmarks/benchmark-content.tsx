@@ -167,19 +167,6 @@ export async function BenchmarkContent({
               <div key={entry.competitor} className="text-center">
                 <p className="text-xs font-medium text-gold mb-2">{entry.competitor}</p>
                 <FormatPieChart data={entry.data} />
-                {entry.rawFormats.length > 0 && (
-                  <p
-                    className="text-[9px] text-muted-foreground/80 leading-snug mt-1 px-2 tabular-nums"
-                    title={entry.rawFormats.map((f) => `${f.label}: ${f.count}`).join("\n")}
-                  >
-                    <span className="uppercase tracking-wider text-muted-foreground">Raw:</span>{" "}
-                    {entry.rawFormats
-                      .slice(0, 4)
-                      .map((f) => `${f.label} ${f.count}`)
-                      .join(" · ")}
-                    {entry.rawFormats.length > 4 && " · …"}
-                  </p>
-                )}
               </div>
             ))}
           </div>
