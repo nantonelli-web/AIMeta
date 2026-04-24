@@ -34,9 +34,19 @@ export async function GET(req: Request) {
     const workspaceId = profile.workspace_id;
     const admin = createAdminClient();
 
-    const competitorIds = rawIds
+    // If the caller did not pass explicit ids, auto-discover all the
+    // workspace's competitor ids so the probe is trivially reproducible
+    // by just hitting the URL.
+    let competitorIds: string[] | null = rawIds
       ? rawIds.split(",").map((s) => s.trim()).filter(Boolean)
       : null;
+    if (!competitorIds || competitorIds.length === 0) {
+      const { data: comps } = await admin
+        .from("mait_competitors")
+        .select("id")
+        .eq("workspace_id", workspaceId);
+      competitorIds = (comps ?? []).map((c) => c.id as string);
+    }
 
     // Run the same query via both clients. Single .range() call to 9999
     // — if the response caps at 1000 we will see the cap, not loop over.
