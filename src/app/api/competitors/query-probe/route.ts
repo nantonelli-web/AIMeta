@@ -76,9 +76,27 @@ export async function GET(req: Request) {
       return { total, uniqueIds, uniqueArchiveIds, byCompetitor };
     }
 
-    const [viaAdmin, viaAuth] = await Promise.all([
+    // Authoritative exact count via PostgREST count=exact, head=true.
+    // This does NOT return rows; it returns only the total count in the
+    // response headers. It is the ground truth for "how many rows match".
+    async function exactCount(c: ReturnType<typeof createAdminClient>, withFilter: boolean) {
+      let q = c
+        .from("mait_ads_external")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("source", source);
+      if (withFilter && competitorIds && competitorIds.length > 0) {
+        q = q.in("competitor_id", competitorIds);
+      }
+      const { count } = await q;
+      return count ?? 0;
+    }
+
+    const [viaAdmin, viaAuth, totalInWorkspace, totalMatchingFilter] = await Promise.all([
       run(admin),
       run(supabase as unknown as ReturnType<typeof createAdminClient>),
+      exactCount(admin, false),
+      exactCount(admin, true),
     ]);
 
     const diff: string[] = [];
@@ -89,7 +107,13 @@ export async function GET(req: Request) {
       diff.push(`UNIQUE_IDS: admin=${viaAdmin.uniqueIds} auth=${viaAuth.uniqueIds}`);
     }
 
-    return NextResponse.json({ ok: true, viaAdmin, viaAuth, diff });
+    return NextResponse.json({
+      ok: true,
+      exactCounts: { totalInWorkspace, totalMatchingFilter },
+      viaAdmin,
+      viaAuth,
+      diff,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[query-probe]", e);
