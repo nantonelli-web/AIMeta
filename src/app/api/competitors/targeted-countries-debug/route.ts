@@ -82,6 +82,93 @@ export async function GET(req: Request) {
       ? Object.keys(rows[0].raw_data).sort()
       : [];
 
+    // ── Extra probes for alternative country-bearing fields ──
+    // We already know `targetedOrReachedCountries` is always []. Look at
+    // the other plausible sources so we can tell what Meta/Apify DOES
+    // give us, and pick the best signal for a per-ad country.
+
+    // 1) inputUrl — the scan URL we passed Apify. Contains `country=XX`
+    //    or `country=ALL`. When single-country it IS the per-ad country.
+    const inputUrlCountryTally = new Map<string, number>();
+    let inputUrlPresent = 0;
+    let inputUrlParseable = 0;
+    const inputUrlSamples: string[] = [];
+
+    // 2) regionalRegulationData — Meta's per-region regulation info.
+    //    Often carries a country code / list.
+    let regulationPresent = 0;
+    const regulationShapeSamples: string[] = [];
+
+    // 3) reachEstimate — sometimes a number, sometimes an object with
+    //    per-country keys.
+    let reachEstimatePresent = 0;
+    const reachEstimateShapeSamples: string[] = [];
+
+    // 4) ageCountryGenderReachBreakdown — DSA per-country breakdown.
+    //    If non-empty, it lists the countries the ad actually reached.
+    const dsaCountryTally = new Map<string, number>();
+    let dsaPresent = 0;
+
+    for (const r of rows) {
+      const raw = r.raw_data;
+      if (!raw) continue;
+      const rec = raw as Record<string, unknown>;
+
+      const inputUrl = rec.inputUrl;
+      if (typeof inputUrl === "string" && inputUrl) {
+        inputUrlPresent++;
+        if (inputUrlSamples.length < 6) inputUrlSamples.push(inputUrl.slice(0, 200));
+        try {
+          const c = new URL(inputUrl).searchParams.get("country");
+          if (c) {
+            inputUrlParseable++;
+            inputUrlCountryTally.set(c, (inputUrlCountryTally.get(c) ?? 0) + 1);
+          }
+        } catch {
+          // skip malformed URL
+        }
+      }
+
+      const reg = rec.regionalRegulationData;
+      if (reg !== undefined && reg !== null) {
+        regulationPresent++;
+        if (regulationShapeSamples.length < 3) {
+          regulationShapeSamples.push(JSON.stringify(reg).slice(0, 300));
+        }
+      }
+
+      const re = rec.reachEstimate;
+      if (re !== undefined && re !== null) {
+        reachEstimatePresent++;
+        if (reachEstimateShapeSamples.length < 3) {
+          reachEstimateShapeSamples.push(JSON.stringify(re).slice(0, 300));
+        }
+      }
+
+      const dsa = rec.ageCountryGenderReachBreakdown;
+      if (Array.isArray(dsa) && dsa.length > 0) {
+        dsaPresent++;
+        for (const entry of dsa) {
+          if (entry && typeof entry === "object") {
+            const country =
+              (entry as Record<string, unknown>).country ??
+              (entry as Record<string, unknown>).countryCode;
+            if (typeof country === "string" && country) {
+              dsaCountryTally.set(country, (dsaCountryTally.get(country) ?? 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    const inputUrlTop = [...inputUrlCountryTally.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([country, count]) => ({ country, count }));
+    const dsaTop = [...dsaCountryTally.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 40)
+      .map(([country, count]) => ({ country, count }));
+
     // Scan raw_data for every plausible country-like field name so we
     // can confirm the field is where we think it is (and not under a
     // different casing / prefix / nesting).
@@ -180,6 +267,24 @@ export async function GET(req: Request) {
       })),
       topCountryValues: topValues,
       firstRowTopLevelKeys: firstRawKeys,
+      inputUrl: {
+        present: inputUrlPresent,
+        parseable: inputUrlParseable,
+        countryTally: inputUrlTop,
+        samples: inputUrlSamples,
+      },
+      regionalRegulationData: {
+        present: regulationPresent,
+        samples: regulationShapeSamples,
+      },
+      reachEstimate: {
+        present: reachEstimatePresent,
+        samples: reachEstimateShapeSamples,
+      },
+      dsaBreakdown: {
+        present: dsaPresent,
+        countryTally: dsaTop,
+      },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
