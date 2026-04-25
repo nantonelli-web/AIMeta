@@ -18,6 +18,9 @@ import {
   Trash2,
   ArrowLeft,
   Printer,
+  CalendarRange,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
@@ -143,6 +146,8 @@ interface SavedComparison {
   locale: string;
   countries: string[] | null;
   channel: string | null;
+  date_from: string | null;
+  date_to: string | null;
   stale: boolean;
   created_at: string;
   updated_at: string;
@@ -178,6 +183,22 @@ export function CompareView({
   const [channel, setChannel] = useState<Channel | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("technical");
 
+  // Refresh-rate window. Default = last 30 days, mirroring Benchmarks.
+  // The "applied" pair drives the fetch; the draft inputs let the user
+  // edit without triggering a recompute on every keystroke.
+  function defaultDateRange(): { from: string; to: string } {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(today.getDate() - 30);
+    return { from: from.toISOString().slice(0, 10), to: today.toISOString().slice(0, 10) };
+  }
+  const initialRange = defaultDateRange();
+  const [dateFrom, setDateFrom] = useState<string>(initialRange.from);
+  const [dateTo, setDateTo] = useState<string>(initialRange.to);
+  const [draftFrom, setDraftFrom] = useState<string>(initialRange.from);
+  const [draftTo, setDraftTo] = useState<string>(initialRange.to);
+  const [refreshRateWindowDays, setRefreshRateWindowDays] = useState<number>(30);
+
   // Cached comparison state
   const [cache, setCache] = useState<CachedComparison | null>(null);
   const [stats, setStats] = useState<CompStats[] | null>(null);
@@ -211,7 +232,9 @@ export function CompareView({
 
   const { t, locale } = useT();
   const selectedIds = [...selected];
-  const selectedKey = selectedIds.sort().join(",") + "|" + channel;
+  // Dates participate in the key so a change in window busts the local
+  // memoisation and forces fetchComparison to re-run with the new POST.
+  const selectedKey = selectedIds.sort().join(",") + "|" + channel + "|" + dateFrom + "|" + dateTo;
 
   function switchChannel(ch: Channel) {
     setChannel(ch);
@@ -281,7 +304,9 @@ export function CompareView({
         // 1. Try fetching from cache. The cache row is keyed only by
         // (workspace, ids, locale), so data from a different channel may
         // still be returned — if the stored kind mismatches the requested
-        // channel (organic vs ads), we treat it as a miss and regenerate.
+        // channel (organic vs ads), or if the cached row was computed
+        // for a different date window, we treat it as a miss and POST
+        // to regenerate.
         const expectedKind: "organic" | "ads" =
           channel === "instagram" ? "organic" : "ads";
         const getRes = await fetch(
@@ -298,7 +323,19 @@ export function CompareView({
             cachedKind === "organic" &&
             normalized !== null &&
             normalized.some((s) => !("profile" in (s as object)));
-          if (normalized && cachedKind === expectedKind && !needsOrganicRefresh) {
+          // Stale cache when the saved row's window does not match the
+          // user's currently-selected window. Legacy rows (date_from/
+          // date_to NULL) are also treated as stale — we can no longer
+          // tell what window they were computed against.
+          const cachedFrom = (data.date_from as string | null) ?? null;
+          const cachedTo = (data.date_to as string | null) ?? null;
+          const windowMatches = cachedFrom === dateFrom && cachedTo === dateTo;
+          if (
+            normalized &&
+            cachedKind === expectedKind &&
+            !needsOrganicRefresh &&
+            windowMatches
+          ) {
             setCache({
               technical_data: normalized,
               copy_analysis: data.copy_analysis,
@@ -307,6 +344,9 @@ export function CompareView({
               stale: data.stale,
             });
             setStats(normalized);
+            if (typeof data.refresh_rate_window_days === "number") {
+              setRefreshRateWindowDays(data.refresh_rate_window_days);
+            }
             if (data.copy_analysis || data.visual_analysis) {
               setAiResult({
                 copywriterReport: data.copy_analysis ?? null,
@@ -316,7 +356,7 @@ export function CompareView({
             setLoading(false);
             return;
           }
-          // kind mismatch — fall through to POST which will overwrite the row
+          // kind / window mismatch — fall through to POST which will overwrite the row
         }
 
         // 2. Not cached — generate technical data
@@ -328,6 +368,8 @@ export function CompareView({
             locale,
             channel,
             countries: [...selectedCountries],
+            date_from: dateFrom,
+            date_to: dateTo,
             sections: ["technical"],
           }),
         });
@@ -345,6 +387,9 @@ export function CompareView({
           if (normalized) {
             setStats(normalized);
           }
+          if (typeof data.refresh_rate_window_days === "number") {
+            setRefreshRateWindowDays(data.refresh_rate_window_days);
+          }
           if (data.copy_analysis || data.visual_analysis) {
             setAiResult({
               copywriterReport: data.copy_analysis ?? null,
@@ -358,7 +403,7 @@ export function CompareView({
         setLoading(false);
       }
     },
-    [locale, channel, competitors]
+    [locale, channel, competitors, dateFrom, dateTo, selectedCountries]
   );
 
   useEffect(() => {
@@ -411,6 +456,8 @@ export function CompareView({
         competitor_ids: selectedIds,
         locale,
         channel,
+        date_from: dateFrom,
+        date_to: dateTo,
         sections: [section],
       }),
     })
@@ -503,6 +550,8 @@ export function CompareView({
           locale,
           channel,
           countries: [...selectedCountries],
+          date_from: dateFrom,
+          date_to: dateTo,
           sections,
         }),
       });
@@ -518,6 +567,9 @@ export function CompareView({
           stale: data.stale ?? false,
         });
         if (normalized) setStats(normalized);
+        if (typeof data.refresh_rate_window_days === "number") {
+          setRefreshRateWindowDays(data.refresh_rate_window_days);
+        }
         setAiResult({
           copywriterReport: data.copy_analysis ?? null,
           creativeDirectorReport: data.visual_analysis ?? null,
@@ -717,6 +769,15 @@ export function CompareView({
     setMisconfiguredBrands([]);
     setBenchmarkData(null);
     setActiveTab("technical");
+    // Restore the date inputs to the default 30d so the next comparison
+    // starts from a clean state instead of inheriting whatever window
+    // the user picked last session.
+    const d = defaultDateRange();
+    setDraftFrom(d.from);
+    setDraftTo(d.to);
+    setDateFrom(d.from);
+    setDateTo(d.to);
+    setRefreshRateWindowDays(30);
     fetchingRef.current = "";
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1062,6 +1123,80 @@ export function CompareView({
         </Card>
       )}
 
+      {/* Date range — drives the refresh-rate window. Visible once a
+          channel is picked so the first fetch already used defaults. */}
+      {selected.size >= 2 && selectedCountries.size > 0 && channel !== null && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="size-4 text-muted-foreground" />
+            <span className="text-[11px] uppercase tracking-wider text-foreground font-bold">
+              {t("compare", "analysisRange")}
+            </span>
+          </div>
+          <Input
+            type="date"
+            value={draftFrom}
+            onChange={(e) => setDraftFrom(e.target.value)}
+            className="text-xs h-8 w-36"
+          />
+          <span className="text-muted-foreground text-xs">—</span>
+          <Input
+            type="date"
+            value={draftTo}
+            onChange={(e) => setDraftTo(e.target.value)}
+            className="text-xs h-8 w-36"
+          />
+          {(!draftFrom || !draftTo || draftFrom > draftTo) && (
+            <span className="text-[11px] text-red-500">{t("compare", "rangeInvalid")}</span>
+          )}
+          <span className="text-[11px] text-muted-foreground italic ml-2">
+            {t("compare", "rangeAffectsRefresh")}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              onClick={() => {
+                const d = defaultDateRange();
+                setDraftFrom(d.from);
+                setDraftTo(d.to);
+                setDateFrom(d.from);
+                setDateTo(d.to);
+                // Clear cache locally so the user does not see stale
+                // numbers during the refetch triggered by selectedKey.
+                setCache(null);
+                setStats(null);
+              }}
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs cursor-pointer"
+            >
+              <RotateCcw className="size-3.5" />
+              {t("compare", "resetRange")}
+            </Button>
+            <Button
+              onClick={() => {
+                if (!draftFrom || !draftTo || draftFrom > draftTo) return;
+                if (draftFrom === dateFrom && draftTo === dateTo) return;
+                setDateFrom(draftFrom);
+                setDateTo(draftTo);
+                setCache(null);
+                setStats(null);
+              }}
+              disabled={
+                !draftFrom ||
+                !draftTo ||
+                draftFrom > draftTo ||
+                (draftFrom === dateFrom && draftTo === dateTo)
+              }
+              size="sm"
+              className="h-8 text-xs cursor-pointer"
+            >
+              <Check className="size-3.5" />
+              {t("compare", "applyRange")}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Scanning overlay */}
       {scanning && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -1123,6 +1258,23 @@ export function CompareView({
                           setSelected(new Set(sc.competitor_ids));
                           setSelectedCountries(new Set(sc.countries ?? []));
                           setChannel(isChannel(sc.channel) ? sc.channel : null);
+                          // Restore the saved analysis window so the
+                          // re-opened comparison renders with the same
+                          // refresh-rate denominator as when it was saved.
+                          // Fall back to defaults for legacy rows where
+                          // date_from / date_to were never persisted.
+                          if (sc.date_from && sc.date_to) {
+                            setDateFrom(sc.date_from);
+                            setDateTo(sc.date_to);
+                            setDraftFrom(sc.date_from);
+                            setDraftTo(sc.date_to);
+                          } else {
+                            const d = defaultDateRange();
+                            setDateFrom(d.from);
+                            setDateTo(d.to);
+                            setDraftFrom(d.from);
+                            setDraftTo(d.to);
+                          }
                           setCache(null);
                           setStats(null);
                           setAiResult(null);
@@ -1510,7 +1662,7 @@ function AdsTechnicalView({
         }
       />
       <CompareTable
-        label={t("compare", "refreshRate")}
+        label={`${t("compare", "refreshRate")} (${refreshRateWindowDays}${t("compare", "refreshRateWindowSuffix")})`}
         stats={stats}
         render={(s) =>
           s.adsPerWeek > 0

@@ -559,6 +559,15 @@ const translations = {
     /** Day suffix used when composing "Refresh rate (Ngg)" / "(Nd)". */
     refreshRateWindowSuffix: { it: "gg", en: "d" },
     adsPerWeek: { it: "ads/sett.", en: "ads/wk" },
+    // Date-range selector that drives the refresh-rate window.
+    analysisRange: { it: "Range di analisi", en: "Analysis range" },
+    rangeAffectsRefresh: {
+      it: "Influisce sul refresh rate.",
+      en: "Affects the refresh rate.",
+    },
+    rangeInvalid: { it: "Date non valide", en: "Invalid range" },
+    applyRange: { it: "Applica", en: "Apply" },
+    resetRange: { it: "Reset", en: "Reset" },
     latestAds: { it: "Ultime ads", en: "Latest ads" },
     // Organic-specific Technical tab keys
     totalPosts: { it: "Post totali", en: "Total posts" },

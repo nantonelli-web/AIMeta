@@ -621,6 +621,11 @@ export async function POST(req: Request) {
   if (parsed.data.countries !== undefined) {
     payload.countries = parsed.data.countries;
   }
+  // Persist the window so the GET cache check can tell whether the
+  // stored technical_data was computed for this exact range. NULL keeps
+  // the legacy "no window → 90d default" semantics for old rows.
+  payload.date_from = parsed.data.date_from ?? null;
+  payload.date_to = parsed.data.date_to ?? null;
 
   const isOrganic = parsed.data.channel === "instagram";
 
