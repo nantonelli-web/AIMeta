@@ -271,7 +271,18 @@ export function CompareView({
     async (ids: string[]) => {
       if (ids.length < 2) return;
 
-      const key = [...ids].sort().join(",") + "|" + channel;
+      // Key must include the date window so changing it after a
+      // previous fetch is NOT treated as a duplicate. Without dates
+      // here, hitting Apply on a new range early-exits and the
+      // Technical tab freezes on stats=null forever.
+      const key =
+        [...ids].sort().join(",") +
+        "|" +
+        channel +
+        "|" +
+        dateFrom +
+        "|" +
+        dateTo;
       if (fetchingRef.current === key) return;
       fetchingRef.current = key;
 
@@ -1160,10 +1171,16 @@ export function CompareView({
                 setDraftTo(d.to);
                 setDateFrom(d.from);
                 setDateTo(d.to);
-                // Clear cache locally so the user does not see stale
-                // numbers during the refetch triggered by selectedKey.
+                // Window changed — every cached piece must be cleared
+                // so the dependent effects re-fire and refetch with
+                // the new range. Leaving aiResult around would block
+                // the AI useEffect via its alreadyHas early-exit.
                 setCache(null);
                 setStats(null);
+                setAiResult(null);
+                setAiError(null);
+                setBenchmarkData(null);
+                fetchingRef.current = "";
               }}
               variant="outline"
               size="sm"
@@ -1178,8 +1195,14 @@ export function CompareView({
                 if (draftFrom === dateFrom && draftTo === dateTo) return;
                 setDateFrom(draftFrom);
                 setDateTo(draftTo);
+                // Same reset story as the Reset button: clear every
+                // piece of state derived from the previous window.
                 setCache(null);
                 setStats(null);
+                setAiResult(null);
+                setAiError(null);
+                setBenchmarkData(null);
+                fetchingRef.current = "";
               }}
               disabled={
                 !draftFrom ||
