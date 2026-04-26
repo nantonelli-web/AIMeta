@@ -155,8 +155,9 @@ export async function POST(req: Request) {
         .upsert(rows, { onConflict: "workspace_id,ad_archive_id,source" });
       if (upErr) throw upErr;
 
-      // Reconcile: any ad that was ACTIVE in DB and lives in the
-      // countries we just scanned but did NOT come back from Apify is
+      // Reconcile: any ad that was ACTIVE in DB, lives in the
+      // countries we just scanned, and falls inside the same
+      // start_date window Apify was given but did NOT come back is
       // no longer running. Flip it to INACTIVE so the volume chart
       // stops counting stale active rows. Best-effort: errors are
       // logged inside the helper and never block the scan response.
@@ -168,6 +169,8 @@ export async function POST(req: Request) {
         competitor.id,
         newArchiveIds,
         result.scannedCountries,
+        parsed.data.date_from,
+        parsed.data.date_to,
       );
       if (inactivated > 0) {
         console.log(

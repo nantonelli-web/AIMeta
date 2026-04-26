@@ -20,7 +20,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *    are considered. An ad scanned previously in GB will not be
  *    flipped INACTIVE during a scan that only covered IT/FR — we have
  *    no negative evidence about GB.
- * 3. When the new scan returned zero records the function is a no-op.
+ * 3. When the caller supplies a scan window (`scanDateFrom` /
+ *    `scanDateTo`), only ads whose `start_date` falls inside that
+ *    window are reconciled. Apify applies the same window via
+ *    `start_date[min/max]` on the Ad Library URL, so ads outside it
+ *    were never expected to come back — flipping them INACTIVE on
+ *    the basis of "missing from the new scan" would be wrong.
+ *    Backdated scans without this guard would mass-inactivate every
+ *    currently-running ad whose start date predates the window.
+ * 4. When the new scan returned zero records the function is a no-op.
  *    A genuine empty scan is rare; an Apify hiccup that returns
  *    success with no items is more common, and mass-inactivating
  *    every ad in scope on the latter would be a disaster. Stale data
@@ -33,6 +41,8 @@ export async function reconcileMetaAdStatus(
   competitorId: string,
   newArchiveIds: string[],
   scannedCountries: string[],
+  scanDateFrom?: string,
+  scanDateTo?: string,
 ): Promise<number> {
   if (newArchiveIds.length === 0) return 0;
   if (scannedCountries.length === 0) return 0;
@@ -41,13 +51,20 @@ export async function reconcileMetaAdStatus(
 
   // Pull every ACTIVE ad that lives entirely inside the just-scanned
   // country set. PostgREST's containedBy maps to the array <@ operator.
-  const { data: existing, error } = await admin
+  // When the caller passed a date window, narrow further by start_date —
+  // Apify applied the same window, so ads outside it were never
+  // expected to come back and must NOT be inactivated.
+  let query = admin
     .from("mait_ads_external")
     .select("id, ad_archive_id")
     .eq("competitor_id", competitorId)
     .eq("source", "meta")
     .eq("status", "ACTIVE")
     .containedBy("scan_countries", scannedCountries);
+  if (scanDateFrom) query = query.gte("start_date", scanDateFrom);
+  if (scanDateTo) query = query.lte("start_date", scanDateTo);
+
+  const { data: existing, error } = await query;
 
   if (error) {
     console.error("[reconcile-status select]", error);
