@@ -67,6 +67,10 @@ export interface ScrapeResult {
   records: NormalizedAd[];
   costCu: number;
   startUrl: string;
+  /** Countries we explicitly asked Apify for, in upper-case ISO-2.
+   *  Empty when the legacy country=ALL path ran (no per-country signal
+   *  available, so callers must NOT use this for reconcile logic). */
+  scannedCountries: string[];
   debug?: Record<string, unknown>;
 }
 
@@ -112,14 +116,20 @@ export async function scrapeMetaAds(
 
   // No country configured — legacy behavior (ALL), scan_countries = null.
   if (countryList.length === 0) {
-    return scrapeMetaAdsSingleCountry({ ...opts, country: undefined }, null);
+    const r = await scrapeMetaAdsSingleCountry(
+      { ...opts, country: undefined },
+      null,
+    );
+    return { ...r, scannedCountries: [] };
   }
 
   // Single country — one scan, scan_countries = [country].
   if (countryList.length === 1) {
-    return scrapeMetaAdsSingleCountry({ ...opts, country: countryList[0] }, [
-      countryList[0],
-    ]);
+    const r = await scrapeMetaAdsSingleCountry(
+      { ...opts, country: countryList[0] },
+      [countryList[0]],
+    );
+    return { ...r, scannedCountries: countryList };
   }
 
   // Multi-country — N scans, dedup by ad_archive_id, union scan_countries.
@@ -152,6 +162,7 @@ export async function scrapeMetaAds(
     records: [...byArchiveId.values()],
     costCu: totalCostCu,
     startUrl: startUrls[0] ?? "",
+    scannedCountries: countryList,
     debug: { countriesScanned: countryList, runIds, startUrls },
   };
 }
@@ -236,7 +247,15 @@ async function scrapeMetaAdsSingleCountry(
     /* ignore */
   }
 
-  return { runId, records, costCu, startUrl };
+  return {
+    runId,
+    records,
+    costCu,
+    startUrl,
+    // Mirror the scanCountries arg so the type stays satisfied; the
+    // orchestrator overwrites this when it wraps the result.
+    scannedCountries: scanCountries ?? [],
+  };
 }
 
 // ------- Raw ad shape from apify/facebook-ads-scraper -------

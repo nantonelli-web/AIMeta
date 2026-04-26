@@ -38,6 +38,8 @@ interface AdRow {
 interface CompetitorRef {
   id: string;
   page_name: string;
+  /** CSV of configured ISO codes — needed to compute country-coverage. */
+  country?: string | null;
 }
 
 export interface BenchmarkData {
@@ -81,6 +83,23 @@ export interface BenchmarkData {
     competitor: string;
     earliestStart: string | null;
     adsInRange: number;
+  }[];
+  /**
+   * Per-brand country-coverage signal. `configuredCountries` is what
+   * the user set on the competitor record (the markets they want to
+   * track). `scannedCountriesWithData` is the subset that actually
+   * came back with at least one ad in the analysis window.
+   * `emptyCountries` is the diff — e.g. Karen Millen configured
+   * GB,IT,FR,DE,ES but only GB has data, so emptyCountries = [IT,FR,DE,ES].
+   * The UI uses these to surface a "you configured countries that
+   * have no ads" warning so the user can clean up the config or
+   * realise the brand only runs in its primary market.
+   */
+  countryScanCoverage: {
+    competitor: string;
+    configuredCountries: string[];
+    scannedCountriesWithData: string[];
+    emptyCountries: string[];
   }[];
   /**
    * EU DSA transparency roll-up per brand. Only populated for ads whose
@@ -410,7 +429,7 @@ export async function computeBenchmarks(
   const [{ data: competitors }, rawAdsPages, allAdsMeta] = await Promise.all([
     supabase
       .from("mait_competitors")
-      .select("id, page_name")
+      .select("id, page_name, country")
       .eq("workspace_id", workspaceId)
       .order("page_name"),
     fetchAllHeavyRows(),
@@ -481,6 +500,48 @@ export async function computeBenchmarks(
       earliestStart: earliestByComp.get(id) ?? null,
       adsInRange: inRangeByComp.get(id) ?? 0,
     }));
+
+  // ---- Country scan coverage per competitor ----
+  // Aggregates `scan_countries` from the heavy query (which already
+  // respects the user-selected date range) so the warning is anchored
+  // to the same data shown in the charts. A configured country with
+  // zero ads in the analysis window earns its way into emptyCountries.
+  const scanCountriesByComp = new Map<string, Set<string>>();
+  for (const ad of rawAdsPages) {
+    const key = ad.competitor_id;
+    if (!key || !Array.isArray(ad.scan_countries)) continue;
+    const set = scanCountriesByComp.get(key) ?? new Set<string>();
+    for (const c of ad.scan_countries) {
+      if (typeof c === "string" && c) set.add(c.toUpperCase());
+    }
+    scanCountriesByComp.set(key, set);
+  }
+  function parseConfiguredCountries(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => /^[A-Z]{2,3}$/.test(c));
+  }
+  const countryScanCoverage = [...coverageIds]
+    .map((id) => {
+      const c = comps.find((cc) => cc.id === id);
+      const configured = parseConfiguredCountries(c?.country ?? null);
+      if (configured.length === 0) return null;
+      const scanned = scanCountriesByComp.get(id) ?? new Set<string>();
+      const empty = configured.filter((cc) => !scanned.has(cc));
+      return {
+        competitor: compMap.get(id) ?? "N/A",
+        configuredCountries: configured,
+        scannedCountriesWithData: [...scanned].sort(),
+        emptyCountries: empty,
+      };
+    })
+    .filter(
+      (entry): entry is NonNullable<typeof entry> =>
+        entry !== null && entry.emptyCountries.length > 0,
+    )
+    .sort((a, b) => b.emptyCountries.length - a.emptyCountries.length);
   // Pad with zero-ads brands so the chart always shows the full project scope.
   const volumeIds = scopedCompetitorIds ?? new Set(comps.map((c) => c.id));
   for (const id of volumeIds) {
@@ -1016,6 +1077,7 @@ export async function computeBenchmarks(
     ctaMixByCompetitor,
     utmInsightsByCompetitor,
     coverageByCompetitor,
+    countryScanCoverage,
     audienceByCompetitor,
     platformDistribution,
     platformByCompetitor,

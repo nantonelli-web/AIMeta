@@ -143,6 +143,17 @@ export async function BenchmarkContent({
         </div>
       )}
 
+      {/* Country-scan coverage warning: brands whose configured
+          countries returned 0 ads for this analysis window. Helps the
+          user notice they configured markets the brand does not
+          actually advertise in. */}
+      {data.countryScanCoverage.length > 0 && (
+        <CountryCoverageWarning
+          coverage={data.countryScanCoverage}
+          t={t}
+        />
+      )}
+
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Stat label={t("benchmarks", "totalAds")} value={formatNumber(data.totals.totalAds)} />
@@ -587,6 +598,54 @@ function NoScanWarning({
       <ul className="text-[11px] text-red-950 space-y-0.5 list-disc list-inside">
         {brands.map((b) => (
           <li key={b}>{b}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Brands whose configured countries returned 0 ads. Lets the user
+ *  spot Karen-Millen-style cases where 5 countries are configured but
+ *  the brand only advertises in one. */
+function CountryCoverageWarning({
+  coverage,
+  t,
+}: {
+  coverage: {
+    competitor: string;
+    configuredCountries: string[];
+    scannedCountriesWithData: string[];
+    emptyCountries: string[];
+  }[];
+  t: (section: string, key: string) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
+      <p className="text-xs font-semibold text-gold mb-1.5">
+        {t("benchmarks", "countryCoverageTitle")}
+      </p>
+      <p className="text-[11px] text-muted-foreground mb-2">
+        {t("benchmarks", "countryCoverageBody")}
+      </p>
+      <ul className="text-[11px] text-foreground space-y-0.5">
+        {coverage.map((c) => (
+          <li key={c.competitor}>
+            <span className="font-medium">{c.competitor}</span>
+            <span className="text-muted-foreground">
+              {" — "}
+              {t("benchmarks", "countryCoverageEmpty")}{" "}
+              <span className="font-mono">{c.emptyCountries.join(", ")}</span>
+              {c.scannedCountriesWithData.length > 0 && (
+                <>
+                  {" · "}
+                  {t("benchmarks", "countryCoverageActive")}{" "}
+                  <span className="font-mono">
+                    {c.scannedCountriesWithData.join(", ")}
+                  </span>
+                </>
+              )}
+            </span>
+          </li>
         ))}
       </ul>
     </div>

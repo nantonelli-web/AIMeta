@@ -827,6 +827,16 @@ const translations = {
     },
     coverageFrom: { it: "dati disponibili dal", en: "data available from" },
     coverageDaysShort: { it: "gg dopo l'inizio", en: "d after start" },
+    countryCoverageTitle: {
+      it: "Paesi configurati senza ads",
+      en: "Configured countries with no ads",
+    },
+    countryCoverageBody: {
+      it: "I brand qui sotto hanno paesi configurati che non restituiscono ads. Probabilmente il brand non fa pubblicità in quei mercati: rivedi la configurazione per snellire le scansioni.",
+      en: "The brands below have configured countries that return no ads. The brand likely does not advertise in those markets: review the configuration to slim down scans.",
+    },
+    countryCoverageEmpty: { it: "nessuna ad in", en: "no ads in" },
+    countryCoverageActive: { it: "attivo in", en: "active in" },
     utmPerBrand: { it: "Analisi UTM per brand", en: "UTM analysis per brand" },
     descUtmPerBrand: {
       it: "Audience e obiettivo di campagna dedotti dai parametri UTM delle landing page.",

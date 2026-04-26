@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeMetaAds } from "@/lib/apify/service";
 import { scrapeGoogleAds } from "@/lib/apify/google-ads-service";
+import { reconcileMetaAdStatus } from "@/lib/apify/reconcile-status";
 import { storeAdImages, storeProfilePicture } from "@/lib/media/store-ad-images";
 
 export const maxDuration = 300;
@@ -111,6 +112,24 @@ export async function GET(req: Request) {
         await admin
           .from("mait_ads_external")
           .upsert(rows, { onConflict: "workspace_id,ad_archive_id,source" });
+
+        // Reconcile: ads that were ACTIVE inside the just-scanned
+        // countries and did not come back are no longer running.
+        // Same safeguards as the manual scan path.
+        const newArchiveIds = result.records
+          .map((r) => r.ad_archive_id)
+          .filter((id): id is string => !!id);
+        const inactivated = await reconcileMetaAdStatus(
+          admin,
+          c.id,
+          newArchiveIds,
+          result.scannedCountries,
+        );
+        if (inactivated > 0) {
+          console.log(
+            `[cron/scrape] Reconciled ${inactivated} stale ACTIVE ads for ${c.page_name ?? c.id}`,
+          );
+        }
       }
 
       let totalRecords = result.records.length;

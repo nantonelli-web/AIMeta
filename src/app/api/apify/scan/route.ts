@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { scrapeMetaAds } from "@/lib/apify/service";
+import { reconcileMetaAdStatus } from "@/lib/apify/reconcile-status";
 import { resolvePageId } from "@/lib/meta/resolve-page-id";
 import { sendNewAdsNotification } from "@/lib/email/resend";
 import { storeAdImages, storeProfilePicture } from "@/lib/media/store-ad-images";
@@ -153,6 +154,26 @@ export async function POST(req: Request) {
         .from("mait_ads_external")
         .upsert(rows, { onConflict: "workspace_id,ad_archive_id,source" });
       if (upErr) throw upErr;
+
+      // Reconcile: any ad that was ACTIVE in DB and lives in the
+      // countries we just scanned but did NOT come back from Apify is
+      // no longer running. Flip it to INACTIVE so the volume chart
+      // stops counting stale active rows. Best-effort: errors are
+      // logged inside the helper and never block the scan response.
+      const newArchiveIds = result.records
+        .map((r) => r.ad_archive_id)
+        .filter((id): id is string => !!id);
+      const inactivated = await reconcileMetaAdStatus(
+        admin,
+        competitor.id,
+        newArchiveIds,
+        result.scannedCountries,
+      );
+      if (inactivated > 0) {
+        console.log(
+          `[scan] Reconciled ${inactivated} stale ACTIVE ads for ${competitor.page_name}`,
+        );
+      }
     }
 
     await admin

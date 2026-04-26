@@ -244,6 +244,9 @@ export async function scrapeGoogleAds(
     records,
     costCu,
     startUrl,
+    // Google Ads is not scraped per-country, so callers must NOT use
+    // this list to drive a status reconcile. Empty by design.
+    scannedCountries: [],
     debug: {
       actorId: GOOGLE_ACTOR_ID,
       input,
