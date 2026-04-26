@@ -13,6 +13,7 @@ import {
   HorizontalBarChart,
   PlatformChart,
 } from "@/components/dashboard/benchmark-charts";
+import { CollapsibleAlert } from "./collapsible-alert";
 import { getLocale, serverT } from "@/lib/i18n/server";
 
 export async function BenchmarkContent({
@@ -121,10 +122,12 @@ export async function BenchmarkContent({
       {/* Scan coverage warning: surfaces when a scanned brand has ads
           that do not reach back to dateFrom. */}
       {coverageGaps.length > 0 && (
-        <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
-          <p className="text-xs font-semibold text-gold mb-1.5">
-            {t("benchmarks", "coverageWarningTitle")}
-          </p>
+        <CollapsibleAlert
+          tone="warning"
+          title={t("benchmarks", "coverageWarningTitle")}
+          summary={`${coverageGaps.length} ${coverageGaps.length === 1 ? "brand" : "brands"}`}
+          persistKey="coverage-gaps"
+        >
           <p className="text-[11px] text-muted-foreground mb-2">
             {t("benchmarks", "coverageWarningBody")}
           </p>
@@ -140,7 +143,7 @@ export async function BenchmarkContent({
               </li>
             ))}
           </ul>
-        </div>
+        </CollapsibleAlert>
       )}
 
       {/* Country-scan coverage warning: brands whose configured
@@ -588,10 +591,12 @@ function NoScanWarning({
   t: (section: string, key: string) => string;
 }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-      <p className="text-xs font-semibold text-red-700 mb-1.5">
-        {t("benchmarks", "noScanWarningTitle").replace("{channel}", channelLabel)}
-      </p>
+    <CollapsibleAlert
+      tone="danger"
+      title={t("benchmarks", "noScanWarningTitle").replace("{channel}", channelLabel)}
+      summary={`${brands.length} ${brands.length === 1 ? "brand" : "brands"}`}
+      persistKey={`no-scan-${channelLabel}`}
+    >
       <p className="text-[11px] text-red-900/80 mb-2">
         {t("benchmarks", "noScanWarningBody").replace("{channel}", channelLabel)}
       </p>
@@ -600,7 +605,7 @@ function NoScanWarning({
           <li key={b}>{b}</li>
         ))}
       </ul>
-    </div>
+    </CollapsibleAlert>
   );
 }
 
@@ -620,10 +625,12 @@ function CountryCoverageWarning({
   t: (section: string, key: string) => string;
 }) {
   return (
-    <div className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
-      <p className="text-xs font-semibold text-gold mb-1.5">
-        {t("benchmarks", "countryCoverageTitle")}
-      </p>
+    <CollapsibleAlert
+      tone="warning"
+      title={t("benchmarks", "countryCoverageTitle")}
+      summary={`${coverage.length} ${coverage.length === 1 ? "brand" : "brands"}`}
+      persistKey="country-coverage"
+    >
       <p className="text-[11px] text-muted-foreground mb-2">
         {t("benchmarks", "countryCoverageBody")}
       </p>
@@ -648,7 +655,7 @@ function CountryCoverageWarning({
           </li>
         ))}
       </ul>
-    </div>
+    </CollapsibleAlert>
   );
 }
 

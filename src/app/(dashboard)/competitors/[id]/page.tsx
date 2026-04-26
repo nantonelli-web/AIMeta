@@ -119,15 +119,28 @@ export default async function CompetitorDetailPage({
     (j) => j.status === "running" && j.started_at && new Date(j.started_at).getTime() > tenMinAgoMs
   );
 
-  // Organic engagement stats
+  // Organic engagement stats. Instagram returns likes_count = -1 when
+  // the account has hidden likes (an Instagram setting). Treat any
+  // negative value as "unknown" — never include it in the average,
+  // never display it. Same for comments and views, even though those
+  // are rarely hidden, just in case.
   const organicCount = organicList.length;
-  const avgLikes = organicCount > 0
-    ? Math.round(organicList.reduce((s, p) => s + (p.likes_count ?? 0), 0) / organicCount)
-    : 0;
-  const avgComments = organicCount > 0
-    ? Math.round(organicList.reduce((s, p) => s + (p.comments_count ?? 0), 0) / organicCount)
-    : 0;
-  const totalViews = organicList.reduce((s, p) => s + (p.video_views ?? 0), 0);
+  const validLikes = organicList
+    .map((p) => p.likes_count ?? -1)
+    .filter((n) => n >= 0);
+  const validComments = organicList
+    .map((p) => p.comments_count ?? -1)
+    .filter((n) => n >= 0);
+  const validViews = organicList
+    .map((p) => p.video_views ?? -1)
+    .filter((n) => n >= 0);
+  const avgLikes = validLikes.length > 0
+    ? Math.round(validLikes.reduce((s, n) => s + n, 0) / validLikes.length)
+    : null;
+  const avgComments = validComments.length > 0
+    ? Math.round(validComments.reduce((s, n) => s + n, 0) / validComments.length)
+    : null;
+  const totalViews = validViews.reduce((s, n) => s + n, 0);
   const frequency = ((c.monitor_config as { frequency?: string })?.frequency ??
     "manual") as "manual" | "daily" | "weekly";
 

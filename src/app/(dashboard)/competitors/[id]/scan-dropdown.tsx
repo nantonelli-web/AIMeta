@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { RefreshCw, CalendarRange, Square } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
@@ -60,6 +60,15 @@ export function ScanDropdown({
   hasRunningJob = false,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  // After a successful scan we push `?tab=<channel>` so the brand
+  // page lands on the just-imported channel instead of leaving the
+  // user on the previous tab. router.replace + router.refresh keeps
+  // the back-stack clean and re-runs the server component.
+  function focusChannel(tab: "meta" | "google" | "instagram") {
+    router.replace(`${pathname}?tab=${tab}`);
+    router.refresh();
+  }
   const { t } = useT();
   const [loading, setLoading] = useState<ScanTarget | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -138,7 +147,7 @@ export function ScanDropdown({
       } else {
         if (json.debug) console.log("[AISCAN scan debug]", json.debug);
         toast.success(`${json.records} Meta Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
-        router.refresh();
+        focusChannel("meta");
       }
     } catch (e) {
       if ((e as Error).name === "AbortError") {
@@ -177,7 +186,7 @@ export function ScanDropdown({
       } else {
         if (json.debug) console.log("[AISCAN Google scan debug]", json.debug);
         toast.success(`${json.records} Google Ads ${t("scan", "adsSynced")} (${rangeLabel})`, { id: toastId });
-        router.refresh();
+        focusChannel("google");
       }
     } catch (e) {
       if ((e as Error).name === "AbortError") {
@@ -217,7 +226,7 @@ export function ScanDropdown({
           `${json.records} ${t("organic", "postsSynced")} (${rangeLabel})`,
           { id: toastId }
         );
-        router.refresh();
+        focusChannel("instagram");
       }
     } catch (e) {
       if ((e as Error).name === "AbortError") {

@@ -47,10 +47,10 @@ export function OrganicPostCard({ post }: { post: MaitOrganicPost }) {
         {/* Engagement overlay on hover */}
         <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-6">
           <span className="flex items-center gap-1.5 text-white text-sm font-medium">
-            <Heart className="size-4" /> {formatNumber(post.likes_count)}
+            <Heart className="size-4" /> {post.likes_count >= 0 ? formatNumber(post.likes_count) : "—"}
           </span>
           <span className="flex items-center gap-1.5 text-white text-sm font-medium">
-            <MessageCircle className="size-4" /> {formatNumber(post.comments_count)}
+            <MessageCircle className="size-4" /> {post.comments_count >= 0 ? formatNumber(post.comments_count) : "—"}
           </span>
           {isVideo && post.video_views > 0 && (
             <span className="flex items-center gap-1.5 text-white text-sm font-medium">
@@ -71,10 +71,10 @@ export function OrganicPostCard({ post }: { post: MaitOrganicPost }) {
         {/* Engagement stats */}
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <Heart className="size-3" /> {formatNumber(post.likes_count)}
+            <Heart className="size-3" /> {post.likes_count >= 0 ? formatNumber(post.likes_count) : "—"}
           </span>
           <span className="flex items-center gap-1">
-            <MessageCircle className="size-3" /> {formatNumber(post.comments_count)}
+            <MessageCircle className="size-3" /> {post.comments_count >= 0 ? formatNumber(post.comments_count) : "—"}
           </span>
           {isVideo && post.video_play_count > 0 && (
             <span className="flex items-center gap-1">

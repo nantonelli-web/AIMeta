@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { AdCard } from "@/components/ads/ad-card";
 import { OrganicPostCard } from "@/components/organic/organic-post-card";
@@ -35,14 +36,34 @@ interface Props {
   organicPosts: MaitOrganicPost[];
   organicStats: {
     count: number;
-    avgLikes: number;
-    avgComments: number;
+    /** null when every post has likes hidden (Instagram setting) —
+     *  rendered as em-dash instead of "0" or "-1" so the user sees
+     *  "unknown" rather than wrong numbers. */
+    avgLikes: number | null;
+    avgComments: number | null;
     totalViews: number;
   };
 }
 
+function isChannel(v: string | null): v is Channel {
+  return v === "all" || v === "meta" || v === "google" || v === "instagram";
+}
+
 export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: Props) {
-  const [channel, setChannel] = useState<Channel>("all");
+  const searchParams = useSearchParams();
+  const initialFromUrl = searchParams.get("tab");
+  const [channel, setChannel] = useState<Channel>(
+    isChannel(initialFromUrl) ? initialFromUrl : "all",
+  );
+  // When the user runs a scan and scan-dropdown rewrites the URL with
+  // ?tab=instagram, the searchParams update fires this effect and we
+  // sync the local state. Without this the user would still see
+  // whichever tab they had open before the scan.
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (isChannel(t) && t !== channel) setChannel(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const { t } = useT();
 
   // Split ads by source
@@ -75,26 +96,32 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
   return (
     <div className="space-y-6">
       {/* ─── Channel filter ─── */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground shrink-0">{t("competitors", "filterBy")}</span>
-        <div className="flex items-center gap-1">
+      {/* Lifted to a framed strip with bigger pills + stronger
+          contrast so users actually notice it. Previously rendered
+          as a tiny inline-flex row that disappeared between the
+          page hero and the ad grid. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
+        <span className="text-[11px] uppercase tracking-wider text-foreground font-bold shrink-0">
+          {t("competitors", "filterBy")}
+        </span>
+        <div className="flex items-center gap-2 flex-wrap">
           {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setChannel(tab.key)}
               className={cn(
-                "inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors cursor-pointer",
+                "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
                 channel === tab.key
-                  ? "bg-gold/15 text-gold border border-gold/30"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "bg-gold/15 text-gold border border-gold/40"
+                  : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
             >
               {tab.icon}
-              {tab.label}
+              <span className="font-medium">{tab.label}</span>
               <span className={cn(
-                "text-[9px] rounded-full px-1 py-0.5 min-w-[16px] text-center",
+                "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
                 channel === tab.key
-                  ? "bg-gold/20 text-gold"
+                  ? "bg-gold/25 text-gold"
                   : "bg-muted text-muted-foreground"
               )}>
                 {tab.count}
@@ -203,13 +230,17 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
               </Card>
               <Card>
                 <CardContent className="py-4 text-center">
-                  <p className="text-2xl font-semibold">{formatNumber(organicStats.avgLikes)}</p>
+                  <p className="text-2xl font-semibold">
+                    {organicStats.avgLikes != null ? formatNumber(organicStats.avgLikes) : "—"}
+                  </p>
                   <p className="text-xs text-muted-foreground">{t("organic", "avgLikes")}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="py-4 text-center">
-                  <p className="text-2xl font-semibold">{formatNumber(organicStats.avgComments)}</p>
+                  <p className="text-2xl font-semibold">
+                    {organicStats.avgComments != null ? formatNumber(organicStats.avgComments) : "—"}
+                  </p>
                   <p className="text-xs text-muted-foreground">{t("organic", "avgComments")}</p>
                 </CardContent>
               </Card>

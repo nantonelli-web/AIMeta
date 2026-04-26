@@ -1275,9 +1275,12 @@ export async function computeOrganicBenchmarks(
     entry.total++;
     const fmt = classify(p);
     entry[fmt]++;
-    if ((p.likes_count ?? 0) > 0) entry.likes.push(p.likes_count ?? 0);
-    if ((p.comments_count ?? 0) > 0) entry.comments.push(p.comments_count ?? 0);
-    if ((p.video_views ?? 0) > 0) entry.views.push(p.video_views ?? 0);
+    // Instagram returns -1 for posts on accounts with hidden likes;
+    // treat negative as "unknown" and exclude. A real 0 is valid data
+    // and stays in the average. Null is coerced to -1 and excluded.
+    if ((p.likes_count ?? -1) >= 0) entry.likes.push(p.likes_count ?? 0);
+    if ((p.comments_count ?? -1) >= 0) entry.comments.push(p.comments_count ?? 0);
+    if ((p.video_views ?? -1) > 0) entry.views.push(p.video_views ?? 0);
     const capLen = (p.caption ?? "").length;
     if (capLen > 0) entry.captions.push(capLen);
     const when = p.posted_at
