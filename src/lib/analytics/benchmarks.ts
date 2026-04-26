@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractAdInsights } from "@/lib/meta/ad-insights";
+import {
+  classifyAdFormat,
+  computeAdDurationDays,
+  normalizeCtaLabel as sharedNormalizeCta,
+} from "@/lib/analytics/ad-shared";
 
 export type InferredAudience =
   | "prospecting"
@@ -189,13 +194,9 @@ function ageRangeBucketOrder(range: string): number {
   return m ? parseInt(m[1], 10) : 999;
 }
 
-function normalizeCtaLabel(raw: string): string {
-  const cleaned = raw.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  if (!cleaned) return "";
-  return cleaned
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
+// Local alias for the shared helper so existing call sites stay
+// readable. Single source of truth lives in lib/analytics/ad-shared.ts.
+const normalizeCtaLabel = sharedNormalizeCta;
 
 /**
  * Return the ad's primary UTM signature. Prefer `utm_campaign`, fall back to
@@ -571,62 +572,17 @@ export async function computeBenchmarks(
   for (const ad of ads) {
     const key = ad.competitor_id ?? "unknown";
     const entry = formatByComp.get(key) ?? { image: 0, video: 0, carousel: 0, dpa: 0, unknown: 0 };
+    // Track raw displayFormat distribution (audit trail surfaced in
+    // the UI under each per-brand pie). Bucketing logic itself lives
+    // in classifyAdFormat — single source of truth for every surface.
     const snapshot = (ad.raw_data?.snapshot ?? null) as Record<string, unknown> | null;
     const rawFormat = (snapshot?.displayFormat as string | undefined)?.toUpperCase() ?? null;
     const rawLabel = rawFormat ?? "(empty)";
     const rawMap = rawFormatByComp.get(key) ?? new Map<string, number>();
     rawMap.set(rawLabel, (rawMap.get(rawLabel) ?? 0) + 1);
     rawFormatByComp.set(key, rawMap);
-    const cards = Array.isArray(snapshot?.cards) ? (snapshot?.cards as unknown[]) : null;
-    const videos = Array.isArray(snapshot?.videos) ? (snapshot?.videos as unknown[]) : null;
 
-    // Strict priority: trust Meta's explicit displayFormat before looking at
-    // the raw snapshot payload. A VIDEO-flagged ad that happens to carry
-    // multiple cards (video carousels do exist) must NOT be misclassified
-    // as a plain image carousel, which was the bug in the previous logic.
-    let bucket: "image" | "video" | "carousel" | "dpa" | "unknown";
-    switch (rawFormat) {
-      case "DPA":
-        bucket = "dpa";
-        break;
-      case "CAROUSEL":
-      case "CAROUSEL_IMAGE":
-      case "CAROUSEL_VIDEO":
-      case "MULTIPLE_IMAGES":
-        bucket = "carousel";
-        break;
-      case "VIDEO":
-      case "SINGLE_VIDEO":
-        bucket = "video";
-        break;
-      case "IMAGE":
-      case "SINGLE_IMAGE":
-        bucket = "image";
-        break;
-      case "DCO": {
-        // DCO = Dynamic Creative Optimization. snapshot.cards is a POOL of
-        // creative variants Meta rotates among, NOT carousel slides.
-        // Ad Library renders the primary variant (first card), so classify
-        // by what the primary actually is. We rely on ad.video_url /
-        // ad.image_url because normalize() already resolves the first card.
-        if (ad.video_url) bucket = "video";
-        else if (ad.image_url) bucket = "image";
-        else bucket = "unknown";
-        break;
-      }
-      case null:
-      default: {
-        // Missing / unknown displayFormat — here the cards.length > 1
-        // heuristic is safe because we have no explicit signal either way.
-        const cardsLen = cards?.length ?? 0;
-        const videosLen = videos?.length ?? 0;
-        if (cardsLen > 1) bucket = "carousel";
-        else if (videosLen > 0 || ad.video_url) bucket = "video";
-        else if (ad.image_url) bucket = "image";
-        else bucket = "unknown";
-      }
-    }
-
+    const bucket = classifyAdFormat(ad);
     if (bucket === "carousel") { carouselCount++; entry.carousel++; }
     else if (bucket === "dpa") { dpaCount++; entry.dpa++; }
     else if (bucket === "video") { videoCount++; entry.video++; }
@@ -797,19 +753,14 @@ export async function computeBenchmarks(
     });
 
   // ---- Campaign duration ----
-  // For ACTIVE ads, ignore end_date (Meta Ad Library sets it to snapshot date,
-  // not actual campaign end). Use Date.now() instead. Clamp to a minimum
-  // of 1 day so sub-day test campaigns are not silently dropped from the
-  // average — previously `if (days < 1) continue` excluded them.
+  // Single source of truth in computeAdDurationDays — ACTIVE ads
+  // ignore end_date (Meta Ad Library sets it to snapshot date, not
+  // real campaign end), sub-day campaigns clamp to 1 day so they are
+  // never silently dropped from the average.
   const durationByComp = new Map<string, number[]>();
   for (const ad of ads) {
-    if (!ad.start_date) continue;
-    const start = new Date(ad.start_date).getTime();
-    const end = ad.status === "ACTIVE" || !ad.end_date
-      ? Date.now()
-      : new Date(ad.end_date).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
-    const days = Math.max(1, Math.round((end - start) / 86_400_000));
+    const days = computeAdDurationDays(ad);
+    if (days == null) continue;
     const key = ad.competitor_id ?? "unknown";
     const arr = durationByComp.get(key) ?? [];
     arr.push(days);

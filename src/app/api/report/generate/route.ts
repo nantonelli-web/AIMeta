@@ -3,6 +3,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inferObjective } from "@/lib/analytics/objective-inference";
+import {
+  classifyAdFormat,
+  computeAdDurationDays,
+  normalizeCtaLabel,
+} from "@/lib/analytics/ad-shared";
 import { generateSinglePptx, generateComparisonPptx, type BrandData, type SectionType } from "@/lib/report/generate-pptx";
 import { generateSinglePdf, generateComparisonPdf } from "@/lib/report/generate-pdf";
 import { analyzeCopy, analyzeVisuals, type BrandAdData, type CreativeAnalysisResult } from "@/lib/ai/creative-analysis";
@@ -96,7 +101,12 @@ async function fetchBrandData(
   const active = adsList.filter((a) => a.status === "ACTIVE");
   const isGoogle = source === "google";
 
-  // Format counts — Meta uses snapshot.cards for carousel, Google uses raw_data.adFormat
+  // Format counts — shared classifier for Meta so the report tables
+  // see the same image/video/carousel/dpa split as Benchmarks and
+  // Compare. Google still uses adFormat heuristics because the
+  // displayFormat scheme is Meta-specific. Carousel + DPA roll up
+  // into the report's `carouselCount` slot since the templates only
+  // expose three buckets.
   let imageCount = 0;
   let videoCount = 0;
   let carouselCount = 0;
@@ -106,21 +116,23 @@ async function fetchBrandData(
       if (fmt.includes("video")) videoCount++;
       else imageCount++;
     } else {
-      if (a.video_url) {
-        videoCount++;
-      } else {
-        imageCount++;
-      }
-      const snapshot = (a.raw_data?.snapshot ?? {}) as Record<string, unknown>;
-      const cards = (snapshot?.cards ?? []) as unknown[];
-      if (cards.length > 1) carouselCount++;
+      const bucket = classifyAdFormat(a);
+      if (bucket === "video") videoCount++;
+      else if (bucket === "image") imageCount++;
+      else if (bucket === "carousel" || bucket === "dpa") carouselCount++;
+      // unknown intentionally not added to any visible bucket
     }
   }
 
-  // CTA counts (Meta has CTA field, Google doesn't)
+  // CTA counts — shared normalizer so "Shop Now" / "SHOP_NOW" /
+  // "shop now" collapse identically across surfaces. Without this
+  // the report listed them as separate top CTAs.
   const ctaMap = new Map<string, number>();
   for (const a of adsList) {
-    if (a.cta) ctaMap.set(a.cta, (ctaMap.get(a.cta) ?? 0) + 1);
+    if (!a.cta) continue;
+    const key = normalizeCtaLabel(a.cta);
+    if (!key) continue;
+    ctaMap.set(key, (ctaMap.get(key) ?? 0) + 1);
   }
   const topCtas = [...ctaMap.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -138,17 +150,12 @@ async function fetchBrandData(
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ name, count }));
 
-  // Duration
+  // Duration — shared helper clamps sub-day campaigns to 1 day so
+  // Report and Benchmarks agree on average campaign length.
   const durations: number[] = [];
   for (const a of adsList) {
-    if (!a.start_date) continue;
-    const start = new Date(a.start_date).getTime();
-    const end = a.status === "ACTIVE" || !a.end_date
-      ? Date.now()
-      : new Date(a.end_date).getTime();
-    const days = Math.round((end - start) / 86_400_000);
-    if (days < 1) continue;
-    durations.push(days);
+    const days = computeAdDurationDays(a);
+    if (days != null) durations.push(days);
   }
   const avgDuration =
     durations.length > 0

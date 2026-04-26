@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inferObjective } from "@/lib/analytics/objective-inference";
 import {
+  classifyAdFormat,
+  computeAdDurationDays,
+  normalizeCtaLabel,
+} from "@/lib/analytics/ad-shared";
+import {
   analyzeCopy,
   analyzeVisuals,
   type BrandAdData,
@@ -21,8 +26,11 @@ export const maxDuration = 300;
  * History:
  *   - v0: legacy rows (default before this column existed)
  *   - v1: country filter applied to technical stats SQL query
+ *   - v2: shared duration / CTA / format helpers — sub-day campaigns
+ *         now count as 1 day instead of being dropped, format mix
+ *         uses the displayFormat-aware classifier
  */
-const CURRENT_DATA_VERSION = 1;
+const CURRENT_DATA_VERSION = 2;
 
 /* ── Schemas ─────────────────────────────────────────────── */
 
@@ -175,21 +183,27 @@ async function computeTechnicalStats(
         fetchAllAds(),
       ]);
       const active = adsList.filter((a) => a.status === "ACTIVE");
-      const imageCount = adsList.filter(
-        (a) => a.image_url && !a.video_url
-      ).length;
-      const videoCount = adsList.filter((a) => a.video_url).length;
 
-      // CTA counts — normalise case/separators so 'Shop Now' == 'SHOP_NOW'
+      // Format mix — share the bucket logic with Benchmarks/Report.
+      // The previous inline image_url/!video_url heuristic missed
+      // carousel and DPA entirely, so the same brand was reported
+      // with different format mixes across surfaces.
+      let imageCount = 0;
+      let videoCount = 0;
+      for (const a of adsList) {
+        const bucket = classifyAdFormat(a);
+        if (bucket === "video") videoCount++;
+        else if (bucket === "image") imageCount++;
+        // carousel / dpa / unknown intentionally not surfaced on the
+        // Compare technical card — only image vs video is rendered there.
+      }
+
+      // CTA counts — shared normalizer so case + separator variants
+      // collapse identically to Benchmarks ("Shop Now" == "SHOP_NOW").
       const ctaMap = new Map<string, number>();
       for (const a of adsList) {
         if (!a.cta) continue;
-        const key = a.cta
-          .trim()
-          .replace(/[_-]+/g, " ")
-          .replace(/\s+/g, " ")
-          .toLowerCase()
-          .replace(/\b\w/g, (c) => c.toUpperCase());
+        const key = normalizeCtaLabel(a.cta);
         if (!key) continue;
         ctaMap.set(key, (ctaMap.get(key) ?? 0) + 1);
       }
@@ -209,17 +223,13 @@ async function computeTechnicalStats(
         .sort((a, b) => b[1] - a[1])
         .map(([name, count]) => ({ name, count }));
 
-      // Duration
+      // Duration — shared helper clamps sub-day campaigns to 1 day
+      // (was `if (days < 1) continue` which silently dropped them
+      // and made avg duration disagree with Benchmarks).
       const durations: number[] = [];
       for (const a of adsList) {
-        if (!a.start_date) continue;
-        const start = new Date(a.start_date).getTime();
-        const end = a.status === "ACTIVE" || !a.end_date
-          ? Date.now()
-          : new Date(a.end_date).getTime();
-        const days = Math.round((end - start) / 86_400_000);
-        if (days < 1) continue;
-        durations.push(days);
+        const days = computeAdDurationDays(a);
+        if (days != null) durations.push(days);
       }
       const avgDuration =
         durations.length > 0
