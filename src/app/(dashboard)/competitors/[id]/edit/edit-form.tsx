@@ -46,8 +46,13 @@ function parseCountries(val: string | null): string[] {
 
 export function EditCompetitorForm({
   competitor,
+  deleteCounts,
 }: {
   competitor: MaitCompetitor;
+  /** Pre-fetched on the server so the destructive-action dialog can
+   *  show concrete numbers ("36 ads, 12 post, 4 scan job") without an
+   *  extra round trip the moment the user clicks Delete. */
+  deleteCounts?: { ads: number; posts: number; jobs: number };
 }) {
   const router = useRouter();
   const [pageName, setPageName] = useState(competitor.page_name);
@@ -362,6 +367,31 @@ export function EditCompetitorForm({
               {t("editCompetitor", "deleteConfirm")} <b>{competitor.page_name}</b>?
               {" "}{t("editCompetitor", "deleteWarning")}
             </p>
+            {deleteCounts &&
+              (deleteCounts.ads > 0 ||
+                deleteCounts.posts > 0 ||
+                deleteCounts.jobs > 0) && (
+                <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
+                  {deleteCounts.ads > 0 && (
+                    <li>
+                      <b className="text-foreground">{deleteCounts.ads}</b>{" "}
+                      {t("editCompetitor", "deleteCountAds")}
+                    </li>
+                  )}
+                  {deleteCounts.posts > 0 && (
+                    <li>
+                      <b className="text-foreground">{deleteCounts.posts}</b>{" "}
+                      {t("editCompetitor", "deleteCountPosts")}
+                    </li>
+                  )}
+                  {deleteCounts.jobs > 0 && (
+                    <li>
+                      <b className="text-foreground">{deleteCounts.jobs}</b>{" "}
+                      {t("editCompetitor", "deleteCountJobs")}
+                    </li>
+                  )}
+                </ul>
+              )}
             <div className="flex gap-2">
               <Button
                 variant="destructive"

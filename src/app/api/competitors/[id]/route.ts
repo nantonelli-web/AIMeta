@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { competitorsTag } from "@/lib/library/cached-data";
 import { cleanInstagramUsername } from "@/lib/instagram/service";
 import { cleanAdvertiserDomain } from "@/lib/apify/google-ads-service";
@@ -100,6 +101,18 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * Delete a competitor and everything associated with it.
+ *
+ * Foreign keys on the related tables are inconsistent — some cascade
+ * (`mait_organic_posts`, `mait_collection_ads` via ads), others set
+ * NULL (`mait_ads_external`, `mait_scrape_jobs`, `mait_alerts`). If we
+ * relied on the FKs alone, deleting a brand would leave orphan ads and
+ * jobs sitting in tables forever. So we do the cleanup explicitly with
+ * the admin client (RLS would block the orphan rows once the parent is
+ * gone). Order matters: ads → jobs → alerts → competitor, so each step
+ * can hit FK-set-null cleanly.
+ */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -111,17 +124,66 @@ export async function DELETE(
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: existing } = await supabase
+  // RLS-checked read so non-members of the workspace cannot delete.
+  const { data: existing, error: existingErr } = await supabase
     .from("mait_competitors")
     .select("workspace_id")
     .eq("id", id)
     .single();
+  if (existingErr || !existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  const { error } = await supabase.from("mait_competitors").delete().eq("id", id);
+  const admin = createAdminClient();
+
+  // Wipe the related rows first. `mait_ads_external` is the heaviest
+  // and will also cascade to mait_collection_ads + mait_ads_tags via
+  // its own FKs. Jobs and alerts are small but would otherwise survive
+  // with competitor_id = NULL because their FK is `on delete set null`.
+  const adsDel = await admin
+    .from("mait_ads_external")
+    .delete()
+    .eq("competitor_id", id);
+  if (adsDel.error) {
+    console.error("[api/competitors/:id ads cleanup]", adsDel.error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+
+  const jobsDel = await admin
+    .from("mait_scrape_jobs")
+    .delete()
+    .eq("competitor_id", id);
+  if (jobsDel.error) {
+    console.error("[api/competitors/:id jobs cleanup]", jobsDel.error);
+  }
+
+  const alertsDel = await admin
+    .from("mait_alerts")
+    .delete()
+    .eq("competitor_id", id);
+  if (alertsDel.error) {
+    console.error("[api/competitors/:id alerts cleanup]", alertsDel.error);
+  }
+
+  // Saved comparisons reference competitors via an array column, so
+  // they have no FK at all. Mark any that include this brand as stale
+  // so the user knows the cached technical_data no longer matches the
+  // current set of brands. Deleting them outright would surprise users
+  // who saved the comparison earlier.
+  await admin
+    .from("mait_comparisons")
+    .update({ stale: true, updated_at: new Date().toISOString() })
+    .contains("competitor_ids", [id]);
+
+  // mait_organic_posts cascades automatically (FK is on delete cascade).
+  const { error } = await admin
+    .from("mait_competitors")
+    .delete()
+    .eq("id", id);
   if (error) {
     console.error("[api/competitors/:id]", error);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
-  if (existing?.workspace_id) revalidateTag(competitorsTag(existing.workspace_id));
+  revalidateTag(competitorsTag(existing.workspace_id));
   return NextResponse.json({ ok: true });
 }

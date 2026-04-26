@@ -34,6 +34,28 @@ export default async function EditCompetitorPage({
   if (!competitor) notFound();
   const c = competitor as MaitCompetitor;
 
+  // Lightweight counts for the delete confirmation dialog. Head + exact
+  // count returns only the row count, not any data, so this is cheap.
+  const [adsRes, postsRes, jobsRes] = await Promise.all([
+    supabase
+      .from("mait_ads_external")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
+    supabase
+      .from("mait_organic_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
+    supabase
+      .from("mait_scrape_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
+  ]);
+  const deleteCounts = {
+    ads: adsRes.count ?? 0,
+    posts: postsRes.count ?? 0,
+    jobs: jobsRes.count ?? 0,
+  };
+
   return (
     <div className="max-w-3xl space-y-6">
       <Link
@@ -69,7 +91,7 @@ export default async function EditCompetitorPage({
           <CardDescription>{t("editCompetitor", "detailsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <EditCompetitorForm competitor={c} />
+          <EditCompetitorForm competitor={c} deleteCounts={deleteCounts} />
         </CardContent>
       </Card>
     </div>

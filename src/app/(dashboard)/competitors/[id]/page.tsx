@@ -9,6 +9,7 @@ import { ScanDropdown } from "./scan-dropdown";
 import { FrequencySelector } from "./frequency-selector";
 import { CollapsibleJobHistory } from "./collapsible-job-history";
 import { ChannelTabs } from "./channel-tabs";
+import { DeleteBrandButton } from "./delete-brand-button";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { PrintButton } from "@/components/ui/print-button";
 import { formatDate } from "@/lib/utils";
@@ -28,35 +29,78 @@ export default async function CompetitorDetailPage({
   const locale = await getLocale();
   const t = serverT(locale);
 
+  // Specific fields only — `select("*")` was pulling every column on this
+  // hot path. mait_competitors has ~25 columns; we use ~10.
   const { data: competitor } = await supabase
     .from("mait_competitors")
-    .select("*")
+    .select(
+      "id, workspace_id, page_name, page_url, country, category, monitor_config, profile_picture_url, instagram_username, google_advertiser_id, google_domain"
+    )
     .eq("id", id)
     .single();
 
   if (!competitor) notFound();
   const c = competitor as MaitCompetitor;
 
-  const [{ data: ads }, { data: jobs }, { data: organicPosts }] = await Promise.all([
+  // Limit was 120 ads + 120 organic posts, each row carrying a full
+  // raw_data JSONB (50–200 KB on Meta, smaller on Instagram). On a
+  // multi-country brand that meant ~10–25 MB serialised through the
+  // RSC payload before the page rendered, which felt biblical to the
+  // user. 30 is enough to populate the channel tabs above the fold;
+  // load-more / pagination can be added later if needed. `description`
+  // is only read by the ad detail page so we drop it here too.
+  // adCount / postCount / jobCount feed the delete-confirmation
+  // dialog with concrete numbers; head+exact returns only the count.
+  const [
+    { data: ads },
+    { data: jobs },
+    { data: organicPosts },
+    { count: adCount },
+    { count: postCount },
+    { count: jobCount },
+  ] = await Promise.all([
     supabase
       .from("mait_ads_external")
-      .select("id, workspace_id, competitor_id, ad_archive_id, headline, ad_text, description, cta, image_url, video_url, landing_url, platforms, status, start_date, end_date, created_at, raw_data, source")
+      .select(
+        "id, workspace_id, competitor_id, ad_archive_id, headline, ad_text, cta, image_url, video_url, landing_url, platforms, status, start_date, end_date, created_at, raw_data, source"
+      )
       .eq("competitor_id", id)
       .order("start_date", { ascending: false, nullsFirst: false })
-      .limit(120),
+      .limit(30),
     supabase
       .from("mait_scrape_jobs")
-      .select("*")
+      .select(
+        "id, workspace_id, competitor_id, apify_run_id, status, started_at, completed_at, records_count, cost_cu, error"
+      )
       .eq("competitor_id", id)
       .order("started_at", { ascending: false })
       .limit(10),
     supabase
       .from("mait_organic_posts")
-      .select("*")
+      .select(
+        "id, workspace_id, competitor_id, platform, post_id, post_url, post_type, caption, display_url, video_url, likes_count, comments_count, shares_count, video_views, video_play_count, hashtags, mentions, tagged_users, posted_at, raw_data, created_at"
+      )
       .eq("competitor_id", id)
       .order("posted_at", { ascending: false, nullsFirst: false })
-      .limit(120),
+      .limit(30),
+    supabase
+      .from("mait_ads_external")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
+    supabase
+      .from("mait_organic_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
+    supabase
+      .from("mait_scrape_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id),
   ]);
+  const deleteCounts = {
+    ads: adCount ?? 0,
+    posts: postCount ?? 0,
+    jobs: jobCount ?? 0,
+  };
 
   const adsList = (ads ?? []) as MaitAdExternal[];
   const jobsList = (jobs ?? []) as MaitScrapeJob[];
@@ -136,6 +180,11 @@ export default async function CompetitorDetailPage({
               >
                 <Pencil className="size-3.5" />
               </Link>
+              <DeleteBrandButton
+                competitorId={c.id}
+                competitorName={c.page_name}
+                counts={deleteCounts}
+              />
             </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <a
