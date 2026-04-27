@@ -9,7 +9,7 @@ import { TagButton } from "@/components/ads/tag-button";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
 import { Download } from "lucide-react";
-import { cn, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import type { MaitAdExternal, MaitOrganicPost } from "@/types";
 
@@ -188,27 +188,16 @@ export function ChannelTabs({
     { key: "instagram", label: "Instagram", count: instagramCount, icon: <InstagramIcon className="size-3.5" /> },
   ];
 
-  // Status pill counts — sum of paid totals per state. When the user
-  // is on a single paid channel we narrow to that channel; on "all"
-  // and "instagram" we show the paid-wide aggregate.
+  // Status pills — paid channels only (Instagram organic posts have
+  // no ACTIVE/INACTIVE concept). Counts come from the head+exact
+  // queries done in the parent page; we drop them from the pill UI
+  // itself to mirror Benchmarks but keep the structure here in case
+  // we want them back as e.g. tooltips or sidebar copy.
   const showStatusFilter = channel !== "instagram";
-  const paidActive =
-    channel === "meta"
-      ? activeTotals.meta
-      : channel === "google"
-        ? activeTotals.google
-        : activeTotals.meta + activeTotals.google;
-  const paidTotal =
-    channel === "meta"
-      ? channelTotals.meta
-      : channel === "google"
-        ? channelTotals.google
-        : channelTotals.meta + channelTotals.google;
-  const paidInactive = Math.max(0, paidTotal - paidActive);
-  const statusPills: { key: Status; label: string; count: number }[] = [
-    { key: "all", label: t("competitors", "channelAll"), count: paidTotal },
-    { key: "active", label: t("competitors", "statusActive"), count: paidActive },
-    { key: "inactive", label: t("competitors", "statusInactive"), count: paidInactive },
+  const statusPills: { key: Status; label: string }[] = [
+    { key: "all", label: t("competitors", "channelAll") },
+    { key: "active", label: t("competitors", "statusActive") },
+    { key: "inactive", label: t("competitors", "statusInactive") },
   ];
 
   // Filter out channels with 0 items (except "all")
@@ -221,25 +210,21 @@ export function ChannelTabs({
   const visibleAds = channel === "meta" ? metaAds : channel === "google" ? googleAds : channel === "all" ? ads : [];
   const visibleOrganic = showInstagram ? organicPosts : [];
 
-  // Same chip class as Benchmarks for visual consistency across the
-  // app — flat pills, no framed container, gold-on-gold for selected.
+  // Identical chip class to Benchmarks: flat pill, gold/15 selected,
+  // neutral border otherwise. No count badge — counts are already
+  // visible in the "(X of Y) ads" line above each grid, and Benchmarks
+  // itself omits them for visual cleanliness.
   const chipClass = (selected: boolean) =>
     selected
       ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors cursor-pointer"
       : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer";
-  const badgeClass = (selected: boolean) =>
-    cn(
-      "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
-      selected ? "bg-gold/25 text-gold" : "bg-muted text-muted-foreground",
-    );
 
   return (
     <div className="space-y-6">
       {/* ─── Channel + Status row ─────────────────────────────
-          Flat Benchmarks-style strip — inline labels, vertical
-          divider between the two filter groups, no framed box.
-          Saves vertical real estate vs. the previous two-row
-          framed layout while staying scannable. */}
+          Same grammar as the Benchmarks filter strip: inline label
+          (uppercase 10px bold), pills without count badges, vertical
+          divider between groups. */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
@@ -253,8 +238,7 @@ export function ChannelTabs({
               className={chipClass(channel === tab.key)}
             >
               {tab.icon}
-              <span className="font-medium">{tab.label}</span>
-              <span className={badgeClass(channel === tab.key)}>{tab.count}</span>
+              {tab.label}
             </button>
           ))}
         </div>
@@ -273,8 +257,7 @@ export function ChannelTabs({
                   onClick={() => setStatus(p.key)}
                   className={chipClass(status === p.key)}
                 >
-                  <span className="font-medium">{p.label}</span>
-                  <span className={badgeClass(status === p.key)}>{p.count}</span>
+                  {p.label}
                 </button>
               ))}
             </div>
@@ -283,9 +266,8 @@ export function ChannelTabs({
       </div>
 
       {/* ─── Country row (Meta only) ─────────────────────────
-          Own row because the chip count is unbounded — packing it
-          on the same line as Channel/Status would force-wrap and
-          break the visual rhythm. Same flat pattern. */}
+          Own row because country chips can be many. Same flat
+          pattern as the row above. */}
       {showCountryFilter && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-3 print:hidden">
           <span className="text-[10px] uppercase tracking-wider text-foreground font-bold mr-1">
@@ -296,7 +278,7 @@ export function ChannelTabs({
             onClick={() => setCountry(null)}
             className={chipClass(country === null)}
           >
-            <span className="font-medium">{t("competitors", "channelAll")}</span>
+            {t("competitors", "channelAll")}
           </button>
           {availableCountries.map((c) => (
             <button
@@ -305,8 +287,7 @@ export function ChannelTabs({
               onClick={() => setCountry(c.code)}
               className={chipClass(country === c.code)}
             >
-              <span className="font-medium font-mono">{c.code}</span>
-              <span className={badgeClass(country === c.code)}>{c.count}</span>
+              <span className="font-mono">{c.code}</span>
             </button>
           ))}
         </div>
