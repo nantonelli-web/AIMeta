@@ -283,6 +283,8 @@ const translations = {
     filterByStatus: { it: "Stato", en: "Status" },
     statusActive: { it: "Attive", en: "Active" },
     statusInactive: { it: "Non attive", en: "Inactive" },
+    loadMore: { it: "Carica altre", en: "Load more" },
+    loadingMore: { it: "Carico...", en: "Loading..." },
     ofTotal: { it: "di", en: "of" },
     noMetaAds: { it: "Nessuna Meta Ad raccolta.", en: "No Meta Ads collected." },
     noGoogleAds: { it: "Nessuna Google Ad raccolta.", en: "No Google Ads collected." },

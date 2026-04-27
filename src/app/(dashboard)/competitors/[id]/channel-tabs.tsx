@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { AdCard } from "@/components/ads/ad-card";
 import { OrganicPostCard } from "@/components/organic/organic-post-card";
 import { TagButton } from "@/components/ads/tag-button";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import { CountryFilterDropdown } from "./country-filter-dropdown";
@@ -112,14 +113,14 @@ export function ChannelTabs({
     return qs ? `${pathname}?${qs}` : pathname;
   }
 
-  // Split incoming ads by source so the "all" view can group Meta and
-  // Google sections separately. Server has already applied the active
-  // filters — no further status/country narrowing needed here.
-  const metaAdsAll = ads.filter((a) => {
+  // Split server-rendered ads by source so the "all" view can group
+  // Meta and Google sections separately. Server has already applied
+  // every active filter — no further client-side narrowing needed.
+  const serverMetaAds = ads.filter((a) => {
     const src = (a as unknown as Record<string, unknown>).source;
     return src !== "google";
   });
-  const googleAds = ads.filter((a) => {
+  const serverGoogleAds = ads.filter((a) => {
     const src = (a as unknown as Record<string, unknown>).source;
     return src === "google";
   });
@@ -128,10 +129,59 @@ export function ChannelTabs({
     availableCountries.length > 0 &&
     (channel === "all" || channel === "meta");
 
-  // Server has already applied the country filter at the DB query, so
-  // the metaAdsAll set is already narrowed. Keep the alias for the
-  // existing render code that reads `metaAds`.
-  const metaAds = metaAdsAll;
+  // ── Load more: client-appended ads beyond the initial 30 ──
+  // The server-rendered Suspense child caps the first paint at 30
+  // ads to keep the wire transfer light (each ad carries 50-200 KB
+  // of raw_data). The "Load more" button calls /api/competitors/{id}
+  // /ads?offset=… to pull the next page client-side and append in
+  // place — no full Suspense reload, no skeleton flash.
+  //
+  // Suspense key includes every filter, so when the user changes a
+  // filter the entire ChannelTabs subtree re-mounts and these
+  // client-side states reset to empty automatically.
+  const [extraMeta, setExtraMeta] = useState<MaitAdExternal[]>([]);
+  const [extraGoogle, setExtraGoogle] = useState<MaitAdExternal[]>([]);
+  const [loadingMore, setLoadingMore] = useState<"meta" | "google" | null>(
+    null,
+  );
+
+  const metaAds = useMemo(
+    () => [...serverMetaAds, ...extraMeta],
+    [serverMetaAds, extraMeta],
+  );
+  const googleAds = useMemo(
+    () => [...serverGoogleAds, ...extraGoogle],
+    [serverGoogleAds, extraGoogle],
+  );
+
+  async function loadMore(source: "meta" | "google") {
+    setLoadingMore(source);
+    try {
+      const params = new URLSearchParams();
+      params.set("source", source);
+      params.set(
+        "offset",
+        String(source === "meta" ? metaAds.length : googleAds.length),
+      );
+      params.set("limit", "30");
+      if (statusFilter) params.set("status", statusFilter);
+      if (countriesFilter.length > 0) {
+        params.set("countries", countriesFilter.join(","));
+      }
+      const res = await fetch(
+        `/api/competitors/${competitorId}/ads?${params.toString()}`,
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { ads: MaitAdExternal[] };
+      const next = json.ads ?? [];
+      if (source === "meta") setExtraMeta((prev) => [...prev, ...next]);
+      else setExtraGoogle((prev) => [...prev, ...next]);
+    } catch {
+      // Silent on failure — the button stays clickable for retry.
+    } finally {
+      setLoadingMore(null);
+    }
+  }
 
   // Channel badge counts honour the active Status filter: when the
   // user picks "Active", each channel chip shows its DB-wide active
@@ -309,6 +359,26 @@ export function ChannelTabs({
                   <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
                 ))}
               </div>
+              {filteredTotals.meta > metaAds.length && (
+                <div className="flex justify-center pt-2 print:hidden">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadMore("meta")}
+                    disabled={loadingMore !== null}
+                    className="gap-2 cursor-pointer"
+                  >
+                    {loadingMore === "meta" ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        {t("competitors", "loadingMore")}
+                      </>
+                    ) : (
+                      `${t("competitors", "loadMore")} (${filteredTotals.meta - metaAds.length})`
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -330,6 +400,26 @@ export function ChannelTabs({
                   <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
                 ))}
               </div>
+              {filteredTotals.google > googleAds.length && (
+                <div className="flex justify-center pt-2 print:hidden">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadMore("google")}
+                    disabled={loadingMore !== null}
+                    className="gap-2 cursor-pointer"
+                  >
+                    {loadingMore === "google" ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        {t("competitors", "loadingMore")}
+                      </>
+                    ) : (
+                      `${t("competitors", "loadMore")} (${filteredTotals.google - googleAds.length})`
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -366,6 +456,33 @@ export function ChannelTabs({
                   <AdCard key={ad.id} ad={ad} competitorId={competitorId} />
                 ))}
               </div>
+              {(() => {
+                if (channel !== "meta" && channel !== "google") return null;
+                const total =
+                  channel === "meta" ? filteredTotals.meta : filteredTotals.google;
+                if (total <= visibleAds.length) return null;
+                const remaining = total - visibleAds.length;
+                return (
+                  <div className="flex justify-center pt-2 print:hidden">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(channel)}
+                      disabled={loadingMore !== null}
+                      className="gap-2 cursor-pointer"
+                    >
+                      {loadingMore === channel ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          {t("competitors", "loadingMore")}
+                        </>
+                      ) : (
+                        `${t("competitors", "loadMore")} (${remaining})`
+                      )}
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
