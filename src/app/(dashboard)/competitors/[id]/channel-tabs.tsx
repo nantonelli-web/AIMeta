@@ -251,10 +251,13 @@ export function ChannelTabs({
 
   return (
     <div className="space-y-6">
-      {/* ─── Channel + Status row ─────────────────────────────
+      {/* ─── Channel · Country · Status — all on one row ──────
           Same grammar as the Benchmarks filter strip: inline label
           (uppercase 10px bold), pills without count badges, vertical
-          divider between groups. */}
+          divider between groups. Country dropdown sits in the middle
+          (Meta-only, hidden on Instagram/Google) so the row reads
+          left-to-right as "narrow the channel, then the market,
+          then the status". */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
@@ -265,9 +268,10 @@ export function ChannelTabs({
               key={p.key}
               href={buildHref({
                 tab: p.key === "all" ? null : p.key,
-                // Switching to Instagram disables the country filter
-                // (organic posts have no scan_countries). Drop the
-                // selection rather than carrying an invisible filter.
+                // Switching to Instagram or Google disables the
+                // country filter (no scan_countries on those rows).
+                // Drop the selection rather than carrying an
+                // invisible filter forward.
                 ...(p.key === "instagram" || p.key === "google"
                   ? { countries: null }
                   : {}),
@@ -279,6 +283,29 @@ export function ChannelTabs({
             </Link>
           ))}
         </div>
+
+        {showCountryFilter && (
+          <>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
+                {t("competitors", "filterByCountry")}
+              </span>
+              <CountryFilterDropdown
+                availableCountries={availableCountries}
+                selected={selectedCountries}
+                onChange={(next) => {
+                  const codes = [...next];
+                  router.push(
+                    buildHref({
+                      countries: codes.length > 0 ? codes.join(",") : null,
+                    }),
+                  );
+                }}
+              />
+            </div>
+          </>
+        )}
 
         {showStatusFilter && (
           <>
@@ -302,31 +329,6 @@ export function ChannelTabs({
           </>
         )}
       </div>
-
-      {/* ─── Country row (Meta only) ─────────────────────────
-          Same dropdown grammar as the Benchmarks CountryFilter:
-          searchable list with checkboxes. Filter is applied at the
-          DB query (server) so the 30-row cap is post-filter — picking
-          GB on Sezane no longer shows "1 of 415". */}
-      {showCountryFilter && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 print:hidden">
-          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold mr-1">
-            {t("competitors", "filterByCountry")}
-          </span>
-          <CountryFilterDropdown
-            availableCountries={availableCountries}
-            selected={selectedCountries}
-            onChange={(next) => {
-              const codes = [...next];
-              router.push(
-                buildHref({
-                  countries: codes.length > 0 ? codes.join(",") : null,
-                }),
-              );
-            }}
-          />
-        </div>
-      )}
 
       {/* ─── Ads section ─── */}
       {channel === "all" ? (
