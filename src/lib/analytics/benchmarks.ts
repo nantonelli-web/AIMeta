@@ -166,8 +166,6 @@ export interface BenchmarkData {
     competitorIdsFilterSize: number;
     competitorIdsFilterSample: string[];
   };
-  /** Advantage+ usage percentage per competitor */
-  advantagePlusByCompetitor: { name: string; percent: number }[];
   /** Average collation (variant) count per competitor */
   avgVariantsByCompetitor: { name: string; variants: number }[];
   /** Top targeted countries across all ads */
@@ -177,7 +175,6 @@ export interface BenchmarkData {
     activeAds: number;
     avgDuration: number;
     avgCopyLength: number;
-    advantagePlusPercent: number;
   };
 }
 
@@ -860,23 +857,6 @@ export async function computeBenchmarks(
     }))
     .sort((a, b) => b.countedInWindow - a.countedInWindow);
 
-  // ---- Advantage+ usage % per competitor ----
-  const aaaByComp = new Map<string, { total: number; aaa: number }>();
-  for (const ad of ads) {
-    const key = ad.competitor_id ?? "unknown";
-    const entry = aaaByComp.get(key) ?? { total: 0, aaa: 0 };
-    entry.total++;
-    if (ad.raw_data?.isAaaEligible === true) entry.aaa++;
-    aaaByComp.set(key, entry);
-  }
-  const advantagePlusByCompetitor = [...aaaByComp.entries()]
-    .map(([id, v]) => ({
-      name: compMap.get(id) ?? "N/A",
-      percent: v.total > 0 ? Math.round((v.aaa / v.total) * 100) : 0,
-    }))
-    .filter((v) => v.percent > 0)
-    .sort((a, b) => b.percent - a.percent);
-
   // ---- Avg variants per ad (collationCount) ----
   const variantsByComp = new Map<string, number[]>();
   for (const ad of ads) {
@@ -976,7 +956,6 @@ export async function computeBenchmarks(
   // ---- Totals ----
   const allDurations = [...durationByComp.values()].flat();
   const allCopy = [...copyByComp.values()].flat();
-  const totalAaaCount = ads.filter((a) => a.raw_data?.isAaaEligible === true).length;
   const totals = {
     totalAds: ads.length,
     activeAds: ads.filter((a) => a.status === "ACTIVE").length,
@@ -990,8 +969,6 @@ export async function computeBenchmarks(
       allCopy.length > 0
         ? Math.round(allCopy.reduce((a, b) => a + b, 0) / allCopy.length)
         : 0,
-    advantagePlusPercent:
-      ads.length > 0 ? Math.round((totalAaaCount / ads.length) * 100) : 0,
   };
 
   return {
@@ -1022,7 +999,6 @@ export async function computeBenchmarks(
       competitorIdsFilterSize: competitorIds?.length ?? 0,
       competitorIdsFilterSample: competitorIds?.slice(0, 3) ?? [],
     },
-    advantagePlusByCompetitor,
     avgVariantsByCompetitor,
     topTargetedCountries,
     totals,

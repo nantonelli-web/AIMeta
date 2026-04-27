@@ -888,8 +888,6 @@ const translations = {
     charsLabel: { it: "Caratteri", en: "Characters" },
     adsPerWeekLabel: { it: "Ads/settimana", en: "Ads/week" },
     adsLabel: { it: "Ads", en: "Ads" },
-    advantagePlusPercent: { it: "% Advantage+", en: "% Advantage+" },
-    advantagePlusChart: { it: "Advantage+ per brand (%)", en: "Advantage+ per brand (%)" },
     avgVariantsChart: { it: "Media varianti per ad", en: "Avg. variants per ad" },
     variantsLabel: { it: "Varianti", en: "Variants" },
     topTargetedCountries: { it: "Top paesi target", en: "Top targeted countries" },
@@ -928,10 +926,6 @@ const translations = {
     descRefreshRate: {
       it: "Quante nuove ads vengono pubblicate in media ogni settimana. La finestra coincide con il range date selezionato in alto. Un valore alto indica un brand che aggiorna frequentemente i propri creativi.",
       en: "How many new ads are published on average each week. The window matches the date range selected above. A high value indicates a brand that frequently refreshes its creatives.",
-    },
-    descAdvantagePlus: {
-      it: "Percentuale di ads che utilizzano l'ottimizzazione automatica Advantage+ di Meta.",
-      en: "Percentage of ads using Meta's Advantage+ automatic optimization.",
     },
     descAvgVariants: {
       it: "Numero medio di varianti (test A/B) per ciascuna ad per brand.",

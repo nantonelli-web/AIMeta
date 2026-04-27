@@ -21,8 +21,6 @@ export interface BrandData {
   avgDuration: number;
   avgCopyLength: number;
   adsPerWeek: number;
-  /** % of ads eligible for / using Meta Advantage+ automatic optimization */
-  advantagePlusPercent?: number;
   /** Average number of variants (collationCount) per ad */
   avgVariants?: number;
   lastScrapedAt: string | null;
@@ -2143,73 +2141,62 @@ function benchmarkSlide(
       PAD + 2 * (colW3 + 0.1), brands.map((b) => b.adsPerWeek), 4);
   }
 
-  // ─── Slide D: Advantage+ usage + avg variants per ad ────
-  const hasAdvantage = brands.some((b) => (b.advantagePlusPercent ?? 0) > 0);
+  // ─── Slide D: Avg variants per ad ────
+  // The Advantage+ chart that used to share this slide was removed —
+  // raw_data.isAaaEligible is a Meta eligibility flag (almost always
+  // true), not an opt-in signal, so the metric was misleading on the
+  // dashboards and is gone there too.
   const hasVariants = brands.some((b) => (b.avgVariants ?? 0) > 0);
-  if (hasAdvantage || hasVariants) {
+  if (hasVariants) {
     const s = pptx.addSlide();
     addLogo(s, theme);
     s.background = { color: hex(contentBg(theme)) };
-    s.addText(label(locale, "Benchmark — Automazione & Varianti", "Benchmark — Automation & Variants"), {
+    s.addText(label(locale, "Benchmark — Varianti", "Benchmark — Variants"), {
       x: PAD, y: 0.15, w: SW - 2 * PAD, h: 0.35,
       fontSize: 14, fontFace: theme.fonts.heading, color: hex(theme.colors.primary), bold: true,
     });
 
-    const colW2 = (SW - 2 * PAD - 0.2) / 2;
+    const chartW = SW - 2 * PAD;
     const medChartH = SH - 2.0;
 
-    const drawAutoChart = (
-      titleIt: string,
-      titleEn: string,
-      descIt: string,
-      descEn: string,
-      xPos: number,
-      values: number[],
-      colorIdx: number
-    ) => {
-      s.addText(label(locale, titleIt, titleEn), {
-        x: xPos, y: 0.55, w: colW2, h: 0.22,
-        fontSize: 11, fontFace: theme.fonts.heading,
-        color: hex(theme.colors.primary), bold: true,
-      });
-      s.addText(label(locale, descIt, descEn), {
-        x: xPos, y: 0.8, w: colW2, h: 0.3,
+    s.addText(label(locale, "Varianti medie per ad", "Avg. variants per ad"), {
+      x: PAD, y: 0.55, w: chartW, h: 0.22,
+      fontSize: 11, fontFace: theme.fonts.heading,
+      color: hex(theme.colors.primary), bold: true,
+    });
+    s.addText(
+      label(
+        locale,
+        "Numero medio di varianti (test A/B) generate per ogni ad dal brand.",
+        "Average number of variants (A/B tests) generated per ad by each brand."
+      ),
+      {
+        x: PAD, y: 0.8, w: chartW, h: 0.3,
         fontSize: 8, fontFace: theme.fonts.body,
         color: hex(theme.colors.text), transparency: 30,
-      });
-      s.addChart(pptx.ChartType.bar, [
-        { name: "val", labels: brands.map(() => ""), values },
-      ], {
-        x: xPos, y: 1.15, w: colW2, h: medChartH,
+      }
+    );
+    s.addChart(
+      pptx.ChartType.bar,
+      [{ name: "val", labels: brands.map(() => ""), values: brands.map((b) => b.avgVariants ?? 0) }],
+      {
+        x: PAD, y: 1.15, w: chartW, h: medChartH,
         barDir: "col",
-        chartColors: [chartPalette(theme, 3)[colorIdx]],
+        chartColors: [chartPalette(theme, 3)[2]],
         ...chartOpts, showLegend: false, catAxisHidden: true,
-      });
-      const labelY = 1.15 + medChartH + 0.05;
-      const plotW = colW2 * 0.86;
-      const plotX = xPos + colW2 * 0.08;
-      const seg = plotW / brands.length;
-      brands.forEach((b, i) => {
-        s.addText(b.name, {
-          x: plotX + i * seg, y: labelY, w: seg, h: 0.26,
-          fontSize: 11, fontFace: theme.fonts.heading,
-          color: hex(theme.colors.primary), bold: true, align: "center",
-        });
-      });
-    };
-
-    drawAutoChart(
-      "Advantage+ per brand (%)", "Advantage+ per brand (%)",
-      "Percentuale di ads che usano l'ottimizzazione automatica Advantage+ di Meta.",
-      "Percentage of ads using Meta's Advantage+ automatic optimization.",
-      PAD, brands.map((b) => b.advantagePlusPercent ?? 0), 0
+      }
     );
-    drawAutoChart(
-      "Varianti medie per ad", "Avg. variants per ad",
-      "Numero medio di varianti (test A/B) generate per ogni ad dal brand.",
-      "Average number of variants (A/B tests) generated per ad by each brand.",
-      PAD + colW2 + 0.2, brands.map((b) => b.avgVariants ?? 0), 2
-    );
+    const labelY = 1.15 + medChartH + 0.05;
+    const plotW = chartW * 0.86;
+    const plotX = PAD + chartW * 0.08;
+    const seg = plotW / brands.length;
+    brands.forEach((b, i) => {
+      s.addText(b.name, {
+        x: plotX + i * seg, y: labelY, w: seg, h: 0.26,
+        fontSize: 11, fontFace: theme.fonts.heading,
+        color: hex(theme.colors.primary), bold: true, align: "center",
+      });
+    });
   }
 }
 

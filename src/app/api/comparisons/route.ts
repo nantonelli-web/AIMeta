@@ -32,8 +32,10 @@ export const maxDuration = 300;
  *   - v3: latestAds payload includes video_url + ad_text so the
  *         Compare grid can render video creatives + text-only
  *         fallbacks instead of the empty "Ad" placeholder
+ *   - v4: Advantage+ aggregate metric removed; BenchmarkData and
+ *         BrandData totals no longer carry advantagePlusPercent
  */
-const CURRENT_DATA_VERSION = 3;
+const CURRENT_DATA_VERSION = 4;
 
 /* ── Schemas ─────────────────────────────────────────────── */
 

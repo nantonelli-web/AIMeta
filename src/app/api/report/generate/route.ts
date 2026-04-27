@@ -183,14 +183,6 @@ async function fetchBrandData(
   }).length;
   const adsPerWeek = Math.round((recent / weeks) * 10) / 10;
 
-  // Advantage+ usage (Meta-specific flag in raw_data.isAaaEligible)
-  const aaaCount = isGoogle
-    ? 0
-    : adsList.filter((a) => a.raw_data?.isAaaEligible === true).length;
-  const advantagePlusPercent = adsList.length > 0
-    ? Math.round((aaaCount / adsList.length) * 100)
-    : 0;
-
   // Avg variants per ad (Meta-specific collationCount in raw_data)
   const variantCounts = isGoogle
     ? []
@@ -309,7 +301,6 @@ async function fetchBrandData(
     avgDuration,
     avgCopyLength,
     adsPerWeek,
-    advantagePlusPercent,
     avgVariants,
     lastScrapedAt: comp?.last_scraped_at ?? null,
     brandLogoBase64,

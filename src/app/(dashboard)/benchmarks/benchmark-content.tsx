@@ -158,12 +158,11 @@ export async function BenchmarkContent({
       )}
 
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t("benchmarks", "totalAds")} value={formatNumber(data.totals.totalAds)} />
         <Stat label={t("benchmarks", "activeAds")} value={formatNumber(data.totals.activeAds)} />
         <Stat label={t("benchmarks", "avgCampaignDuration")} value={`${data.totals.avgDuration}gg`} />
         <Stat label={t("benchmarks", "avgCopyLength")} value={`${data.totals.avgCopyLength} chr`} />
-        <Stat label={t("benchmarks", "advantagePlusPercent")} value={`${data.totals.advantagePlusPercent}%`} />
       </div>
 
       {/* Volume per competitor */}
@@ -356,31 +355,18 @@ export async function BenchmarkContent({
         </Card>
       </div>
 
-      {/* Advantage+ + Variants */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {data.advantagePlusByCompetitor.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("benchmarks", "advantagePlusChart")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descAdvantagePlus")}</p>
-              <HorizontalBarChart data={data.advantagePlusByCompetitor} dataKey="percent" label="%" color="#5ba09b" />
-            </CardContent>
-          </Card>
-        )}
-        {data.avgVariantsByCompetitor.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("benchmarks", "avgVariantsChart")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descAvgVariants")}</p>
-              <HorizontalBarChart data={data.avgVariantsByCompetitor} dataKey="variants" label={t("benchmarks", "variantsLabel")} color="#d97757" />
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {/* Variants */}
+      {data.avgVariantsByCompetitor.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("benchmarks", "avgVariantsChart")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descAvgVariants")}</p>
+            <HorizontalBarChart data={data.avgVariantsByCompetitor} dataKey="variants" label={t("benchmarks", "variantsLabel")} color="#d97757" />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Targeted countries */}
       {data.topTargetedCountries.length > 0 && (
