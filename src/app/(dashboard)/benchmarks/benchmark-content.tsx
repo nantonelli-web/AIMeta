@@ -23,6 +23,7 @@ export async function BenchmarkContent({
   dateFrom,
   dateTo,
   countries,
+  statusFilter,
 }: {
   workspaceId: string;
   channel: "meta" | "google" | "instagram";
@@ -35,6 +36,9 @@ export async function BenchmarkContent({
    *  comparable to single-country ones. Ads without scan_countries
    *  (legacy rows) are excluded until their brand is re-scanned. */
   countries?: string[];
+  /** "active" → only currently-running ads, "inactive" → everything else.
+   *  Ignored on Instagram (organic posts have no ACTIVE/INACTIVE concept). */
+  statusFilter?: "active" | "inactive";
 }) {
   const supabase = await createClient();
   const locale = await getLocale();
@@ -60,7 +64,8 @@ export async function BenchmarkContent({
     competitorIdsFilter,
     dateFrom,
     dateTo,
-    countries
+    countries,
+    statusFilter,
   );
 
   // Scan-coverage check — split selected brands into two buckets:

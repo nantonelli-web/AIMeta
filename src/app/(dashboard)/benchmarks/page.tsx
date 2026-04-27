@@ -66,11 +66,18 @@ function isValidIsoDate(s: string): boolean {
 }
 
 type Channel = "meta" | "google" | "instagram";
+type StatusFilter = "active" | "inactive" | null;
 
 function parseChannel(raw: string | string[] | undefined): Channel {
   if (raw === "google") return "google";
   if (raw === "instagram") return "instagram";
   return "meta";
+}
+
+function parseStatus(raw: string | string[] | undefined): StatusFilter {
+  if (raw === "active") return "active";
+  if (raw === "inactive") return "inactive";
+  return null;
 }
 
 export default async function BenchmarksPage({
@@ -85,6 +92,10 @@ export default async function BenchmarksPage({
   const rawCountries = typeof sp.countries === "string" ? sp.countries : null;
   const rawFrom = typeof sp.from === "string" ? sp.from : null;
   const rawTo = typeof sp.to === "string" ? sp.to : null;
+  // Status filter is meaningful only on paid channels — Instagram organic
+  // posts have no ACTIVE / INACTIVE concept. We still parse it for both so
+  // the URL stays clean if the user toggles back to a paid channel.
+  const status = parseStatus(sp.status);
 
   const { profile } = await getSessionUser();
   const supabase = await createClient();
@@ -190,16 +201,33 @@ export default async function BenchmarksPage({
     const params = new URLSearchParams();
     params.set("channel", ch);
     if (cl) params.set("client", cl);
-    // Brand subset + date range reset on channel/project switch because the
-    // available brands differ across projects and the user typically wants
-    // to re-scope when they pivot.
+    // Status is the only orthogonal narrow that survives a channel/project
+    // pivot — brand subset + date range get reset because the available
+    // brands differ across projects. Status applies to any paid channel,
+    // so preserving it keeps the user's intent when they bounce around.
+    if (status && ch !== "instagram") params.set("status", status);
     const qs = params.toString();
     return qs ? `/benchmarks?${qs}` : "/benchmarks";
   }
 
+  // Build a Status pill href that preserves channel/project/country/brand/
+  // dates and only swaps the `status` value. Removing the param entirely
+  // (the "All" pill) is what restores the unfiltered view.
+  function hrefForStatus(s: StatusFilter): string {
+    const params = new URLSearchParams();
+    params.set("channel", channel);
+    if (activeClient) params.set("client", activeClient);
+    if (rawCountries) params.set("countries", rawCountries);
+    if (rawBrands) params.set("brands", rawBrands);
+    if (rawFrom) params.set("from", rawFrom);
+    if (rawTo) params.set("to", rawTo);
+    if (s) params.set("status", s);
+    return `/benchmarks?${params.toString()}`;
+  }
+
   const hasUnassigned = allCompetitors.some((c) => c.client_id === null);
 
-  const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeCountryCodes.join(",")}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}`;
+  const suspenseKey = `${channel}|${activeClient ?? "all"}|${activeCountryCodes.join(",")}|${activeBrandIds.join(",")}|${dateFrom}|${dateTo}|${status ?? "all"}`;
 
   const chipClass = (selected: boolean) =>
     selected
@@ -216,7 +244,11 @@ export default async function BenchmarksPage({
         <PrintButton label={t("common", "print")} variant="outline" />
       </div>
 
-      {/* ─── Channels grouped by Paid / Organic ─── */}
+      {/* ─── Channels + Status ─────────────────────────────────
+          Status sits next to the channel groups because it is also
+          an attribute of the ad itself, not of the project / country
+          / brand selection. Hidden on Instagram — organic posts do
+          not carry an ACTIVE/INACTIVE concept. */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
@@ -245,6 +277,25 @@ export default async function BenchmarksPage({
             ))}
           </div>
         </div>
+        {channel !== "instagram" && (
+          <>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
+                {t("benchmarks", "filterByStatus")}
+              </span>
+              <Link href={hrefForStatus(null)} className={chipClass(status === null)}>
+                {t("benchmarks", "statusAll")}
+              </Link>
+              <Link href={hrefForStatus("active")} className={chipClass(status === "active")}>
+                {t("benchmarks", "statusActive")}
+              </Link>
+              <Link href={hrefForStatus("inactive")} className={chipClass(status === "inactive")}>
+                {t("benchmarks", "statusInactive")}
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── Project row ─── */}
@@ -282,6 +333,7 @@ export default async function BenchmarksPage({
               client={activeClient}
               dateFrom={dateFrom}
               dateTo={dateTo}
+              status={status}
             />
           ) : (
             <span className="text-xs text-muted-foreground italic">—</span>
@@ -301,6 +353,7 @@ export default async function BenchmarksPage({
             totalCountries={availableCountries.length}
             dateFrom={dateFrom}
             dateTo={dateTo}
+            status={status}
           />
         </div>
       </div>
@@ -315,6 +368,7 @@ export default async function BenchmarksPage({
         totalBrands={brandsInCountries.length}
         countries={activeCountryCodes}
         totalCountries={availableCountries.length}
+        status={status}
       />
 
       <Suspense key={suspenseKey} fallback={<ContentSkeleton />}>
@@ -333,6 +387,9 @@ export default async function BenchmarksPage({
             channel !== "meta" || ALL_COUNTRIES_SELECTED
               ? undefined
               : activeCountryCodes
+          }
+          statusFilter={
+            channel === "instagram" ? undefined : (status ?? undefined)
           }
         />
       </Suspense>

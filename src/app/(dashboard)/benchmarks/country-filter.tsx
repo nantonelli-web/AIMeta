@@ -20,6 +20,9 @@ interface Props {
   client: string | null;
   dateFrom: string;
   dateTo: string;
+  /** Preserved through the buildHref so applying a country pick does not
+   *  silently drop the user's Active/Inactive narrowing. */
+  status: "active" | "inactive" | null;
 }
 
 /**
@@ -34,6 +37,7 @@ export function CountryFilter({
   client,
   dateFrom,
   dateTo,
+  status,
 }: Props) {
   const router = useRouter();
   const { t } = useT();
@@ -88,6 +92,7 @@ export function CountryFilter({
     }
     params.set("from", dateFrom);
     params.set("to", dateTo);
+    if (status) params.set("status", status);
     return `/benchmarks?${params.toString()}`;
   }
 

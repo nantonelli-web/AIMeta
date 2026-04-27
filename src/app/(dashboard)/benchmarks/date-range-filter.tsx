@@ -17,6 +17,9 @@ interface Props {
   totalBrands: number;
   countries: string[];
   totalCountries: number;
+  /** Preserved through buildHref so Apply/Reset on the date range do
+   *  not silently drop the user's Active/Inactive narrowing. */
+  status: "active" | "inactive" | null;
 }
 
 /**
@@ -33,6 +36,7 @@ export function DateRangeFilter({
   totalBrands,
   countries,
   totalCountries,
+  status,
 }: Props) {
   const router = useRouter();
   const { t } = useT();
@@ -55,6 +59,7 @@ export function DateRangeFilter({
     }
     params.set("from", f);
     params.set("to", tt);
+    if (status) params.set("status", status);
     return `/benchmarks?${params.toString()}`;
   }
 

@@ -296,6 +296,12 @@ export async function computeBenchmarks(
    * brands: selecting FR shows only Marina Rinaldi's FR scan results,
    * not her IT/DE/UK/ES scans. */
   countries?: string[],
+  /** "active"  → ads whose status is exactly ACTIVE
+   *  "inactive" → every other status (ENDED + null + future variants)
+   *  undefined → no narrowing.
+   *  Applied at query level on both heavy + volume passes so the KPIs,
+   *  charts and coverage lists all see the same subset. */
+  statusFilter?: "active" | "inactive",
 ): Promise<BenchmarkData> {
   const normalisedCountries = countries && countries.length > 0
     ? [...new Set(countries.map((c) => c.toUpperCase()))]
@@ -341,6 +347,11 @@ export async function computeBenchmarks(
       if (normalisedCountries) {
         q = q.overlaps("scan_countries", normalisedCountries);
       }
+      // Status filter — applied at the database so the filter is honoured
+      // by the SAFETY_CAP pagination loop; doing it post-fetch would risk
+      // truncating an inactive-only result set under the cap.
+      if (statusFilter === "active") q = q.eq("status", "ACTIVE");
+      else if (statusFilter === "inactive") q = q.neq("status", "ACTIVE");
       const { data, error } = await q;
       if (error || !data || data.length === 0) break;
       rows.push(...(data as AdRow[]));
@@ -406,6 +417,8 @@ export async function computeBenchmarks(
       if (normalisedCountries) {
         q = q.overlaps("scan_countries", normalisedCountries);
       }
+      if (statusFilter === "active") q = q.eq("status", "ACTIVE");
+      else if (statusFilter === "inactive") q = q.neq("status", "ACTIVE");
       const { data, error } = await q;
       if (error || !data || data.length === 0) break;
       rows.push(...(data as Row[]));

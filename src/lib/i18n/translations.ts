@@ -752,6 +752,10 @@ const translations = {
     },
     filterByProject: { it: "Progetto:", en: "Project:" },
     allProjects: { it: "Tutti i progetti", en: "All projects" },
+    filterByStatus: { it: "Stato", en: "Status" },
+    statusAll: { it: "Tutte", en: "All" },
+    statusActive: { it: "Attive", en: "Active" },
+    statusInactive: { it: "Non attive", en: "Inactive" },
     noData: {
       it: "Nessun dato disponibile. Aggiungi dei brand e lancia almeno uno scan per popolare i benchmark.",
       en: "No data available. Add brands and run at least one scan to populate benchmarks.",

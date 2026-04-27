@@ -20,6 +20,9 @@ interface Props {
   dateFrom: string;
   dateTo: string;
   totalCountries: number;
+  /** Preserved through buildHref so applying a brand pick does not
+   *  silently drop the user's Active/Inactive narrowing. */
+  status: "active" | "inactive" | null;
 }
 
 /**
@@ -36,6 +39,7 @@ export function BrandFilter({
   dateFrom,
   dateTo,
   totalCountries,
+  status,
 }: Props) {
   const router = useRouter();
   const { t } = useT();
@@ -99,6 +103,7 @@ export function BrandFilter({
     }
     params.set("from", dateFrom);
     params.set("to", dateTo);
+    if (status) params.set("status", status);
     return `/benchmarks?${params.toString()}`;
   }
 
