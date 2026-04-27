@@ -38,7 +38,8 @@ export default async function CompetitorDetailPage({
   const [
     { data: competitor },
     { data: jobs },
-    { count: adCount },
+    { count: metaAdCount },
+    { count: googleAdCount },
     { count: postCount },
     { count: jobCount },
     { count: comparisonCount },
@@ -59,10 +60,20 @@ export default async function CompetitorDetailPage({
       .eq("competitor_id", id)
       .order("started_at", { ascending: false })
       .limit(10),
+    // Source-split ad counts so the channel-filter chips can show the
+    // real totals (the lazy ChannelTabs grid only loads 30 ads, which
+    // would otherwise stall the badge at 30). Two head+exact queries
+    // are still cheap — they return only counts, no rows.
     supabase
       .from("mait_ads_external")
       .select("id", { count: "exact", head: true })
-      .eq("competitor_id", id),
+      .eq("competitor_id", id)
+      .eq("source", "meta"),
+    supabase
+      .from("mait_ads_external")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id)
+      .eq("source", "google"),
     supabase
       .from("mait_organic_posts")
       .select("id", { count: "exact", head: true })
@@ -94,11 +105,19 @@ export default async function CompetitorDetailPage({
   if (!competitor) notFound();
   const c = competitor as MaitCompetitor;
   const jobsList = (jobs ?? []) as MaitScrapeJob[];
+  const metaTotal = metaAdCount ?? 0;
+  const googleTotal = googleAdCount ?? 0;
+  const organicTotal = postCount ?? 0;
   const deleteCounts = {
-    ads: adCount ?? 0,
-    posts: postCount ?? 0,
+    ads: metaTotal + googleTotal,
+    posts: organicTotal,
     jobs: jobCount ?? 0,
     comparisons: comparisonCount ?? 0,
+  };
+  const channelTotals = {
+    meta: metaTotal,
+    google: googleTotal,
+    instagram: organicTotal,
   };
 
   // A fresh-enough running job (<10 min) means the scan is genuinely in
@@ -243,7 +262,10 @@ export default async function CompetitorDetailPage({
       {/* ─── Channel tabs: streamed via Suspense so the heavy
           ads + posts fetch does not block the page chrome above. */}
       <Suspense fallback={<BrandChannelsSkeleton />}>
-        <BrandChannelsSection competitorId={c.id} />
+        <BrandChannelsSection
+          competitorId={c.id}
+          channelTotals={channelTotals}
+        />
       </Suspense>
 
       <div className="flex justify-center pt-2 print:hidden">

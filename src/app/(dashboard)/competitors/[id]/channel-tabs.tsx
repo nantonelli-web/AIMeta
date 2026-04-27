@@ -34,6 +34,10 @@ interface Props {
   competitorId: string;
   ads: MaitAdExternal[];
   organicPosts: MaitOrganicPost[];
+  /** DB-wide totals per channel — drive the filter chip badges so the
+   *  user sees the real count for the brand, not the lazy-loaded
+   *  array length (which is capped at 30 for performance). */
+  channelTotals: { meta: number; google: number; instagram: number };
   organicStats: {
     count: number;
     /** null when every post has likes hidden (Instagram setting) —
@@ -49,7 +53,13 @@ function isChannel(v: string | null): v is Channel {
   return v === "all" || v === "meta" || v === "google" || v === "instagram";
 }
 
-export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: Props) {
+export function ChannelTabs({
+  competitorId,
+  ads,
+  organicPosts,
+  channelTotals,
+  organicStats,
+}: Props) {
   const searchParams = useSearchParams();
   const initialFromUrl = searchParams.get("tab");
   const [channel, setChannel] = useState<Channel>(
@@ -76,11 +86,20 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
     return src === "google";
   });
 
+  // Badge counts come from the DB-wide totals fetched in the parent
+  // page, NOT from the lazy-loaded array length (capped at 30). The
+  // grid below still renders only the loaded sample — the badge is
+  // there to tell the user how many ads exist in total for the brand.
   const tabs: { key: Channel; label: string; count: number; icon?: React.ReactNode }[] = [
-    { key: "all", label: t("competitors", "channelAll"), count: ads.length + organicPosts.length },
-    { key: "meta", label: "Meta Ads", count: metaAds.length, icon: <MetaIcon className="size-3.5" /> },
-    { key: "google", label: "Google Ads", count: googleAds.length, icon: <GoogleIcon className="size-3.5" /> },
-    { key: "instagram", label: "Instagram", count: organicPosts.length, icon: <InstagramIcon className="size-3.5" /> },
+    {
+      key: "all",
+      label: t("competitors", "channelAll"),
+      count:
+        channelTotals.meta + channelTotals.google + channelTotals.instagram,
+    },
+    { key: "meta", label: "Meta Ads", count: channelTotals.meta, icon: <MetaIcon className="size-3.5" /> },
+    { key: "google", label: "Google Ads", count: channelTotals.google, icon: <GoogleIcon className="size-3.5" /> },
+    { key: "instagram", label: "Instagram", count: channelTotals.instagram, icon: <InstagramIcon className="size-3.5" /> },
   ];
 
   // Filter out channels with 0 items (except "all")
@@ -134,14 +153,22 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
       {/* ─── Ads section ─── */}
       {channel === "all" ? (
         <>
-          {/* All: grouped by channel */}
+          {/* All: grouped by channel. The (X of Y) suffix tells the
+              user that the grid is a recent slice — Y is the real DB
+              total, X is the loaded sample (capped at 30). */}
           {metaAds.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <MetaIcon className="size-4 text-gold" />
                   <p className="text-sm font-medium">Meta Ads</p>
-                  <span className="text-xs text-muted-foreground">({metaAds.length})</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({metaAds.length}
+                    {channelTotals.meta > metaAds.length
+                      ? ` ${t("competitors", "ofTotal")} ${channelTotals.meta}`
+                      : ""}
+                    )
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <TagButton competitorId={competitorId} />
@@ -167,7 +194,13 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
               <div className="flex items-center gap-2">
                 <GoogleIcon className="size-4 text-gold" />
                 <p className="text-sm font-medium">Google Ads</p>
-                <span className="text-xs text-muted-foreground">({googleAds.length})</span>
+                <span className="text-xs text-muted-foreground">
+                  ({googleAds.length}
+                  {channelTotals.google > googleAds.length
+                    ? ` ${t("competitors", "ofTotal")} ${channelTotals.google}`
+                    : ""}
+                  )
+                </span>
               </div>
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {googleAds.map((ad) => (
@@ -184,7 +217,17 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  {visibleAds.length} ads
+                  {visibleAds.length}
+                  {(() => {
+                    const total =
+                      channel === "meta"
+                        ? channelTotals.meta
+                        : channelTotals.google;
+                    return total > visibleAds.length
+                      ? ` ${t("competitors", "ofTotal")} ${total}`
+                      : "";
+                  })()}
+                  {" "}ads
                 </p>
                 <div className="flex items-center gap-3">
                   <TagButton competitorId={competitorId} />
@@ -224,7 +267,9 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
               <Card>
                 <CardContent className="py-4 text-center">
-                  <p className="text-2xl font-semibold">{organicStats.count}</p>
+                  <p className="text-2xl font-semibold">
+                    {channelTotals.instagram}
+                  </p>
                   <p className="text-xs text-muted-foreground">{t("organic", "totalPosts")}</p>
                 </CardContent>
               </Card>
@@ -265,7 +310,11 @@ export function ChannelTabs({ competitorId, ads, organicPosts, organicStats }: P
             <>
               {channel === "instagram" && (
                 <p className="text-sm text-muted-foreground">
-                  {visibleOrganic.length} {t("organic", "postsCount")}
+                  {visibleOrganic.length}
+                  {channelTotals.instagram > visibleOrganic.length
+                    ? ` ${t("competitors", "ofTotal")} ${channelTotals.instagram}`
+                    : ""}
+                  {" "}{t("organic", "postsCount")}
                 </p>
               )}
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

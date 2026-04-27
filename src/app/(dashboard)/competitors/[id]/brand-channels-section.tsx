@@ -19,8 +19,14 @@ import type { MaitAdExternal, MaitOrganicPost } from "@/types";
  */
 export async function BrandChannelsSection({
   competitorId,
+  channelTotals,
 }: {
   competitorId: string;
+  /** Real DB-wide counts per channel (head+exact queries done in the
+   *  parent page). The lazy ad/post lists are capped at 30 for
+   *  performance, so the filter chips would otherwise display the
+   *  loaded length (always 30) instead of the brand actual totals. */
+  channelTotals: { meta: number; google: number; instagram: number };
 }) {
   const supabase = await createClient();
 
@@ -73,6 +79,7 @@ export async function BrandChannelsSection({
       competitorId={competitorId}
       ads={adsList}
       organicPosts={organicList}
+      channelTotals={channelTotals}
       organicStats={{
         count: organicList.length,
         avgLikes,
