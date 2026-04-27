@@ -551,6 +551,23 @@ export function ChannelTabs({
             )
           ) : (
             <>
+              {/* Section header on the all-tab so the user can tell
+                  these cards are Instagram posts, not "more ads
+                  that loaded by themselves". Same grammar as the
+                  Meta/Google headers above so the rhythm matches. */}
+              {channel === "all" && (
+                <div className="flex items-center gap-2 pt-4 border-t border-border">
+                  <InstagramIcon className="size-4 text-gold" />
+                  <p className="text-sm font-medium">Instagram</p>
+                  <span className="text-xs text-muted-foreground">
+                    ({visibleOrganic.length}
+                    {channelTotals.instagram > visibleOrganic.length
+                      ? ` ${t("competitors", "ofTotal")} ${channelTotals.instagram}`
+                      : ""}
+                    )
+                  </span>
+                </div>
+              )}
               {channel === "instagram" && (
                 <p className="text-sm text-muted-foreground">
                   {visibleOrganic.length}
