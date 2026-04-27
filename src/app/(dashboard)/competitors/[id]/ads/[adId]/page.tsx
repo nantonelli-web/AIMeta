@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { getLocale, serverT } from "@/lib/i18n/server";
 import { extractAdInsights } from "@/lib/meta/ad-insights";
+import { AI_TAGS_ENABLED } from "@/config/features";
 import type { MaitAdExternal } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -308,7 +309,7 @@ export default async function AdDetailPage({
             </Card>
           )}
 
-          {aiTags && Object.keys(aiTags).length > 0 && (
+          {AI_TAGS_ENABLED && aiTags && Object.keys(aiTags).length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">

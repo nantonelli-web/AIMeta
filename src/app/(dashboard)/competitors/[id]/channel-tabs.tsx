@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AdCard } from "@/components/ads/ad-card";
 import { OrganicPostCard } from "@/components/organic/organic-post-card";
 import { TagButton } from "@/components/ads/tag-button";
+import { AI_TAGS_ENABLED } from "@/config/features";
 import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
 import { Download, Loader2 } from "lucide-react";
@@ -351,7 +352,7 @@ export function ChannelTabs({
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <TagButton competitorId={competitorId} />
+                  {AI_TAGS_ENABLED && <TagButton competitorId={competitorId} />}
                   <a
                     href={`/api/export/ads.csv?competitor_id=${competitorId}`}
                     className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -448,7 +449,7 @@ export function ChannelTabs({
                   {" "}ads
                 </p>
                 <div className="flex items-center gap-3">
-                  <TagButton competitorId={competitorId} />
+                  {AI_TAGS_ENABLED && <TagButton competitorId={competitorId} />}
                   <a
                     href={`/api/export/ads.csv?competitor_id=${competitorId}`}
                     className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"

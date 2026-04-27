@@ -8,6 +8,7 @@ import { SaveToCollection } from "@/components/ads/save-to-collection";
 import { VideoPreview } from "@/components/ads/video-preview";
 import { formatDate } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
+import { AI_TAGS_ENABLED } from "@/config/features";
 import type { MaitAdExternal } from "@/types";
 
 /** Strip JSON artifacts from ad text (e.g. {"text": "..."}) */
@@ -243,7 +244,7 @@ export function AdCard({
             </span>
           </div>
         )}
-        {aiTags ? (
+        {AI_TAGS_ENABLED && aiTags && (
           <div className="flex items-center gap-1 flex-wrap">
             <Sparkles className="size-3 text-gold shrink-0" />
             {aiTags.sector && <Badge variant="gold">{aiTags.sector}</Badge>}
@@ -251,11 +252,6 @@ export function AdCard({
             {aiTags.objective && (
               <Badge variant="outline">{aiTags.objective}</Badge>
             )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
-            <Sparkles className="size-3" />
-            <span>{t("adCard", "notAnalyzed")}</span>
           </div>
         )}
         {ad.platforms && ad.platforms.length > 0 && (
