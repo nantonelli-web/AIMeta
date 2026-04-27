@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarRange, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/lib/i18n/context";
+import { jumpToDateInput } from "@/lib/utils";
 
 interface Props {
   dateFrom: string;
@@ -37,6 +38,7 @@ export function DateRangeFilter({
   const { t } = useT();
   const [from, setFrom] = useState(dateFrom);
   const [to, setTo] = useState(dateTo);
+  const toRef = useRef<HTMLInputElement | null>(null);
 
   const rangeInvalid = !from || !to || from > to;
   const dirty = from !== dateFrom || to !== dateTo;
@@ -83,11 +85,15 @@ export function DateRangeFilter({
       <Input
         type="date"
         value={from}
-        onChange={(e) => setFrom(e.target.value)}
+        onChange={(e) => {
+          setFrom(e.target.value);
+          if (e.target.value) jumpToDateInput(toRef.current);
+        }}
         className="text-xs h-8 w-36"
       />
       <span className="text-muted-foreground text-xs">—</span>
       <Input
+        ref={toRef}
         type="date"
         value={to}
         onChange={(e) => setTo(e.target.value)}

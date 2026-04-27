@@ -26,7 +26,7 @@ import { InstagramIcon } from "@/components/ui/instagram-icon";
 import { MetaIcon } from "@/components/ui/meta-icon";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { CollapsibleClientSection } from "../collapsible-client-section";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatNumber, jumpToDateInput } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
 import { AnalysisReport } from "./analysis-report";
 import {
@@ -199,6 +199,7 @@ export function CompareView({
   const [dateTo, setDateTo] = useState<string>(initialRange.to);
   const [draftFrom, setDraftFrom] = useState<string>(initialRange.from);
   const [draftTo, setDraftTo] = useState<string>(initialRange.to);
+  const draftToRef = useRef<HTMLInputElement | null>(null);
   const [refreshRateWindowDays, setRefreshRateWindowDays] = useState<number>(30);
 
   // Cached comparison state
@@ -1176,11 +1177,15 @@ export function CompareView({
           <Input
             type="date"
             value={draftFrom}
-            onChange={(e) => setDraftFrom(e.target.value)}
+            onChange={(e) => {
+              setDraftFrom(e.target.value);
+              if (e.target.value) jumpToDateInput(draftToRef.current);
+            }}
             className="text-xs h-8 w-36"
           />
           <span className="text-muted-foreground text-xs">—</span>
           <Input
+            ref={draftToRef}
             type="date"
             value={draftTo}
             onChange={(e) => setDraftTo(e.target.value)}

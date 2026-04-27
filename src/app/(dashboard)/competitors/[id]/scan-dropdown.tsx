@@ -9,7 +9,7 @@ import { MetaIcon } from "@/components/ui/meta-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { cn, jumpToDateInput } from "@/lib/utils";
 
 /* ─── Platform SVG logos ─────────────────────────────────── */
 
@@ -76,6 +76,7 @@ export function ScanDropdown({
   // Shared date range
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const dateToRef = useRef<HTMLInputElement | null>(null);
 
   const isLoading = loading !== null;
   const showStop = isLoading || hasRunningJob;
@@ -259,7 +260,10 @@ export function ScanDropdown({
           <Input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              if (e.target.value) jumpToDateInput(dateToRef.current);
+            }}
             placeholder={daysAgo(30)}
             className="text-xs h-8 w-36"
           />
@@ -267,6 +271,7 @@ export function ScanDropdown({
         <label className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{t("scan", "dateTo")}</span>
           <Input
+            ref={dateToRef}
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
