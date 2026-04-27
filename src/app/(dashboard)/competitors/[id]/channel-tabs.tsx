@@ -74,10 +74,22 @@ export function ChannelTabs({
     if (isChannel(t) && t !== channel) setChannel(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+  // Country filter only applies to Meta — Google + Instagram do not
+  // carry scan_countries — so we drop any selected country when the
+  // channel switches away from Meta to avoid an invisible filter.
+  useEffect(() => {
+    if (channel === "google" || channel === "instagram") setCountry(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel]);
   const { t } = useT();
 
+  // Country filter — only applies to Meta ads (Google ads have
+  // scan_countries=null because Google Ads is not scraped per-country).
+  // null means "all countries", a string is the selected ISO code.
+  const [country, setCountry] = useState<string | null>(null);
+
   // Split ads by source
-  const metaAds = ads.filter((a) => {
+  const metaAdsAll = ads.filter((a) => {
     const src = (a as unknown as Record<string, unknown>).source;
     return src !== "google";
   });
@@ -85,6 +97,40 @@ export function ChannelTabs({
     const src = (a as unknown as Record<string, unknown>).source;
     return src === "google";
   });
+
+  // Available country chips = union of scan_countries across the
+  // loaded Meta sample. We use the loaded sample (not a DB-wide
+  // query) because the filter operates on what is rendered on the
+  // page; a country with no ad in the visible window cannot be
+  // filtered to any visible card anyway.
+  const countryTallyMap = new Map<string, number>();
+  for (const ad of metaAdsAll) {
+    const list = (ad as unknown as { scan_countries?: string[] | null })
+      .scan_countries;
+    if (!Array.isArray(list)) continue;
+    for (const c of list) {
+      if (typeof c === "string" && c) {
+        countryTallyMap.set(c, (countryTallyMap.get(c) ?? 0) + 1);
+      }
+    }
+  }
+  const availableCountries = [...countryTallyMap.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count);
+  const showCountryFilter =
+    availableCountries.length > 0 &&
+    (channel === "all" || channel === "meta");
+
+  // Apply the country filter to the Meta ads only — Google + Instagram
+  // have no per-country signal, so they pass through unchanged.
+  const metaAds =
+    country === null
+      ? metaAdsAll
+      : metaAdsAll.filter((a) => {
+          const list = (a as unknown as { scan_countries?: string[] | null })
+            .scan_countries;
+          return Array.isArray(list) && list.includes(country);
+        });
 
   // Badge counts come from the DB-wide totals fetched in the parent
   // page, NOT from the lazy-loaded array length (capped at 30). The
@@ -149,6 +195,58 @@ export function ChannelTabs({
           ))}
         </div>
       </div>
+
+      {/* ─── Country filter (Meta only) ─────────────────────
+          Visible when the loaded Meta sample contains at least one
+          ad with scan_countries populated. Counts come from the
+          loaded sample (capped at 30) — same convention as the
+          "30 of N" labels in the grid headers below. Hidden for
+          Google + Instagram because those channels do not carry a
+          per-country signal. */}
+      {showCountryFilter && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
+          <span className="text-[11px] uppercase tracking-wider text-foreground font-bold shrink-0">
+            {t("competitors", "filterByCountry")}
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setCountry(null)}
+              className={cn(
+                "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
+                country === null
+                  ? "bg-gold/15 text-gold border border-gold/40"
+                  : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+            >
+              <span className="font-medium">{t("competitors", "channelAll")}</span>
+            </button>
+            {availableCountries.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => setCountry(c.code)}
+                className={cn(
+                  "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
+                  country === c.code
+                    ? "bg-gold/15 text-gold border border-gold/40"
+                    : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+              >
+                <span className="font-medium font-mono">{c.code}</span>
+                <span className={cn(
+                  "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
+                  country === c.code
+                    ? "bg-gold/25 text-gold"
+                    : "bg-muted text-muted-foreground"
+                )}>
+                  {c.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ─── Ads section ─── */}
       {channel === "all" ? (
