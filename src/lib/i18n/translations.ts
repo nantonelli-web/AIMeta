@@ -887,9 +887,7 @@ const translations = {
     charsLabel: { it: "Caratteri", en: "Characters" },
     adsPerWeekLabel: { it: "Ads/settimana", en: "Ads/week" },
     adsLabel: { it: "Ads", en: "Ads" },
-    aiGeneratedPercent: { it: "% AI generato", en: "% AI generated" },
     advantagePlusPercent: { it: "% Advantage+", en: "% Advantage+" },
-    aiGeneratedChart: { it: "Ads AI-generated per brand (%)", en: "AI-generated ads per brand (%)" },
     advantagePlusChart: { it: "Advantage+ per brand (%)", en: "Advantage+ per brand (%)" },
     avgVariantsChart: { it: "Media varianti per ad", en: "Avg. variants per ad" },
     variantsLabel: { it: "Varianti", en: "Variants" },
@@ -929,10 +927,6 @@ const translations = {
     descRefreshRate: {
       it: "Quante nuove ads vengono pubblicate in media ogni settimana. La finestra coincide con il range date selezionato in alto. Un valore alto indica un brand che aggiorna frequentemente i propri creativi.",
       en: "How many new ads are published on average each week. The window matches the date range selected above. A high value indicates a brand that frequently refreshes its creatives.",
-    },
-    descAiGenerated: {
-      it: "Percentuale di ads create con strumenti di intelligenza artificiale.",
-      en: "Percentage of ads created with artificial intelligence tools.",
     },
     descAdvantagePlus: {
       it: "Percentuale di ads che utilizzano l'ottimizzazione automatica Advantage+ di Meta.",

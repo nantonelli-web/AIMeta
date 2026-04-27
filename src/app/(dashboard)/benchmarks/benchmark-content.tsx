@@ -356,19 +356,8 @@ export async function BenchmarkContent({
         </Card>
       </div>
 
-      {/* AI-generated + Advantage+ + Variants */}
+      {/* Advantage+ + Variants */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {data.aiGeneratedByCompetitor.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("benchmarks", "aiGeneratedChart")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descAiGenerated")}</p>
-              <HorizontalBarChart data={data.aiGeneratedByCompetitor} dataKey="percent" label="%" color="#8a6bb0" />
-            </CardContent>
-          </Card>
-        )}
         {data.advantagePlusByCompetitor.length > 0 && (
           <Card>
             <CardHeader>

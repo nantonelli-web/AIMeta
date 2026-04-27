@@ -2359,10 +2359,7 @@ function BenchmarkCharts({
 }) {
   return (
     <div className="space-y-6">
-      {/* KPI cards — same 5 the Benchmarks page exposes. The
-          aiGeneratedPercent KPI was removed there as a UX call (the
-          per-brand chart below still surfaces the same signal); we
-          mirror it here so Compare and Benchmarks stay aligned. */}
+      {/* KPI cards — same 5 the Benchmarks page exposes. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <BenchmarkStat label={t("benchmarks", "totalAds")} value={formatNumber(data.totals.totalAds)} />
         <BenchmarkStat label={t("benchmarks", "activeAds")} value={formatNumber(data.totals.activeAds)} />
@@ -2460,18 +2457,9 @@ function BenchmarkCharts({
         </Card>
       </div>
 
-      {/* AI-generated + Advantage+ + Variants */}
-      {(data.aiGeneratedByCompetitor.length > 0 || data.advantagePlusByCompetitor.length > 0 || data.avgVariantsByCompetitor.length > 0) && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {data.aiGeneratedByCompetitor.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle>{t("benchmarks", "aiGeneratedChart")}</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">{t("benchmarks", "descAiGenerated")}</p>
-                <HorizontalBarChart data={data.aiGeneratedByCompetitor} dataKey="percent" label="%" color="#8a6bb0" />
-              </CardContent>
-            </Card>
-          )}
+      {/* Advantage+ + Variants */}
+      {(data.advantagePlusByCompetitor.length > 0 || data.avgVariantsByCompetitor.length > 0) && (
+        <div className="grid gap-6 lg:grid-cols-2">
           {data.advantagePlusByCompetitor.length > 0 && (
             <Card>
               <CardHeader><CardTitle>{t("benchmarks", "advantagePlusChart")}</CardTitle></CardHeader>
