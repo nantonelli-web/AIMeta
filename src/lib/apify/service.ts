@@ -25,9 +25,10 @@ function getToken(): string {
 
 /**
  * Apify gateway frequently returns 502 / 503 / 504 transients on the
- * actor POST and even on dataset reads. With a multi-country fan-out
- * each scan does N independent Apify calls, so a single transient
- * failure is enough to abort an entire brand scan unless we retry.
+ * actor POST and even on dataset reads. We retry transients but the
+ * total budget has to fit inside the surrounding Vercel maxDuration
+ * (300s) shared with N parallel country scans, so the backoff is
+ * deliberately tight: 1s + 2s = 3s max waste per call.
  *
  * Retries cover only transient classes:
  *   - 502 / 503 / 504  → gateway / upstream timeouts
@@ -35,11 +36,10 @@ function getToken(): string {
  *
  * 4xx responses (auth, quota, validation) are never retried — they
  * will not change on retry and would just waste budget.
- *
- * Backoff is exponential (2s, 4s, 8s) for max 3 retries.
  */
 const APIFY_RETRY_STATUSES = new Set([502, 503, 504]);
-const APIFY_MAX_ATTEMPTS = 4;
+const APIFY_MAX_ATTEMPTS = 3;
+const APIFY_BACKOFF_MS = [1000, 2000];
 
 async function apifyFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -64,7 +64,7 @@ async function apifyFetch(path: string, init?: RequestInit) {
         attempt < APIFY_MAX_ATTEMPTS
       ) {
         lastError = error;
-        const delayMs = 1000 * Math.pow(2, attempt);
+        const delayMs = APIFY_BACKOFF_MS[attempt - 1] ?? 2000;
         console.warn(
           `[apify retry ${attempt}/${APIFY_MAX_ATTEMPTS - 1}] ${res.status} on ${path}, sleeping ${delayMs}ms`,
         );
@@ -80,7 +80,7 @@ async function apifyFetch(path: string, init?: RequestInit) {
       if (isHttpError) throw err;
       if (attempt < APIFY_MAX_ATTEMPTS) {
         lastError = err instanceof Error ? err : new Error(String(err));
-        const delayMs = 1000 * Math.pow(2, attempt);
+        const delayMs = APIFY_BACKOFF_MS[attempt - 1] ?? 2000;
         console.warn(
           `[apify retry ${attempt}/${APIFY_MAX_ATTEMPTS - 1}] network error on ${path}, sleeping ${delayMs}ms`,
           err,
@@ -186,47 +186,61 @@ export async function scrapeMetaAds(
     return { ...r, scannedCountries: countryList };
   }
 
-  // Multi-country — N scans, dedup by ad_archive_id, union scan_countries.
-  // Partial-results tolerance: a single country failing (after the
-  // apifyFetch retries) must NOT discard the data we already collected
-  // from the others. Without this, a transient 502 on the 5th country
-  // wipes the results of the previous 4 — exactly what was making
-  // Sezane scans return zero. Only when EVERY country fails do we
-  // re-throw so the route flips the job to failed.
+  // Multi-country — N scans run IN PARALLEL via Promise.allSettled
+  // so the wall-clock time is the SLOWEST country, not the sum. The
+  // previous sequential loop hit Vercel's 300s maxDuration the moment
+  // any country had a hiccup with retries, leaving the job stuck in
+  // "running" forever (the Lambda died before the catch block could
+  // mark it failed). With parallel execution + tighter retries, even
+  // a 5-country brand normally completes in 60–90s wall time.
+  //
+  // Partial-results tolerance is preserved: a single country failing
+  // (after retries) must NOT discard what the others collected. Only
+  // when EVERY country fails do we re-throw so the route flips the
+  // job to failed.
+  const settled = await Promise.allSettled(
+    countryList.map((country) =>
+      scrapeMetaAdsSingleCountry({ ...opts, country }, [country]).then(
+        (result) => ({ country, result }),
+      ),
+    ),
+  );
+
   const byArchiveId = new Map<string, NormalizedAd>();
   const startUrls: string[] = [];
   const runIds: string[] = [];
   const successfulCountries: string[] = [];
   const failedCountries: { country: string; error: string }[] = [];
   let totalCostCu = 0;
-  for (const country of countryList) {
-    try {
-      const partial = await scrapeMetaAdsSingleCountry(
-        { ...opts, country },
-        [country],
-      );
-      successfulCountries.push(country);
-      totalCostCu += partial.costCu;
-      startUrls.push(partial.startUrl);
-      runIds.push(partial.runId);
-      for (const ad of partial.records) {
-        const existing = byArchiveId.get(ad.ad_archive_id);
-        if (existing) {
-          const merged = new Set<string>(existing.scan_countries ?? []);
-          for (const c of ad.scan_countries ?? []) merged.add(c);
-          existing.scan_countries = [...merged];
-        } else {
-          byArchiveId.set(ad.ad_archive_id, ad);
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+  settled.forEach((outcome, idx) => {
+    const country = countryList[idx];
+    if (outcome.status === "rejected") {
+      const message =
+        outcome.reason instanceof Error
+          ? outcome.reason.message
+          : String(outcome.reason);
       failedCountries.push({ country, error: message });
       console.warn(
         `[scrapeMetaAds] ${country} scan failed after retries: ${message}`,
       );
+      return;
     }
-  }
+    const { result: partial } = outcome.value;
+    successfulCountries.push(country);
+    totalCostCu += partial.costCu;
+    startUrls.push(partial.startUrl);
+    runIds.push(partial.runId);
+    for (const ad of partial.records) {
+      const existing = byArchiveId.get(ad.ad_archive_id);
+      if (existing) {
+        const merged = new Set<string>(existing.scan_countries ?? []);
+        for (const c of ad.scan_countries ?? []) merged.add(c);
+        existing.scan_countries = [...merged];
+      } else {
+        byArchiveId.set(ad.ad_archive_id, ad);
+      }
+    }
+  });
 
   if (successfulCountries.length === 0) {
     // Every country failed — propagate so the route marks the job
@@ -306,9 +320,16 @@ async function scrapeMetaAdsSingleCountry(
     throw new Error("Apify run started but no datasetId returned.");
   }
 
+  // Per-country poll budget. Was 5 min, but with parallel country
+  // execution the slowest country bounds the whole scrapeMetaAds
+  // wall-clock — and that has to fit inside Vercel maxDuration=300s
+  // shared with image storage + DB upserts + reconcile. 2 min is
+  // enough for any healthy actor run we have seen; a country that
+  // takes longer is probably hung and should fail open so the rest
+  // of the brand is not held hostage.
   let status = run.data?.status ?? run.status ?? "RUNNING";
   const startTime = Date.now();
-  const maxWait = 5 * 60 * 1000;
+  const maxWait = 2 * 60 * 1000;
   while (
     (status === "RUNNING" || status === "READY") &&
     Date.now() - startTime < maxWait
