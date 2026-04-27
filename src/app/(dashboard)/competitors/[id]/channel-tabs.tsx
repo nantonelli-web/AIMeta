@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { AdCard } from "@/components/ads/ad-card";
@@ -11,6 +11,7 @@ import { MetaIcon } from "@/components/ui/meta-icon";
 import { Download } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { useT } from "@/lib/i18n/context";
+import { CountryFilterDropdown } from "./country-filter-dropdown";
 import type { MaitAdExternal, MaitOrganicPost } from "@/types";
 
 type Channel = "all" | "meta" | "google" | "instagram";
@@ -81,18 +82,21 @@ export function ChannelTabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   // Country filter only applies to Meta — Google + Instagram do not
-  // carry scan_countries — so we drop any selected country when the
-  // channel switches away from Meta to avoid an invisible filter.
+  // carry scan_countries — so we clear any selection when the channel
+  // switches away from Meta to avoid an invisible filter.
   useEffect(() => {
-    if (channel === "google" || channel === "instagram") setCountry(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (channel === "google" || channel === "instagram") {
+      setSelectedCountries(new Set());
+    }
   }, [channel]);
-  const { t } = useT();
+  const { t, locale } = useT();
 
-  // Country filter — only applies to Meta ads (Google ads have
-  // scan_countries=null because Google Ads is not scraped per-country).
-  // null means "all countries", a string is the selected ISO code.
-  const [country, setCountry] = useState<string | null>(null);
+  // Country filter — multi-select Set, empty = "All countries" (no
+  // filter). Same convention as the Benchmarks CountryFilter so the
+  // two pages share UX vocabulary.
+  const [selectedCountries, setSelectedCountries] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Status filter — meaningful only on paid channels (Meta + Google).
   // Instagram has no ACTIVE/INACTIVE concept on organic posts, so it
@@ -100,7 +104,6 @@ export function ChannelTabs({
   const [status, setStatus] = useState<Status>("all");
   useEffect(() => {
     if (channel === "instagram") setStatus("all");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel]);
 
   // Status helper — Meta + Google share the same ACTIVE / INACTIVE
@@ -124,38 +127,58 @@ export function ChannelTabs({
     return src === "google" && matchesStatus(a);
   });
 
-  // Available country chips = union of scan_countries across the
-  // loaded Meta sample. We use the loaded sample (not a DB-wide
-  // query) because the filter operates on what is rendered on the
-  // page; a country with no ad in the visible window cannot be
-  // filtered to any visible card anyway.
-  const countryTallyMap = new Map<string, number>();
-  for (const ad of metaAdsAll) {
-    const list = (ad as unknown as { scan_countries?: string[] | null })
-      .scan_countries;
-    if (!Array.isArray(list)) continue;
-    for (const c of list) {
-      if (typeof c === "string" && c) {
-        countryTallyMap.set(c, (countryTallyMap.get(c) ?? 0) + 1);
+  // Available countries = union of scan_countries across the loaded
+  // Meta sample. We localize the names with Intl.DisplayNames so the
+  // dropdown shows "Italy" / "Italia" instead of just "IT", matching
+  // the Benchmarks country popover.
+  const availableCountries = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const ad of metaAdsAll) {
+      const list = (ad as unknown as { scan_countries?: string[] | null })
+        .scan_countries;
+      if (!Array.isArray(list)) continue;
+      for (const c of list) {
+        if (typeof c === "string" && c) {
+          tally.set(c, (tally.get(c) ?? 0) + 1);
+        }
       }
     }
-  }
-  const availableCountries = [...countryTallyMap.entries()]
-    .map(([code, count]) => ({ code, count }))
-    .sort((a, b) => b.count - a.count);
+    let display: Intl.DisplayNames | null = null;
+    try {
+      display = new Intl.DisplayNames([locale], { type: "region" });
+    } catch {
+      display = null;
+    }
+    return [...tally.entries()]
+      .map(([code, count]) => {
+        let name = code;
+        try {
+          name = display?.of(code) ?? code;
+        } catch {
+          name = code;
+        }
+        return { code, count, name };
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [metaAdsAll, locale]);
+
   const showCountryFilter =
     availableCountries.length > 0 &&
     (channel === "all" || channel === "meta");
 
   // Apply the country filter to the Meta ads only — Google + Instagram
   // have no per-country signal, so they pass through unchanged.
+  // Empty selection = no filter (show all countries) — same convention
+  // as the Benchmarks CountryFilter.
   const metaAds =
-    country === null
+    selectedCountries.size === 0
       ? metaAdsAll
       : metaAdsAll.filter((a) => {
           const list = (a as unknown as { scan_countries?: string[] | null })
             .scan_countries;
-          return Array.isArray(list) && list.includes(country);
+          return (
+            Array.isArray(list) && list.some((c) => selectedCountries.has(c))
+          );
         });
 
   // Channel badge counts honour the active Status filter: when the
@@ -266,30 +289,20 @@ export function ChannelTabs({
       </div>
 
       {/* ─── Country row (Meta only) ─────────────────────────
-          Own row because country chips can be many. Same flat
-          pattern as the row above. */}
+          Same dropdown grammar as the Benchmarks CountryFilter:
+          searchable list with checkboxes. Auto-applies on toggle
+          (no Apply button) since the underlying filter is purely
+          client-side. */}
       {showCountryFilter && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-3 print:hidden">
           <span className="text-[10px] uppercase tracking-wider text-foreground font-bold mr-1">
             {t("competitors", "filterByCountry")}
           </span>
-          <button
-            type="button"
-            onClick={() => setCountry(null)}
-            className={chipClass(country === null)}
-          >
-            {t("competitors", "channelAll")}
-          </button>
-          {availableCountries.map((c) => (
-            <button
-              key={c.code}
-              type="button"
-              onClick={() => setCountry(c.code)}
-              className={chipClass(country === c.code)}
-            >
-              <span className="font-mono">{c.code}</span>
-            </button>
-          ))}
+          <CountryFilterDropdown
+            availableCountries={availableCountries}
+            selected={selectedCountries}
+            onChange={setSelectedCountries}
+          />
         </div>
       )}
 
