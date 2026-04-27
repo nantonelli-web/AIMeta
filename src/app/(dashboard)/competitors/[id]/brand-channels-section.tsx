@@ -20,6 +20,7 @@ import type { MaitAdExternal, MaitOrganicPost } from "@/types";
 export async function BrandChannelsSection({
   competitorId,
   channelTotals,
+  activeTotals,
 }: {
   competitorId: string;
   /** Real DB-wide counts per channel (head+exact queries done in the
@@ -27,6 +28,10 @@ export async function BrandChannelsSection({
    *  performance, so the filter chips would otherwise display the
    *  loaded length (always 30) instead of the brand actual totals. */
   channelTotals: { meta: number; google: number; instagram: number };
+  /** DB-wide active-only counts per source — drive the Status pill
+   *  badge (Active / Inactive) so the row reflects the brand reality
+   *  rather than the loaded sample. */
+  activeTotals: { meta: number; google: number };
 }) {
   const supabase = await createClient();
 
@@ -80,6 +85,7 @@ export async function BrandChannelsSection({
       ads={adsList}
       organicPosts={organicList}
       channelTotals={channelTotals}
+      activeTotals={activeTotals}
       organicStats={{
         count: organicList.length,
         avgLikes,

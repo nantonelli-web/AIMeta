@@ -14,6 +14,7 @@ import { useT } from "@/lib/i18n/context";
 import type { MaitAdExternal, MaitOrganicPost } from "@/types";
 
 type Channel = "all" | "meta" | "google" | "instagram";
+type Status = "all" | "active" | "inactive";
 
 /* ─── Platform icons (small, inline) ─── */
 
@@ -38,6 +39,10 @@ interface Props {
    *  user sees the real count for the brand, not the lazy-loaded
    *  array length (which is capped at 30 for performance). */
   channelTotals: { meta: number; google: number; instagram: number };
+  /** DB-wide active-only counts per source — fed to the Status pill
+   *  so the Active badge matches the brand reality, not the loaded
+   *  sample. Inactive = total − active. */
+  activeTotals: { meta: number; google: number };
   organicStats: {
     count: number;
     /** null when every post has likes hidden (Instagram setting) —
@@ -58,6 +63,7 @@ export function ChannelTabs({
   ads,
   organicPosts,
   channelTotals,
+  activeTotals,
   organicStats,
 }: Props) {
   const searchParams = useSearchParams();
@@ -88,14 +94,34 @@ export function ChannelTabs({
   // null means "all countries", a string is the selected ISO code.
   const [country, setCountry] = useState<string | null>(null);
 
-  // Split ads by source
+  // Status filter — meaningful only on paid channels (Meta + Google).
+  // Instagram has no ACTIVE/INACTIVE concept on organic posts, so it
+  // is reset alongside country when the user switches to Instagram.
+  const [status, setStatus] = useState<Status>("all");
+  useEffect(() => {
+    if (channel === "instagram") setStatus("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel]);
+
+  // Status helper — Meta + Google share the same ACTIVE / INACTIVE
+  // shape on mait_ads_external.status. Anything not "ACTIVE" is treated
+  // as inactive (covers ENDED + null + future variants).
+  const matchesStatus = (a: MaitAdExternal) => {
+    if (status === "all") return true;
+    const s = (a as unknown as Record<string, unknown>).status;
+    if (status === "active") return s === "ACTIVE";
+    return s !== "ACTIVE";
+  };
+
+  // Split ads by source — then filter by status. Meta also gets the
+  // country filter applied below.
   const metaAdsAll = ads.filter((a) => {
     const src = (a as unknown as Record<string, unknown>).source;
-    return src !== "google";
+    return src !== "google" && matchesStatus(a);
   });
   const googleAds = ads.filter((a) => {
     const src = (a as unknown as Record<string, unknown>).source;
-    return src === "google";
+    return src === "google" && matchesStatus(a);
   });
 
   // Available country chips = union of scan_countries across the
@@ -132,20 +158,57 @@ export function ChannelTabs({
           return Array.isArray(list) && list.includes(country);
         });
 
-  // Badge counts come from the DB-wide totals fetched in the parent
-  // page, NOT from the lazy-loaded array length (capped at 30). The
-  // grid below still renders only the loaded sample — the badge is
-  // there to tell the user how many ads exist in total for the brand.
+  // Channel badge counts honour the active Status filter: when the
+  // user picks "Active", each channel chip shows its DB-wide active
+  // subset (so 396 Meta → 84 if only 84 are currently active). The
+  // "all" tab sums the paid subset under filter + the unfiltered
+  // Instagram total since organic has no ACTIVE/INACTIVE concept.
+  const metaCount =
+    status === "all"
+      ? channelTotals.meta
+      : status === "active"
+        ? activeTotals.meta
+        : Math.max(0, channelTotals.meta - activeTotals.meta);
+  const googleCount =
+    status === "all"
+      ? channelTotals.google
+      : status === "active"
+        ? activeTotals.google
+        : Math.max(0, channelTotals.google - activeTotals.google);
+  const instagramCount = channelTotals.instagram;
+
   const tabs: { key: Channel; label: string; count: number; icon?: React.ReactNode }[] = [
     {
       key: "all",
       label: t("competitors", "channelAll"),
-      count:
-        channelTotals.meta + channelTotals.google + channelTotals.instagram,
+      count: metaCount + googleCount + instagramCount,
     },
-    { key: "meta", label: "Meta Ads", count: channelTotals.meta, icon: <MetaIcon className="size-3.5" /> },
-    { key: "google", label: "Google Ads", count: channelTotals.google, icon: <GoogleIcon className="size-3.5" /> },
-    { key: "instagram", label: "Instagram", count: channelTotals.instagram, icon: <InstagramIcon className="size-3.5" /> },
+    { key: "meta", label: "Meta Ads", count: metaCount, icon: <MetaIcon className="size-3.5" /> },
+    { key: "google", label: "Google Ads", count: googleCount, icon: <GoogleIcon className="size-3.5" /> },
+    { key: "instagram", label: "Instagram", count: instagramCount, icon: <InstagramIcon className="size-3.5" /> },
+  ];
+
+  // Status pill counts — sum of paid totals per state. When the user
+  // is on a single paid channel we narrow to that channel; on "all"
+  // and "instagram" we show the paid-wide aggregate.
+  const showStatusFilter = channel !== "instagram";
+  const paidActive =
+    channel === "meta"
+      ? activeTotals.meta
+      : channel === "google"
+        ? activeTotals.google
+        : activeTotals.meta + activeTotals.google;
+  const paidTotal =
+    channel === "meta"
+      ? channelTotals.meta
+      : channel === "google"
+        ? channelTotals.google
+        : channelTotals.meta + channelTotals.google;
+  const paidInactive = Math.max(0, paidTotal - paidActive);
+  const statusPills: { key: Status; label: string; count: number }[] = [
+    { key: "all", label: t("competitors", "channelAll"), count: paidTotal },
+    { key: "active", label: t("competitors", "statusActive"), count: paidActive },
+    { key: "inactive", label: t("competitors", "statusInactive"), count: paidInactive },
   ];
 
   // Filter out channels with 0 items (except "all")
@@ -158,93 +221,94 @@ export function ChannelTabs({
   const visibleAds = channel === "meta" ? metaAds : channel === "google" ? googleAds : channel === "all" ? ads : [];
   const visibleOrganic = showInstagram ? organicPosts : [];
 
+  // Same chip class as Benchmarks for visual consistency across the
+  // app — flat pills, no framed container, gold-on-gold for selected.
+  const chipClass = (selected: boolean) =>
+    selected
+      ? "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-gold/15 text-gold border border-gold/30 transition-colors cursor-pointer"
+      : "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer";
+  const badgeClass = (selected: boolean) =>
+    cn(
+      "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
+      selected ? "bg-gold/25 text-gold" : "bg-muted text-muted-foreground",
+    );
+
   return (
     <div className="space-y-6">
-      {/* ─── Channel filter ─── */}
-      {/* Lifted to a framed strip with bigger pills + stronger
-          contrast so users actually notice it. Previously rendered
-          as a tiny inline-flex row that disappeared between the
-          page hero and the ad grid. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
-        <span className="text-[11px] uppercase tracking-wider text-foreground font-bold shrink-0">
-          {t("competitors", "filterBy")}
-        </span>
+      {/* ─── Channel + Status row ─────────────────────────────
+          Flat Benchmarks-style strip — inline labels, vertical
+          divider between the two filter groups, no framed box.
+          Saves vertical real estate vs. the previous two-row
+          framed layout while staying scannable. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
+            {t("competitors", "filterByChannel")}
+          </span>
           {visibleTabs.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               onClick={() => setChannel(tab.key)}
-              className={cn(
-                "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
-                channel === tab.key
-                  ? "bg-gold/15 text-gold border border-gold/40"
-                  : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
+              className={chipClass(channel === tab.key)}
             >
               {tab.icon}
               <span className="font-medium">{tab.label}</span>
-              <span className={cn(
-                "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
-                channel === tab.key
-                  ? "bg-gold/25 text-gold"
-                  : "bg-muted text-muted-foreground"
-              )}>
-                {tab.count}
-              </span>
+              <span className={badgeClass(channel === tab.key)}>{tab.count}</span>
             </button>
           ))}
         </div>
+
+        {showStatusFilter && (
+          <>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-foreground font-bold">
+                {t("competitors", "filterByStatus")}
+              </span>
+              {statusPills.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setStatus(p.key)}
+                  className={chipClass(status === p.key)}
+                >
+                  <span className="font-medium">{p.label}</span>
+                  <span className={badgeClass(status === p.key)}>{p.count}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ─── Country filter (Meta only) ─────────────────────
-          Visible when the loaded Meta sample contains at least one
-          ad with scan_countries populated. Counts come from the
-          loaded sample (capped at 30) — same convention as the
-          "30 of N" labels in the grid headers below. Hidden for
-          Google + Instagram because those channels do not carry a
-          per-country signal. */}
+      {/* ─── Country row (Meta only) ─────────────────────────
+          Own row because the chip count is unbounded — packing it
+          on the same line as Channel/Status would force-wrap and
+          break the visual rhythm. Same flat pattern. */}
       {showCountryFilter && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border bg-muted/30 px-4 py-3 print:hidden">
-          <span className="text-[11px] uppercase tracking-wider text-foreground font-bold shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 print:hidden">
+          <span className="text-[10px] uppercase tracking-wider text-foreground font-bold mr-1">
             {t("competitors", "filterByCountry")}
           </span>
-          <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setCountry(null)}
+            className={chipClass(country === null)}
+          >
+            <span className="font-medium">{t("competitors", "channelAll")}</span>
+          </button>
+          {availableCountries.map((c) => (
             <button
+              key={c.code}
               type="button"
-              onClick={() => setCountry(null)}
-              className={cn(
-                "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
-                country === null
-                  ? "bg-gold/15 text-gold border border-gold/40"
-                  : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
+              onClick={() => setCountry(c.code)}
+              className={chipClass(country === c.code)}
             >
-              <span className="font-medium">{t("competitors", "channelAll")}</span>
+              <span className="font-medium font-mono">{c.code}</span>
+              <span className={badgeClass(country === c.code)}>{c.count}</span>
             </button>
-            {availableCountries.map((c) => (
-              <button
-                key={c.code}
-                type="button"
-                onClick={() => setCountry(c.code)}
-                className={cn(
-                  "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer",
-                  country === c.code
-                    ? "bg-gold/15 text-gold border border-gold/40"
-                    : "border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-              >
-                <span className="font-medium font-mono">{c.code}</span>
-                <span className={cn(
-                  "text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center",
-                  country === c.code
-                    ? "bg-gold/25 text-gold"
-                    : "bg-muted text-muted-foreground"
-                )}>
-                  {c.count}
-                </span>
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       )}
 
@@ -262,8 +326,8 @@ export function ChannelTabs({
                   <p className="text-sm font-medium">Meta Ads</p>
                   <span className="text-xs text-muted-foreground">
                     ({metaAds.length}
-                    {channelTotals.meta > metaAds.length
-                      ? ` ${t("competitors", "ofTotal")} ${channelTotals.meta}`
+                    {metaCount > metaAds.length
+                      ? ` ${t("competitors", "ofTotal")} ${metaCount}`
                       : ""}
                     )
                   </span>
@@ -294,8 +358,8 @@ export function ChannelTabs({
                 <p className="text-sm font-medium">Google Ads</p>
                 <span className="text-xs text-muted-foreground">
                   ({googleAds.length}
-                  {channelTotals.google > googleAds.length
-                    ? ` ${t("competitors", "ofTotal")} ${channelTotals.google}`
+                  {googleCount > googleAds.length
+                    ? ` ${t("competitors", "ofTotal")} ${googleCount}`
                     : ""}
                   )
                 </span>
@@ -318,9 +382,7 @@ export function ChannelTabs({
                   {visibleAds.length}
                   {(() => {
                     const total =
-                      channel === "meta"
-                        ? channelTotals.meta
-                        : channelTotals.google;
+                      channel === "meta" ? metaCount : googleCount;
                     return total > visibleAds.length
                       ? ` ${t("competitors", "ofTotal")} ${total}`
                       : "";

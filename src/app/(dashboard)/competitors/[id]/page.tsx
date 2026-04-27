@@ -40,6 +40,8 @@ export default async function CompetitorDetailPage({
     { data: jobs },
     { count: metaAdCount },
     { count: googleAdCount },
+    { count: metaActiveCount },
+    { count: googleActiveCount },
     { count: postCount },
     { count: jobCount },
     { count: comparisonCount },
@@ -62,8 +64,10 @@ export default async function CompetitorDetailPage({
       .limit(10),
     // Source-split ad counts so the channel-filter chips can show the
     // real totals (the lazy ChannelTabs grid only loads 30 ads, which
-    // would otherwise stall the badge at 30). Two head+exact queries
-    // are still cheap — they return only counts, no rows.
+    // would otherwise stall the badge at 30). Plus active-only counts
+    // per source — drives the Status pill row so "Active" / "Inactive"
+    // can carry honest per-channel numbers. All four are head+exact:
+    // counts only, no rows transferred.
     supabase
       .from("mait_ads_external")
       .select("id", { count: "exact", head: true })
@@ -74,6 +78,18 @@ export default async function CompetitorDetailPage({
       .select("id", { count: "exact", head: true })
       .eq("competitor_id", id)
       .eq("source", "google"),
+    supabase
+      .from("mait_ads_external")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id)
+      .eq("source", "meta")
+      .eq("status", "ACTIVE"),
+    supabase
+      .from("mait_ads_external")
+      .select("id", { count: "exact", head: true })
+      .eq("competitor_id", id)
+      .eq("source", "google")
+      .eq("status", "ACTIVE"),
     supabase
       .from("mait_organic_posts")
       .select("id", { count: "exact", head: true })
@@ -118,6 +134,10 @@ export default async function CompetitorDetailPage({
     meta: metaTotal,
     google: googleTotal,
     instagram: organicTotal,
+  };
+  const activeTotals = {
+    meta: metaActiveCount ?? 0,
+    google: googleActiveCount ?? 0,
   };
 
   // A fresh-enough running job (<10 min) means the scan is genuinely in
@@ -265,6 +285,7 @@ export default async function CompetitorDetailPage({
         <BrandChannelsSection
           competitorId={c.id}
           channelTotals={channelTotals}
+          activeTotals={activeTotals}
         />
       </Suspense>
 
